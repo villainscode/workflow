@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useTree, type DocDetail } from "../../lib/api.ts";
 import { manage } from "../../lib/manage.ts";
@@ -18,9 +19,19 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    const changes = [
+      ...(title !== doc.title ? [`제목: ${doc.title} → ${title.trim()}`] : []),
+      ...(status !== doc.status ? [`상태: ${doc.status} → ${status}`] : []),
+      ...(menu !== doc.menuSlug ? [`메뉴: ${flat.find((f) => f.menu.slug === doc.menuSlug)?.menu.name} → ${flat.find((f) => f.menu.slug === menu)?.menu.name}`] : []),
+    ];
+    if (changes.length === 0) return onClose();
     const ok = await run(async () => {
       if (title !== doc.title || status !== doc.status) await manage.updateDoc(doc.menuSlug, doc.slug, { title, status });
       return menu !== doc.menuSlug ? manage.moveDoc(doc.menuSlug, doc.slug, menu) : { menu: doc.menuSlug, doc: doc.slug, category: "" };
+    }, {
+      title: "문서 정보를 저장할까요?", confirmText: "저장", details: changes,
+      tone: menu !== doc.menuSlug ? "warning" : "default",
+      message: menu !== doc.menuSlug ? "문서 폴더가 새 메뉴 폴더로 옮겨집니다." : undefined,
     });
     if (!ok) return;
     onClose();
@@ -28,9 +39,12 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
   }
 
   async function trash() {
-    if (!confirm(`'${doc.title}'을(를) 휴지통으로 옮길까요? 휴지통에서 복원할 수 있습니다.`)) return;
     const owner = flat.find((f) => f.menu.slug === doc.menuSlug)?.category.key ?? "";
-    if (await run(() => manage.trashDoc(doc.menuSlug, doc.slug))) { onClose(); navigate(`/${owner}`); }
+    const ok = await run(() => manage.trashDoc(doc.menuSlug, doc.slug), {
+      title: "휴지통으로 옮길까요?", tone: "danger", confirmText: "휴지통으로",
+      details: [`문서: ${doc.title}`, `버전 ${doc.versions.length}개 모두`], message: "휴지통에서 다시 복원할 수 있습니다.",
+    });
+    if (ok) { onClose(); navigate(`/${owner}`); }
   }
 
   return (
@@ -57,7 +71,9 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
         </label>
         {error && <p className={ui.error}>{error}</p>}
         <div className="flex flex-wrap justify-between gap-2">
-          <button type="button" className={ui.danger} onClick={trash} disabled={busy}>휴지통으로</button>
+          <button type="button" className={`${ui.danger} inline-flex items-center gap-1.5`} onClick={trash} disabled={busy}>
+            <Trash2 size={19} aria-hidden /> 휴지통으로
+          </button>
           <div className="flex gap-2">
             <button type="button" className={ui.secondary} onClick={onClose}>취소</button>
             <button className={ui.primary} disabled={busy || !title.trim()}>저장</button>

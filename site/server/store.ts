@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, normalize, relative, isAbsolute } from "node:path";
 import { unzipSync } from "fflate";
 import { Document, parseDocument, YAMLSeq } from "yaml";
@@ -191,4 +191,38 @@ export function saveEdit(docsRoot: string, menu: string, doc: string,
     path: p, data: p === base.entry ? new TextEncoder().encode(input.content) : readFileSync(join(baseDir, p)),
   }));
   return upload(docsRoot, { menu, doc, entry: base.entry, note: input.note, version: input.version, source: "edit", files });
+}
+
+/** 다음 정식 버전 번호: 가장 높은 major + 1 (v0.x → v1.0, v1.2 → v2.0) */
+export function nextMajor(versions: string[]): string {
+  const majors = versions.map((v) => VERSION_RE.exec(v)).filter((m) => m !== null).map((m) => Number(m[1]));
+  return `v${(majors.length ? Math.max(...majors) : 0) + 1}.0`;
+}
+
+/**
+ * draft(또는 review) 문서를 정식 버전으로 확정한다. 현재 버전 폴더를 새 정식 버전(v1.0 등)으로 복사하고
+ * meta.yaml에 버전을 추가한 뒤 current와 status(approved)를 바꾼다. 기존 버전 폴더는 건드리지 않는다.
+ */
+export function release(docsRoot: string, menu: string, doc: string) {
+  const docDir = join(docsRoot, menu, doc);
+  const metaPath = join(docDir, "meta.yaml");
+  if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  const meta = parseDocument(readFileSync(metaPath, "utf8"));
+  const js = meta.toJS() as { current: string; status?: string; versions: { version: string; entry: string }[] };
+  if (js.status === "approved") throw new StoreError(409, "이미 정식 버전입니다");
+  const base = js.versions.find((v) => v.version === js.current);
+  if (!base || !existsSync(join(docDir, js.current))) throw new StoreError(404, `현재 버전(${js.current}) 폴더가 없습니다`);
+
+  const version = nextMajor(js.versions.map((v) => v.version));
+  if (existsSync(join(docDir, version))) throw new StoreError(409, `${version} 폴더가 이미 있습니다`);
+  cpSync(join(docDir, js.current), join(docDir, version), { recursive: true });
+
+  (meta.get("versions") as YAMLSeq).add(meta.createNode({
+    version, entry: base.entry, note: `${js.current}을(를) 정식 버전으로 확정`, source: "release",
+    created: new Date().toISOString().slice(0, 10),
+  }));
+  meta.set("current", version);
+  meta.set("status", "approved");
+  writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
+  return { menu, doc, from: js.current, version };
 }

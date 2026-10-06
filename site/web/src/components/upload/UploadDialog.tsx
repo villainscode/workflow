@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { File as FileIcon, FilePlus2, Folder, Upload, X } from "lucide-react";
+import { IconButton } from "../IconButton.tsx";
+import { useConfirm } from "../confirm/ConfirmProvider.tsx";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,6 +24,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: tree } = useTree();
+  const confirm = useConfirm();
 
   const [category, setCategory] = useState(preset.category ?? "sdlc");
   const [menu, setMenu] = useState(preset.menu ?? "");
@@ -73,6 +77,17 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
     if (!isMd && files.length === 0) return setError("올릴 파일을 추가하세요");
     if (mode === "new" && !title.trim()) return setError("제목을 입력하세요");
     if (mode === "existing" && !doc) return setError("새 버전을 올릴 문서를 고르세요");
+    const menuName = menu === NEW_MENU ? `${newMenuName.trim()} (새 메뉴)` : menuOptions.find((x) => x.menu.slug === menu)?.menu.name ?? menu;
+    const docName = mode === "existing" ? menuDocs.find((d) => d.slug === doc)?.title ?? doc : `${title.trim()} (새 문서)`;
+    const ok = await confirm({
+      title: isMd ? "새 Markdown 문서를 만들까요?" : mode === "existing" ? "새 버전을 올릴까요?" : "문서를 업로드할까요?",
+      confirmText: isMd ? "만들기" : "업로드",
+      details: [
+        `메뉴: ${menuName}`, `문서: ${docName}`, `버전: ${version || suggested}`,
+        ...(isMd ? [] : [`파일: ${files.length}개${files.length > 1 ? ` (대표 파일 ${entry || autoEntry})` : ` (${relPaths[0]})`}`]),
+      ],
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       let menuSlug = menu;
@@ -118,7 +133,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           <h2 className="text-lg font-bold">
             {mode === "existing" ? "새 버전 올리기" : kind === "markdown" ? "새 Markdown 문서" : "문서 업로드"}
           </h2>
-          <button type="button" className="rounded-md px-2 text-muted hover:bg-sunken" onClick={onClose} aria-label="닫기">✕</button>
+          <IconButton icon={X} label="닫기" size={22} onClick={onClose} />
         </div>
 
         {!preset.doc && (
@@ -209,11 +224,11 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
         >
           <p className="text-muted">파일이나 폴더를 여기에 끌어다 놓으세요. zip 파일은 풀어서 올립니다.</p>
           <div className="flex justify-center gap-2">
-            <label className="cursor-pointer rounded-md border border-line px-3 py-1 hover:bg-sunken">
-              파일 선택<input type="file" multiple hidden onChange={(e) => addFiles(filesFromInput(e.target.files))} />
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-3 py-1 hover:bg-sunken">
+              <FileIcon size={18} aria-hidden /> 파일 선택<input type="file" multiple hidden onChange={(e) => addFiles(filesFromInput(e.target.files))} />
             </label>
-            <label className="cursor-pointer rounded-md border border-line px-3 py-1 hover:bg-sunken">
-              폴더 선택<input ref={folderInput} type="file" multiple hidden onChange={(e) => addFiles(filesFromInput(e.target.files))} />
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-3 py-1 hover:bg-sunken">
+              <Folder size={18} aria-hidden /> 폴더 선택<input ref={folderInput} type="file" multiple hidden onChange={(e) => addFiles(filesFromInput(e.target.files))} />
             </label>
           </div>
         </div>
@@ -225,8 +240,8 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
                 <li key={f.path} className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 last:border-b-0">
                   <span className="min-w-0 flex-1 font-mono break-all">{relPaths[i]}</span>
                   <span className="text-muted">{formatSize(f.file.size)}</span>
-                  <button type="button" className="text-muted hover:text-fg" aria-label="빼기"
-                    onClick={() => setFiles((cur) => cur.filter((x) => x.path !== f.path))}>✕</button>
+                  <IconButton icon={X} label="목록에서 빼기" size={17} className="p-0.5"
+                    onClick={() => setFiles((cur) => cur.filter((x) => x.path !== f.path))} />
                 </li>
               ))}
             </ul>
@@ -247,7 +262,8 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
         <div className="flex justify-end gap-2">
           <button type="button" className="rounded-md border border-line px-4 py-1.5 text-sm hover:bg-sunken" onClick={onClose}>취소</button>
           <button type="submit" disabled={busy}
-            className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-surface disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-surface disabled:opacity-50">
+            {kind === "markdown" ? <FilePlus2 size={19} aria-hidden /> : <Upload size={19} aria-hidden />}
             {busy ? "만드는 중…" : kind === "markdown" ? "만들고 편집하기" : "업로드"}
           </button>
         </div>

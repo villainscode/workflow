@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
+import { Menu, PanelLeftOpen, Upload } from "lucide-react";
+import { IconButton } from "./IconButton.tsx";
 import { useTree } from "../lib/api.ts";
 import { useLiveUpdates } from "../lib/live.ts";
 import { UploadProvider, useOpenUpload } from "./upload/UploadContext.tsx";
@@ -33,13 +35,7 @@ function Shell() {
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex flex-wrap items-center gap-x-1 border-b border-line bg-surface px-3 sm:flex-nowrap sm:px-4">
-        <button
-          className="mr-1 rounded-md px-2 py-1 text-muted hover:bg-sunken md:hidden"
-          onClick={() => setDrawerOpen((v) => !v)}
-          aria-label="메뉴 열기"
-        >
-          ☰
-        </button>
+        <IconButton icon={Menu} label="메뉴 열기" size={24} className="mr-1 md:hidden" onClick={() => setDrawerOpen((v) => !v)} />
         {/* 사이트 로고. 누르면 메인(/)으로 간다. 좁은 화면에서는 심볼만 */}
         <Link to="/" className="mr-4 flex shrink-0 items-center rounded-md py-2" aria-label="Workflow 메인으로">
           <img src="/logo.svg" alt="Workflow" className="hidden h-7 w-auto sm:block" />
@@ -61,12 +57,7 @@ function Shell() {
           ))}
         </nav>
         <SearchBox />
-        <button
-          className="ml-auto shrink-0 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 sm:ml-2"
-          onClick={() => openUpload({ category })}
-        >
-          업로드
-        </button>
+        <IconButton icon={Upload} label="업로드" variant="primary" size={22} className="ml-auto p-2 sm:ml-2" onClick={() => openUpload({ category })} />
       </header>
 
       {/* 넓은 화면: 사이드바 너비는 --sidebar-w(끌어서 조절). 좁은 화면: 고정 폭 서랍 */}
@@ -82,12 +73,12 @@ function Shell() {
           </div>
           {sidebar.collapsed && (
             <button
-              className="hidden h-full w-full justify-center pt-3 text-sm text-muted hover:bg-sunken hover:text-fg md:flex"
+              className="hidden h-full w-full justify-center pt-3 text-muted hover:bg-sunken hover:text-fg md:flex"
               onClick={() => sidebar.setCollapsed(false)}
               aria-label="사이드바 펼치기"
               title="사이드바 펼치기"
             >
-              »
+              <PanelLeftOpen size={18} aria-hidden />
             </button>
           )}
         </aside>

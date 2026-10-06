@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import { Columns2, Eye, Pencil, Save } from "lucide-react";
+import { IconButton } from "../components/IconButton.tsx";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { useQueryClient } from "@tanstack/react-query";
-import { saveMarkdown, useText, type VersionFile } from "../lib/api.ts";
+import { nextVersion, saveMarkdown, useText, type VersionFile } from "../lib/api.ts";
+import { useConfirm } from "../components/confirm/ConfirmProvider.tsx";
 import { clearDraft, loadDraft, saveDraft } from "../lib/draft.ts";
 import { useDark } from "../lib/useDark.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
 
 type Mode = "edit" | "split" | "preview";
-const tab = (on: boolean) => `rounded-md px-2.5 py-1 text-xs ${on ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken"}`;
 
 export interface DocContext { menu: string; doc: string; version: string; isCurrent: boolean }
 
@@ -62,7 +64,14 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
     return () => removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  const confirm = useConfirm();
   async function save() {
+    const ok = await confirm({
+      title: "저장할까요?", confirmText: "저장",
+      message: "기존 버전은 그대로 두고 새 버전으로 저장합니다.",
+      details: [`${ctx.version} → ${nextVersion([ctx.version])}`, ...(note.trim() ? [`메모: ${note.trim()}`] : [])],
+    });
+    if (!ok) return;
     setSaving(true);
     setMessage(null);
     try {
@@ -86,9 +95,9 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
     <div className="grid h-full grid-rows-[auto_auto_minmax(0,1fr)]">
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-1.5">
         <div className="flex gap-1">
-          <button className={tab(mode === "edit")} onClick={() => setMode("edit")}>편집</button>
-          <button className={`${tab(mode === "split")} hidden lg:inline`} onClick={() => setMode("split")}>나란히</button>
-          <button className={tab(mode === "preview")} onClick={() => setMode("preview")}>미리보기</button>
+          <IconButton icon={Pencil} label="편집" active={mode === "edit"} onClick={() => setMode("edit")} />
+          <IconButton icon={Columns2} label="나란히 보기" active={mode === "split"} className="hidden lg:inline-flex" onClick={() => setMode("split")} />
+          <IconButton icon={Eye} label="미리보기" active={mode === "preview"} onClick={() => setMode("preview")} />
         </div>
         {ctx.isCurrent ? (
           <form className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2" onSubmit={(e) => { e.preventDefault(); void save(); }}>
@@ -97,10 +106,8 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
               className="w-full max-w-64 min-w-0 rounded-md border border-line bg-surface px-2 py-1 text-xs"
               placeholder="변경 메모 (선택)" value={note} onChange={(e) => setNote(e.target.value)} disabled={!dirty}
             />
-            <button type="submit" disabled={!dirty || saving}
-              className="shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-medium text-surface disabled:opacity-40">
-              {saving ? "저장 중…" : "저장 → 새 버전"}
-            </button>
+            <IconButton type="submit" icon={Save} label={saving ? "저장 중…" : "저장 (새 버전)"} variant="primary"
+              disabled={!dirty || saving} />
           </form>
         ) : (
           <span className="ml-auto text-xs text-muted">이전 버전은 읽기 전용입니다. 최신 버전에서 편집하세요.</span>

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HttpError } from "./lib/api.ts";
+import { ConfirmProvider } from "./components/confirm/ConfirmProvider.tsx";
 import { Layout } from "./components/Layout.tsx";
 import { DocView } from "./components/DocView.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
@@ -31,7 +32,9 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ConfirmProvider>
+        <RouterProvider router={router} />
+      </ConfirmProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

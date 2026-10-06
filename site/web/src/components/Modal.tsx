@@ -1,4 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { X } from "lucide-react";
+import { IconButton } from "./IconButton.tsx";
 
 /** 공통 대화상자. 닫기(Esc, ✕, 바깥 배경)는 onClose로 알린다. */
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -14,7 +16,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       <div className="grid gap-4 p-5">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button type="button" className="rounded-md px-2 text-muted hover:bg-sunken" onClick={onClose} aria-label="닫기">✕</button>
+          <IconButton icon={X} label="닫기" size={22} onClick={onClose} />
         </div>
         {children}
       </div>
@@ -27,7 +29,6 @@ export const ui = {
   label: "grid gap-1 text-xs font-medium text-muted",
   primary: "rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-surface disabled:opacity-50",
   secondary: "rounded-md border border-line px-4 py-1.5 text-sm hover:bg-sunken",
-  danger: "rounded-md border border-high px-4 py-1.5 text-sm text-high hover:bg-high-soft",
-  icon: "rounded px-1.5 py-0.5 text-xs text-muted hover:bg-line hover:text-fg disabled:opacity-30",
+  danger: "rounded-md border border-crit px-4 py-1.5 text-sm text-crit hover:bg-crit-soft",
   error: "rounded-md bg-high-soft px-3 py-2 text-sm text-high",
 };

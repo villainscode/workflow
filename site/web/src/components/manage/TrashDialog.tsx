@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { RotateCcw, Trash2 } from "lucide-react";
+import { IconButton } from "../IconButton.tsx";
 import { useNavigate } from "react-router";
 import { useTree } from "../../lib/api.ts";
 import { manage, useTrash, type TrashItem } from "../../lib/manage.ts";
@@ -18,7 +20,10 @@ export function TrashDialog({ onClose }: { onClose: () => void }) {
     const exists = flat.some((f) => f.menu.slug === item.menu);
     const to = targets[item.id] ?? (exists ? item.menu : "");
     if (!to) return;
-    const r = await run(() => manage.restore(item.id, to));
+    const r = await run(() => manage.restore(item.id, to), {
+      title: "문서를 복원할까요?", confirmText: "복원",
+      details: [`문서: ${item.title}`, `복원할 메뉴: ${flat.find((f) => f.menu.slug === to)?.menu.name ?? to}`],
+    });
     if (r) { onClose(); navigate(`/${r.category}/${r.menu}/${r.doc}`); }
   }
 
@@ -44,10 +49,12 @@ export function TrashDialog({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button className={ui.secondary} disabled={busy || (!exists && !targets[item.id])} onClick={() => restore(item)}>복원</button>
-                  <button className={ui.danger} disabled={busy} onClick={() => {
-                    if (confirm(`'${item.title}'을(를) 영구 삭제할까요? 되돌릴 수 없습니다(커밋된 적이 있으면 git 이력에는 남습니다).`)) void run(() => manage.purge(item.id));
-                  }}>영구 삭제</button>
+                  <IconButton icon={RotateCcw} label="복원" text="복원" variant="outline"
+                    disabled={busy || (!exists && !targets[item.id])} onClick={() => restore(item)} />
+                  <IconButton icon={Trash2} label="영구 삭제" text="영구 삭제" variant="outline" className="!border-crit !text-crit hover:!bg-crit-soft" disabled={busy} onClick={() => void run(() => manage.purge(item.id), {
+                    title: "영구 삭제할까요?", tone: "danger", confirmText: "영구 삭제", details: [`문서: ${item.title}`],
+                    message: "되돌릴 수 없습니다. 커밋된 적이 있으면 git 이력에는 남습니다.",
+                  })} />
                 </div>
               </li>
             );

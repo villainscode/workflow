@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { useSearch, type SearchHit } from "../lib/manage.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
@@ -20,6 +21,8 @@ export function SearchBox() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const box = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchNow = () => { setQ(input.trim()); setOpen(true); inputRef.current?.focus(); };
 
   // 입력이 멈추면 검색한다
   useEffect(() => { const t = setTimeout(() => setQ(input.trim()), 200); return () => clearTimeout(t); }, [input]);
@@ -36,13 +39,16 @@ export function SearchBox() {
   return (
     <div ref={box} className="relative order-last mb-2 w-full min-w-0 sm:order-none sm:mb-0 sm:ml-auto sm:max-w-72">
       <input
+        ref={inputRef}
         type="search"
-        className="w-full rounded-md border border-line bg-bg px-3 py-1.5 text-sm"
+        className="w-full rounded-md border border-line bg-bg py-1.5 pr-9 pl-3 text-sm"
         placeholder="제목·본문 검색"
         value={input}
         onChange={(e) => { setInput(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => {
+          // 결과가 아직 없으면 Enter는 돋보기 버튼과 같이 바로 검색한다
+          if (e.key === "Enter" && !hits?.length) return searchNow();
           if (!hits?.length) return;
           if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, hits.length - 1)); }
           if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
@@ -51,6 +57,15 @@ export function SearchBox() {
         }}
         aria-label="문서 검색"
       />
+      <button
+        type="button"
+        className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-md text-muted hover:text-accent"
+        onClick={searchNow}
+        aria-label="검색"
+        title="검색"
+      >
+        <Search size={20} aria-hidden />
+      </button>
       {open && q && (
         <div className="absolute top-full right-0 z-30 mt-1 w-[min(520px,calc(100vw-24px))] rounded-lg border border-line bg-surface shadow-xl">
           <div className="flex items-center justify-between border-b border-line px-3 py-1.5 text-xs text-muted">

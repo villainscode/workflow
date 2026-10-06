@@ -1,6 +1,7 @@
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import { Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
+import { IconButton } from "../components/IconButton.tsx";
 
-const btn = "rounded-md border border-line bg-surface px-2.5 py-1 text-xs hover:bg-sunken";
 
 /** SVG도 <img>로 표시하므로 SVG 안의 스크립트는 실행되지 않는다. */
 export function ImageViewer({ url }: { url: string }) {
@@ -9,10 +10,10 @@ export function ImageViewer({ url }: { url: string }) {
       {({ zoomIn, zoomOut, resetTransform, centerView }) => (
         <div className="relative h-full">
           <div className="absolute top-3 right-3 z-10 flex gap-1">
-            <button className={btn} onClick={() => zoomOut()} aria-label="축소">−</button>
-            <button className={btn} onClick={() => zoomIn()} aria-label="확대">+</button>
-            <button className={btn} onClick={() => centerView(1)}>1:1</button>
-            <button className={btn} onClick={() => resetTransform()}>맞춤</button>
+            <IconButton icon={ZoomOut} label="축소" variant="outline" className="bg-surface" onClick={() => zoomOut()} />
+            <IconButton icon={ZoomIn} label="확대" variant="outline" className="bg-surface" onClick={() => zoomIn()} />
+            <IconButton icon={Maximize2} label="원본 크기 (1:1)" variant="outline" className="bg-surface" onClick={() => centerView(1)} />
+            <IconButton icon={Minimize2} label="화면에 맞춤" variant="outline" className="bg-surface" onClick={() => resetTransform()} />
           </div>
           <TransformComponent
             wrapperStyle={{ width: "100%", height: "100%" }}

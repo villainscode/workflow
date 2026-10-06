@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Download, ExternalLink, FilePlus2, Minimize, Presentation, Settings2 } from "lucide-react";
+import { PresentationContent } from "../viewers/Presentation.tsx";
+import { IconButton } from "./IconButton.tsx";
 import { useParams, useSearchParams } from "react-router";
 import { DocSettingsDialog } from "./manage/DocSettingsDialog.tsx";
 import { fileSrc, useDoc } from "../lib/api.ts";
 import { useOpenUpload } from "./upload/UploadContext.tsx";
+import { useConfirm } from "./confirm/ConfirmProvider.tsx";
 import { EmptyState } from "./EmptyState.tsx";
-import { StatusBadge } from "./StatusBadge.tsx";
+import { ReleaseBadge } from "./ReleaseBadge.tsx";
 import { Viewer } from "../viewers/Viewer.tsx";
 import { DiffViewer } from "../viewers/DiffViewer.tsx";
 
@@ -17,6 +21,15 @@ export function DocView() {
   const { data, error, isLoading } = useDoc(menu, doc);
   const openUpload = useOpenUpload();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const confirm = useConfirm();
+  // 프레젠테이션 모드: 문서 영역(stage)만 브라우저 전체 화면으로 띄운다. Esc로 나가도 이벤트로 상태를 맞춘다
+  const stage = useRef<HTMLDivElement>(null);
+  const [presenting, setPresenting] = useState(false);
+  useEffect(() => {
+    const sync = () => setPresenting(document.fullscreenElement !== null && document.fullscreenElement === stage.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
 
   if (isLoading) return <EmptyState title="불러오는 중…" />;
   if (error || !data) return <EmptyState title="문서를 열 수 없습니다" body={String(error ?? "")} />;
@@ -64,25 +77,38 @@ export function DocView() {
             ))}
           </select>
         )}
-        <StatusBadge status={data.status} />
-        {entry && (
-          <a className="text-xs text-accent hover:underline" href={entry.url} download>다운로드</a>
-        )}
-        <button
-          className="rounded-md border border-line px-2 py-0.5 text-xs hover:bg-sunken"
-          onClick={() => openUpload({ menu, doc })}
-        >
-          새 버전
-        </button>
-        <button
-          className="rounded-md border border-line px-2 py-0.5 text-xs hover:bg-sunken"
-          onClick={() => setSettingsOpen(true)}
-        >
-          관리
-        </button>
+        <ReleaseBadge doc={data} />
+        <div className="flex items-center gap-0.5">
+          {entry && (
+            <IconButton icon={Download} label="다운로드" onClick={async () => {
+              const name = entry.path.split("/").pop()!;
+              const ok = await confirm({
+                title: "다운로드할까요?", confirmText: "다운로드",
+                details: [`파일: ${name}`, `버전: ${version.version}`, `크기: ${(entry.size / 1024).toFixed(1)} KB`],
+              });
+              if (!ok) return;
+              const a = document.createElement("a");
+              a.href = entry.url;
+              a.download = name;
+              a.click();
+            }} />
+          )}
+          <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />
+          <IconButton icon={Presentation} label="프레젠테이션 (전체 화면)" disabled={!entry}
+            onClick={() => void stage.current?.requestFullscreen()} />
+          <IconButton icon={Settings2} label="문서 관리" onClick={() => setSettingsOpen(true)} />
+          {data.notionUrl && (
+            <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.notionUrl} target="_blank" rel="noreferrer" title="Notion에서 열기">
+              Notion <ExternalLink size={16} aria-hidden />
+            </a>
+          )}
+          {data.gdriveUrl && (
+            <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.gdriveUrl} target="_blank" rel="noreferrer" title="Google Drive에서 열기">
+              Drive <ExternalLink size={16} aria-hidden />
+            </a>
+          )}
+        </div>
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
-        {data.notionUrl && <a className="text-xs text-accent hover:underline" href={data.notionUrl} target="_blank" rel="noreferrer">Notion</a>}
-        {data.gdriveUrl && <a className="text-xs text-accent hover:underline" href={data.gdriveUrl} target="_blank" rel="noreferrer">Drive</a>}
         {version.note && (
           <details className="basis-full text-xs text-muted">
             <summary className="cursor-pointer">{version.version} 변경 메모{version.createdAt ? ` · ${version.createdAt}` : ""}</summary>
@@ -90,8 +116,15 @@ export function DocView() {
           </details>
         )}
       </div>
-      <div className="min-h-0 min-w-0 bg-bg">
-        {!entry ? (
+      <div ref={stage} className="relative min-h-0 min-w-0 bg-bg">
+        {presenting && entry ? (
+          <>
+            <PresentationContent key={fileSrc(entry)} file={entry}
+              ctx={{ menu, doc, version: version.version, isCurrent: version.version === data.currentVersion }} />
+            <IconButton icon={Minimize} label="프레젠테이션 끝내기 (Esc)" variant="outline"
+              className="absolute top-3 right-3 z-10 bg-surface/90 shadow" onClick={() => void document.exitFullscreen()} />
+          </>
+        ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
         ) : cmpVersion && cmpEntry && comparable ? (
           <DiffViewer from={cmpEntry} to={entry} fromLabel={cmpVersion.version} toLabel={version.version} />

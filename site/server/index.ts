@@ -10,7 +10,7 @@ import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
 import { DDL, categories, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
-import { StoreError, saveEdit, upload, type IncomingFile } from "./store.ts";
+import { StoreError, release, saveEdit, upload, type IncomingFile } from "./store.ts";
 import {
   addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc,
   trashDoc, updateCategory, updateDoc,
@@ -152,6 +152,7 @@ app.patch<DocParams & { Body: { title?: string; status?: string } }>("/api/docs/
   done("doc", updateDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
 app.post<DocParams & { Body: { menu: string } }>("/api/docs/:menu/:doc/move", async (req) =>
   done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body.menu)));
+app.post<DocParams>("/api/docs/:menu/:doc/release", async (req) => done("release", release(DOCS_ROOT, req.params.menu, req.params.doc)));
 app.delete<DocParams>("/api/docs/:menu/:doc", async (req) => done("trash", trashDoc(DOCS_ROOT, req.params.menu, req.params.doc)));
 
 app.get("/api/trash", async () => listTrash(DOCS_ROOT));

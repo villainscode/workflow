@@ -15,7 +15,11 @@ export function AddMenuDialog({ category, parent, onClose }: { category: string;
     <Modal title={parent ? `'${parent.name}' 아래에 하위 메뉴` : "메뉴 추가"} onClose={onClose}>
       <form className="grid gap-3" onSubmit={async (e) => {
         e.preventDefault();
-        if (await run(() => manage.addMenu(category, name, slug, parent?.slug))) onClose();
+        const ok = await run(() => manage.addMenu(category, name, slug, parent?.slug), {
+          title: "메뉴를 추가할까요?", confirmText: "추가",
+          details: [`이름: ${name.trim()}`, `slug: ${slug || slugify(name)}`, ...(parent ? [`상위 메뉴: ${parent.name}`] : [])],
+        });
+        if (ok) onClose();
       }}>
         <label className={ui.label}>메뉴 이름<input className={ui.field} value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="예: 빌드·배포" /></label>
         <label className={ui.label}>메뉴 slug (영문, docs/ 아래 폴더 이름)
@@ -38,7 +42,10 @@ export function RenameMenuDialog({ menu, onClose }: { menu: MenuNode; onClose: (
     <Modal title="메뉴 이름 바꾸기" onClose={onClose}>
       <form className="grid gap-3" onSubmit={async (e) => {
         e.preventDefault();
-        if (await run(() => manage.renameMenu(menu.slug, name))) onClose();
+        const ok = await run(() => manage.renameMenu(menu.slug, name), {
+          title: "메뉴 이름을 바꿀까요?", confirmText: "저장", details: [`${menu.name} → ${name.trim()}`],
+        });
+        if (ok) onClose();
       }}>
         <label className={ui.label}>메뉴 이름<input className={ui.field} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></label>
         <p className="text-xs text-muted">slug(<code>{menu.slug}</code>)와 폴더 이름은 바뀌지 않습니다.</p>
@@ -67,7 +74,12 @@ export function MoveMenuDialog({ menu, onClose }: { menu: MenuNode; onClose: () 
         const [kind, value] = target.split(":");
         const parent = kind === "m" ? flat.find((f) => f.menu.slug === value) : undefined;
         const category = parent ? parent.category.key : value;
-        if (await run(() => manage.moveMenu(menu.slug, { category, parent: parent?.menu.slug ?? null }))) onClose();
+        const where = parent ? `${parent.category.name} › ${parent.menu.name} 아래` : `${tree?.categories.find((c) => c.key === category)?.name ?? category} 최상위`;
+        const ok = await run(() => manage.moveMenu(menu.slug, { category, parent: parent?.menu.slug ?? null }), {
+          title: "메뉴를 옮길까요?", tone: "warning", confirmText: "옮기기",
+          details: [`메뉴: ${menu.name}`, `옮길 위치: ${where}`], message: "하위 메뉴와 문서도 함께 옮겨집니다.",
+        });
+        if (ok) onClose();
       }}>
         <label className={ui.label}>옮길 위치
           <select className={ui.field} value={target} onChange={(e) => setTarget(e.target.value)}>

@@ -28,6 +28,8 @@ export const manage = {
     call("PATCH", `/api/docs/${menu}/${doc}`, change),
   moveDoc: (menu: string, doc: string, to: string) =>
     call<{ menu: string; doc: string; category: string }>("POST", `/api/docs/${menu}/${doc}/move`, { menu: to }),
+  release: (menu: string, doc: string) =>
+    call<{ menu: string; doc: string; from: string; version: string }>("POST", `/api/docs/${menu}/${doc}/release`),
   trashDoc: (menu: string, doc: string) => call<{ id: string }>("DELETE", `/api/docs/${menu}/${doc}`),
 
   restore: (id: string, menu?: string) =>

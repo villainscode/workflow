@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useConfirm, type ConfirmOptions } from "../confirm/ConfirmProvider.tsx";
 
-/** 관리 작업 실행: 진행 중 표시, 오류 메시지, 성공하면 목록·문서·휴지통을 다시 불러온다. */
+/**
+ * 관리 작업 실행: (confirm을 주면) 공통 확인 창 → 진행 중 표시 → 오류 메시지 → 목록·문서·휴지통 새로고침.
+ * 확인 창에서 취소하면 아무것도 하지 않고 undefined를 돌려준다.
+ */
 export function useAction() {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  const confirm = useConfirm();
+  async function run<T>(fn: () => Promise<T>, confirmWith?: ConfirmOptions): Promise<T | undefined> {
+    if (confirmWith && !(await confirm(confirmWith))) return undefined;
     setBusy(true);
     setError("");
     try {
