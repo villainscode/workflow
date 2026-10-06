@@ -10,7 +10,7 @@ import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
 import { DDL, categories, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
-import { StoreError, addMenu, upload, type IncomingFile } from "./store.ts";
+import { StoreError, addMenu, saveEdit, upload, type IncomingFile } from "./store.ts";
 import { convert, type Target } from "./convert.ts";
 
 const SITE_ROOT = resolve(import.meta.dirname, "..");
@@ -114,6 +114,15 @@ app.post("/api/upload", async (req) => {
   reindex("upload");
   return result;
 });
+
+app.post<{ Params: { menu: string; doc: string }; Body: { baseVersion: string; content: string; note?: string; version?: string } }>(
+  "/api/docs/:menu/:doc/edit",
+  async (req) => {
+    const result = saveEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
+    reindex("edit");
+    return result;
+  },
+);
 
 app.post<{ Body: { category: string; name: string; slug?: string } }>("/api/menus", async (req) => {
   const result = addMenu(DOCS_ROOT, req.body.category, req.body.name, req.body.slug);

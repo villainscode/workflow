@@ -20,6 +20,7 @@ export interface UploadInput {
   version?: string;      // 없으면 다음 버전을 자동으로 정한다
   note?: string;
   entry?: string;        // 대표 파일. 없으면 자동 선택
+  source?: "upload" | "edit";
   files: IncomingFile[];
 }
 
@@ -149,7 +150,7 @@ export function upload(docsRoot: string, input: UploadInput) {
 
   // 2) meta.yaml 쓰기 (기존 주석과 순서는 유지)
   const versionEntry = {
-    version, entry, note: input.note?.trim() || null, source: "upload", created: new Date().toISOString().slice(0, 10),
+    version, entry, note: input.note?.trim() || null, source: input.source ?? "upload", created: new Date().toISOString().slice(0, 10),
   };
   if (isNew) {
     const ext = extname(entry).slice(1).toLowerCase();
@@ -166,6 +167,30 @@ export function upload(docsRoot: string, input: UploadInput) {
   writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
 
   return { menu: input.menu, doc: docSlug, version, category, created: isNew };
+}
+
+/**
+ * 사이트에서 편집한 Markdown 저장. 기준 버전의 파일을 그대로 가져오고 대표 파일 내용만 바꿔 새 버전으로 쓴다.
+ * 그사이 다른 곳에서 새 버전이 생겼으면 덮어쓰지 않도록 거부한다.
+ */
+export function saveEdit(docsRoot: string, menu: string, doc: string,
+  input: { baseVersion: string; content: string; note?: string; version?: string }) {
+  const docDir = join(docsRoot, menu, doc);
+  const metaPath = join(docDir, "meta.yaml");
+  if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  const meta = parseDocument(readFileSync(metaPath, "utf8")).toJS() as { current: string; versions: { version: string; entry: string }[] };
+  if (meta.current !== input.baseVersion) {
+    throw new StoreError(409, `편집하는 동안 새 버전(${meta.current})이 생겼습니다. 새로고침해서 최신 내용을 확인하세요`);
+  }
+  const base = meta.versions.find((v) => v.version === input.baseVersion);
+  if (!base) throw new StoreError(404, `${input.baseVersion} 버전이 없습니다`);
+  if (!/\.md$/i.test(base.entry)) throw new StoreError(400, "Markdown 문서만 사이트에서 편집할 수 있습니다");
+
+  const baseDir = join(docDir, input.baseVersion);
+  const files: IncomingFile[] = listFiles(baseDir).map((p) => ({
+    path: p, data: p === base.entry ? new TextEncoder().encode(input.content) : readFileSync(join(baseDir, p)),
+  }));
+  return upload(docsRoot, { menu, doc, entry: base.entry, note: input.note, version: input.version, source: "edit", files });
 }
 
 export function addMenu(docsRoot: string, categoryKey: string, name: string, slug?: string) {

@@ -27,6 +27,8 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuSlug, setNewMenuSlug] = useState("");
   const [mode, setMode] = useState<"new" | "existing">(preset.doc ? "existing" : "new");
+  // files: 파일 올리기, markdown: 빈 Markdown 문서를 만들어 바로 편집
+  const [kind, setKind] = useState<"files" | "markdown">("files");
   const [doc, setDoc] = useState(preset.doc ?? "");
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -67,7 +69,8 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
 
   async function submit() {
     setError("");
-    if (files.length === 0) return setError("올릴 파일을 추가하세요");
+    const isMd = kind === "markdown";
+    if (!isMd && files.length === 0) return setError("올릴 파일을 추가하세요");
     if (mode === "new" && !title.trim()) return setError("제목을 입력하세요");
     if (mode === "existing" && !doc) return setError("새 버전을 올릴 문서를 고르세요");
     setBusy(true);
@@ -77,16 +80,22 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
         if (!newMenuName.trim()) throw new Error("새 메뉴 이름을 입력하세요");
         menuSlug = (await createMenu(category, newMenuName, newMenuSlug || undefined)).slug;
       }
-      const result = await uploadFiles({
-        menu: menuSlug,
-        doc: mode === "existing" ? doc : undefined,
-        title: mode === "new" ? title : undefined,
-        slug: mode === "new" ? slug || undefined : undefined,
-        version: version || undefined,
-        note,
-        entry: zipOnly ? undefined : entry || undefined,
-        files,
-      });
+      const mdName = `${slug || slugify(title) || "doc"}.md`;
+      const result = await uploadFiles(isMd
+        ? {
+          menu: menuSlug, title, slug: slug || undefined, version: version || undefined, note: note || "새 문서",
+          files: [{ file: new File([`# ${title.trim()}\n\n`], mdName, { type: "text/markdown" }), path: mdName }],
+        }
+        : {
+          menu: menuSlug,
+          doc: mode === "existing" ? doc : undefined,
+          title: mode === "new" ? title : undefined,
+          slug: mode === "new" ? slug || undefined : undefined,
+          version: version || undefined,
+          note,
+          entry: zipOnly ? undefined : entry || undefined,
+          files,
+        });
       await qc.invalidateQueries({ queryKey: ["tree"] });
       await qc.invalidateQueries({ queryKey: ["doc", result.menu, result.doc] });
       onClose();
@@ -106,9 +115,23 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
     >
       <form method="dialog" className="grid gap-4 p-5" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">{mode === "existing" ? "새 버전 올리기" : "문서 업로드"}</h2>
+          <h2 className="text-lg font-bold">
+            {mode === "existing" ? "새 버전 올리기" : kind === "markdown" ? "새 Markdown 문서" : "문서 업로드"}
+          </h2>
           <button type="button" className="rounded-md px-2 text-muted hover:bg-sunken" onClick={onClose} aria-label="닫기">✕</button>
         </div>
+
+        {!preset.doc && (
+          <div className="flex gap-1 rounded-lg bg-sunken p-1 text-sm">
+            {(["files", "markdown"] as const).map((k) => (
+              <button key={k} type="button"
+                className={`flex-1 rounded-md px-3 py-1.5 ${kind === k ? "bg-surface font-medium shadow-sm" : "text-muted"}`}
+                onClick={() => { setKind(k); if (k === "markdown") setMode("new"); }}>
+                {k === "files" ? "파일 업로드" : "새 Markdown 문서"}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={label}>대분류
@@ -139,7 +162,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           )}
         </div>
 
-        {menu !== NEW_MENU && (
+        {menu !== NEW_MENU && kind === "files" && (
           <fieldset className="flex gap-4 text-sm" disabled={!!preset.doc}>
             <label className="flex items-center gap-1.5">
               <input type="radio" checked={mode === "new"} onChange={() => setMode("new")} /> 새 문서
@@ -158,7 +181,8 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
                 <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 로그인 시퀀스 다이어그램" />
               </label>
               <label className={label}>문서 slug (영문, 폴더 이름)
-                <input className={field} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder={autoSlug} />
+                <input className={field} value={slug} onChange={(e) => setSlug(e.target.value)}
+                  placeholder={kind === "markdown" ? slugify(title) || "doc" : autoSlug} />
               </label>
             </>
           ) : (
@@ -176,6 +200,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           </label>
         </div>
 
+        {kind === "files" && (<>
         <div
           className={`grid gap-2 rounded-lg border-2 border-dashed p-4 text-center text-sm ${dragging ? "border-accent bg-accent-soft" : "border-line"}`}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -215,13 +240,15 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           </div>
         )}
 
+        </>)}
+
         {error && <p className="rounded-md bg-high-soft px-3 py-2 text-sm text-high">{error}</p>}
 
         <div className="flex justify-end gap-2">
           <button type="button" className="rounded-md border border-line px-4 py-1.5 text-sm hover:bg-sunken" onClick={onClose}>취소</button>
           <button type="submit" disabled={busy}
             className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-surface disabled:opacity-50">
-            {busy ? "올리는 중…" : "업로드"}
+            {busy ? "만드는 중…" : kind === "markdown" ? "만들고 편집하기" : "업로드"}
           </button>
         </div>
       </form>

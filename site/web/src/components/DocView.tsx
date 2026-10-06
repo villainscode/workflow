@@ -4,6 +4,10 @@ import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { StatusBadge } from "./StatusBadge.tsx";
 import { Viewer } from "../viewers/Viewer.tsx";
+import { DiffViewer } from "../viewers/DiffViewer.tsx";
+
+// 줄 단위 비교가 의미 있는 텍스트 형식
+const TEXT = /\.(md|markdown|html?|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
 
 export function DocView() {
   const { menu = "", doc = "" } = useParams();
@@ -18,6 +22,15 @@ export function DocView() {
   const version = data.versions.find((v) => v.version === versionKey);
   if (!version) return <EmptyState title={`${versionKey} 버전이 없습니다`} />;
   const entry = version.files.find((f) => f.isEntry);
+  const cmpKey = params.get("cmp");
+  const cmpVersion = data.versions.find((v) => v.version === cmpKey && v.version !== version.version);
+  const cmpEntry = cmpVersion?.files.find((f) => f.isEntry);
+  const comparable = !!entry && TEXT.test(entry.path) && data.versions.length > 1;
+  const setParam = (k: string, v: string | null) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set(k, v); else next.delete(k);
+    setParams(next);
+  };
 
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
@@ -26,7 +39,7 @@ export function DocView() {
         <select
           className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs"
           value={version.version}
-          onChange={(e) => setParams(e.target.value === data.currentVersion ? {} : { v: e.target.value })}
+          onChange={(e) => setParam("v", e.target.value === data.currentVersion ? null : e.target.value)}
           aria-label="버전"
         >
           {data.versions.map((v) => (
@@ -35,6 +48,19 @@ export function DocView() {
             </option>
           ))}
         </select>
+        {comparable && (
+          <select
+            className="rounded-md border border-line bg-surface px-2 py-1 text-xs"
+            value={cmpVersion?.version ?? ""}
+            onChange={(e) => setParam("cmp", e.target.value || null)}
+            aria-label="비교할 버전"
+          >
+            <option value="">비교 안 함</option>
+            {data.versions.filter((v) => v.version !== version.version).map((v) => (
+              <option key={v.version} value={v.version}>{v.version}과 비교</option>
+            ))}
+          </select>
+        )}
         <StatusBadge status={data.status} />
         {entry && (
           <a className="text-xs text-accent hover:underline" href={entry.url} download>다운로드</a>
@@ -55,7 +81,17 @@ export function DocView() {
         )}
       </div>
       <div className="min-h-0 min-w-0 bg-bg">
-        {entry ? <Viewer key={fileSrc(entry)} file={entry} /> : <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />}
+        {!entry ? (
+          <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
+        ) : cmpVersion && cmpEntry && comparable ? (
+          <DiffViewer from={cmpEntry} to={entry} fromLabel={cmpVersion.version} toLabel={version.version} />
+        ) : (
+          <Viewer
+            key={fileSrc(entry)}
+            file={entry}
+            ctx={{ menu, doc, version: version.version, isCurrent: version.version === data.currentVersion }}
+          />
+        )}
       </div>
     </div>
   );

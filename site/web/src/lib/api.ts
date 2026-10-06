@@ -70,3 +70,15 @@ export const fileSrc = (f: VersionFile) => `${f.url}?h=${f.sha256.slice(0, 12)}`
 /** 변환 결과 URL. 원본 내용이 바뀌면 h 값이 바뀌어 새로 변환된다. */
 export const convertSrc = (f: VersionFile, to: "pdf" | "svg") =>
   `/api/convert/${to}/${f.path.replace(/^docs\//, "")}?h=${f.sha256.slice(0, 12)}`;
+
+export async function saveMarkdown(
+  menu: string, doc: string, body: { baseVersion: string; content: string; note?: string; version?: string },
+): Promise<UploadResult> {
+  return send(await fetch(`/api/docs/${menu}/${doc}/edit`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  }));
+}
+
+/** 텍스트 파일 내용. 편집기·비교에서 같이 쓴다. */
+export const useText = (url: string) =>
+  useQuery({ queryKey: ["text", url], queryFn: async () => (await fetch(url)).text(), staleTime: Infinity });

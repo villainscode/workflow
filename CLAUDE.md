@@ -76,7 +76,7 @@ npm run build      # 타입 검사 후 site/dist로 빌드
 ```
 
 - **server/**: `scan.ts`가 `docs/_site/menus.yaml`과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
-- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과). `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
+- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장). `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **HTML 뷰어**: iframe에 `allow-same-origin` 없이 sandbox를 건다. 문서 안의 스크립트는 동작하지만 사이트 쪽에는 접근하지 못한다. 문서 안의 링크를 누르면 iframe 안에서 이동한다.
 - **업로드** (`server/store.ts`): 파일 → `meta.yaml`(주석·순서 유지) → 색인 순서로 쓴다.
@@ -95,6 +95,13 @@ npm run build      # 타입 검사 후 site/dist로 빌드
   - PDF는 브라우저 내장 뷰어로 연다. Chrome은 sandbox iframe에서 PDF를 열지 않아 sandbox를 걸지 않는다.
   - DOCX는 `docx-preview`로 렌더링하고, PDF 변환으로 볼 수도 있다.
   - XLSX·CSV는 SheetJS로 읽는다. SheetJS는 npm 레지스트리 버전이 오래되어 공식 CDN tgz로 설치했다. CSV는 UTF-8 텍스트로 읽는다.
+- **Markdown 편집** (`viewers/MarkdownViewer.tsx`, `store.ts`의 `saveEdit`): 화면은 CodeMirror 편집기와 미리보기를 나란히 둔다.
+  - 미리보기는 react-markdown + GFM이고, 코드는 Shiki, `mermaid` 코드 블록은 다이어그램으로 그린다. 상대 경로 이미지·링크는 버전 폴더 기준으로 푼다.
+  - 저장은 기준 버전의 파일을 모두 복사하고 대표 `.md`만 바꿔 새 버전(`source: edit`)으로 쓴다. 그사이 최신 버전이 바뀌었으면 409로 거부한다.
+  - 저장 전 내용은 localStorage(`workflow:draft:<메뉴>/<문서>@<버전>`)에 임시 보관하고, 다시 열면 복원을 제안한다.
+  - 이전 버전은 읽기 전용이다.
+  - 새 Markdown 문서는 업로드 대화상자의 "새 Markdown 문서" 탭에서 `# 제목` 한 줄짜리 `.md`를 업로드하는 방식으로 만든다.
+- **버전 비교**: 텍스트 형식(md, html, yaml 등)이고 버전이 2개 이상이면 문서 상단에 "비교" 선택이 생긴다(`?cmp=<버전>`). `viewers/DiffViewer.tsx`가 jsdiff로 줄 단위 비교를 보여준다.
 - **업로드 진입점**: 모두 `upload/UploadContext.tsx`의 `useOpenUpload()`로 연다.
   - 상단 "업로드" 버튼
   - 메뉴별 `+` 버튼
