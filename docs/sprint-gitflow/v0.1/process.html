@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Git-flow 스프린트 프로세스</title>
+<meta name="description" content="2주 스프린트 한 번을 Git-flow 브랜치와 두 층의 코드 리뷰(로컬 매일, CI 리뷰 에이전트 D7·D14)로 따라가는 팀 런북">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* 같은 폴더의 OCR 가이드와 같은 토큰. 페이지 안에 가로 스크롤이 생기지 않도록 모든 블록은 줄바꿈하거나 좁은 화면에서 세로로 쌓는다. */
+:root {
+  --bg: #F4F5F7;
+  --surface: #FFFFFF;
+  --sunken: #EBEDF1;
+  --fg: #1A1F29;
+  --muted: #586172;
+  --line: #D8DCE3;
+  --accent: #1F5FBF;
+  --accent-soft: #E2EBF9;
+  --crit: #C42B2B;  --crit-soft: #FBE8E8;
+  --high: #C95308;  --high-soft: #FDEDE1;
+  --med:  #946C00;  --med-soft:  #FAF2D9;
+  --ok:   #1C7543;  --ok-soft:   #E1F2E8;
+  --rel:  #7A3FB0;  --rel-soft:  #F0E7F8;
+  --code-bg: #161B24;
+  --code-fg: #DCE3EE;
+  --code-dim: #8B96A8;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+    --accent: #80A8F0; --accent-soft: #1C2940;
+    --crit: #F07A7A; --crit-soft: #3A1D20; --high: #F29C5E; --high-soft: #3A2719;
+    --med: #E0BA4F; --med-soft: #342C15; --ok: #5DC28C; --ok-soft: #163225; --rel: #C39AF0; --rel-soft: #2C2040;
+    --code-bg: #0A0D12; --code-fg: #DCE3EE; --code-dim: #7D889A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+  --accent: #80A8F0; --accent-soft: #1C2940;
+  --crit: #F07A7A; --crit-soft: #3A1D20; --high: #F29C5E; --high-soft: #3A2719;
+  --med: #E0BA4F; --med-soft: #342C15; --ok: #5DC28C; --ok-soft: #163225; --rel: #C39AF0; --rel-soft: #2C2040;
+  --code-bg: #0A0D12; --code-fg: #DCE3EE; --code-dim: #7D889A;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.75;
+  padding: 0 20px 80px;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: var(--font-mono); }
+:not(pre) > code { font-size: 0.86em; background: var(--sunken); padding: 0.12em 0.4em; border-radius: 4px; overflow-wrap: anywhere; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.35; margin: 0; }
+p { margin: 0; }
+ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+
+.masthead, .wrap, footer { max-width: 1080px; margin-inline: auto; }
+.masthead { padding-block: 56px 36px; margin-bottom: 40px; border-bottom: 1px solid var(--line); display: grid; gap: 14px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.masthead h1 { font-size: clamp(28px, 4.2vw, 38px); font-weight: 700; letter-spacing: -0.01em; }
+.lede { max-width: 68ch; color: var(--muted); font-size: 16.5px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.meta-row b { color: var(--fg); font-weight: 500; }
+
+.wrap { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 48px; }
+.toc { position: sticky; top: 24px; align-self: start; font-size: 13.5px; }
+.toc p { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a { display: grid; grid-template-columns: 26px 1fr; padding: 5px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; line-height: 1.5; }
+.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; }
+.toc a:hover { background: var(--sunken); color: var(--fg); }
+
+main { min-width: 0; display: grid; gap: 64px; }
+section { display: grid; gap: 18px; min-width: 0; scroll-margin-top: 24px; }
+.sec-head { display: grid; gap: 6px; }
+.num { font-family: var(--font-mono); font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+section h2 { font-size: 24px; font-weight: 700; }
+.sec-head p { color: var(--muted); max-width: 68ch; }
+h3 { font-size: 16.5px; font-weight: 700; }
+.muted { color: var(--muted); }
+
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card .k { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.card p { color: var(--muted); font-size: 14.5px; }
+
+/* branch figure */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.figure svg { display: block; width: 100%; height: auto; }
+.figure .cap { font-size: 13px; color: var(--muted); }
+svg text { font-family: var(--font-body); }
+.g-lane { fill: var(--fg); font-size: 13px; font-weight: 500; }
+.g-day { fill: var(--muted); font-size: 12px; font-family: var(--font-mono); }
+.g-wk { fill: var(--muted); font-size: 12px; font-weight: 500; }
+.g-tag { fill: var(--fg); font-size: 12px; font-family: var(--font-mono); font-weight: 500; }
+.g-note { fill: var(--muted); font-size: 11.5px; }
+.g-rv { fill: var(--high); font-size: 12px; font-weight: 700; }
+.g-band { fill: var(--sunken); }
+.g-rvcol { fill: var(--high-soft); }
+.g-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.g-main { stroke: var(--fg); stroke-width: 3; fill: none; }
+.g-dev { stroke: var(--accent); stroke-width: 3; fill: none; }
+.g-feat { stroke: var(--muted); stroke-width: 2.2; fill: none; }
+.g-rel { stroke: var(--rel); stroke-width: 2.6; fill: none; }
+.g-dot { fill: var(--surface); stroke-width: 2.5; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+/* 좁은 화면에서는 그림 대신 세로 흐름 */
+.flow-list { display: none; list-style: none; margin: 0; padding: 0; gap: 0; }
+.flow-list li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.flow-list li:last-child { border-bottom: 0; }
+.flow-list b { font-family: var(--font-mono); font-weight: 500; color: var(--accent); }
+.flow-list li.rv b { color: var(--high); }
+
+/* sprint calendar */
+.cal { display: grid; gap: 14px; }
+.week { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.week-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 10px 14px; background: var(--sunken); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.week-head b { font-weight: 700; }
+.week-head span { color: var(--muted); }
+.days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.dc { padding: 10px 10px 12px; border-right: 1px solid var(--line); display: grid; gap: 4px; align-content: start; min-width: 0; font-size: 13px; line-height: 1.5; }
+.dc:last-child { border-right: 0; }
+.dc .d { font-family: var(--font-mono); font-size: 15px; font-weight: 500; }
+.dc .ph { font-size: 11.5px; font-weight: 700; justify-self: start; padding: 0 7px; border-radius: 999px; white-space: nowrap; }
+.dc p { color: var(--muted); }
+.ph.plan { color: var(--accent); background: var(--accent-soft); }
+.ph.dev  { color: var(--muted); background: var(--sunken); }
+.ph.test { color: var(--med); background: var(--med-soft); }
+.ph.qa   { color: var(--rel); background: var(--rel-soft); }
+.ph.rv   { color: var(--high); background: var(--surface); }
+.ph.ship { color: var(--ok); background: var(--surface); }
+.dc.review { background: var(--high-soft); }
+.dc.review .d { color: var(--high); }
+
+/* review layers */
+.layers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.layer { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.layer.ci { border-top-color: var(--high); }
+.layer .k { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.layer.ci .k { color: var(--high); }
+.layer dl { margin: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 6px 12px; font-size: 14px; }
+.layer dt { color: var(--muted); }
+.layer dd { margin: 0; min-width: 0; }
+
+/* phases */
+.phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 32px; }
+.phase { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 20px; }
+.phase-tag { display: grid; gap: 2px; align-content: start; }
+.phase-tag b { font-family: var(--font-mono); font-size: 17px; font-weight: 500; color: var(--accent); }
+.phase-tag span { font-size: 12.5px; color: var(--muted); }
+.phase.rv .phase-tag b { color: var(--high); }
+.phase-body { display: grid; gap: 10px; min-width: 0; border-left: 1px solid var(--line); padding-left: 20px; }
+.phase-body > p, .phase-body > ul { max-width: 68ch; }
+
+/* code: 가로 스크롤 대신 줄바꿈 */
+.code { background: var(--code-bg); color: var(--code-fg); border-radius: var(--radius); min-width: 0; }
+.code .fname { display: block; padding: 8px 16px 0; font-family: var(--font-mono); font-size: 12px; color: var(--code-dim); }
+.code pre { margin: 0; padding: 8px 16px 14px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.code .c { color: var(--code-dim); }
+
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 14.5px; max-width: 76ch; }
+
+/* table: 좁은 화면에서는 행마다 카드로 쌓는다 */
+.tbl { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; table-layout: fixed; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 500; color: var(--muted); background: var(--sunken); }
+
+.checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.checks > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.checks ul { font-size: 14px; }
+
+footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+
+@media (max-width: 960px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .toc { position: static; }
+  .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 820px) {
+  .days { grid-template-columns: minmax(0, 1fr); }
+  .dc { border-right: 0; border-bottom: 1px solid var(--line); grid-template-columns: 44px auto minmax(0, 1fr); align-items: baseline; column-gap: 10px; }
+  .dc:last-child { border-bottom: 0; }
+}
+@media (max-width: 640px) {
+  body { font-size: 15px; padding-inline: 16px; }
+  .masthead { padding-block: 36px 28px; }
+  .cards, .layers, .checks, .toc ol { grid-template-columns: minmax(0, 1fr); }
+  .figure svg, .figure .legend { display: none; }
+  .flow-list { display: grid; }
+  .phase { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .phase-tag { grid-auto-flow: column; justify-content: start; align-items: baseline; gap: 10px; }
+  .phase-body { border-left: 0; padding-left: 0; }
+  .dc { grid-template-columns: 40px minmax(0, 1fr); }
+  .dc p { grid-column: 2; }
+  table, thead, tbody, tr, th, td { display: block; }
+  thead { display: none; }
+  tr { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  tr:last-child { border-bottom: 0; }
+  td, tr:last-child td { border: 0; padding: 2px 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; }
+  td::before { content: attr(data-l); color: var(--muted); font-size: 12.5px; }
+  .layer dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .layer dd { margin-bottom: 8px; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="eyebrow">Team Runbook · Git-flow · 2주 스프린트</div>
+  <h1>Git-flow 스프린트 개발 프로세스</h1>
+  <p class="lede">스프린트 한 번은 14일입니다. 1주차에 개발하고 테스트한 뒤 첫 코드 리뷰를 받고, 2주차에 QA를 거쳐 배포하고 데모합니다. 개발자는 매일 로컬에서 리뷰하고, 팀이 정한 두 시점(D7, D14)에는 CI의 리뷰 에이전트가 자동으로 리뷰해 Slack으로 알립니다.</p>
+  <div class="meta-row">
+    <span>브랜치 <b>main · develop · feature · release · bugfix</b></span>
+    <span>CI 리뷰 <b>D7 → develop, D14 → main</b></span>
+    <span>전제 <b>OCR 리뷰 게이트 가이드 설정 완료</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="목차">
+    <p>목차</p>
+    <ol>
+      <li><a href="#flow">전체 흐름</a></li>
+      <li><a href="#calendar">스프린트 캘린더</a></li>
+      <li><a href="#review">리뷰 두 층</a></li>
+      <li><a href="#steps">일정별 진행</a></li>
+      <li><a href="#branches">브랜치 규칙</a></li>
+      <li><a href="#checks">완료 기준</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- 01 -->
+    <section id="flow">
+      <div class="sec-head">
+        <span class="num">01 · 전체 흐름</span>
+        <h2>한 스프린트에서 브랜치가 움직이는 방식</h2>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <span class="k">원칙 1 · 티켓 먼저</span>
+          <h3>Asana 티켓 없이 브랜치를 만들지 않는다</h3>
+          <p>브랜치 이름, 커밋, PR 제목에 티켓 번호(WF-201)를 넣습니다. CI 리뷰 결과가 이 번호로 티켓에 연결됩니다.</p>
+        </div>
+        <div class="card">
+          <span class="k">원칙 2 · PR로만 머지</span>
+          <h3>develop과 main은 PR로만 바뀐다</h3>
+          <p>PR이 열리면 CI 리뷰 에이전트가 돌고, critical·high가 하나라도 있으면 필수 체크가 실패해 머지가 막힙니다.</p>
+        </div>
+        <div class="card">
+          <span class="k">원칙 3 · 리뷰는 두 층</span>
+          <h3>매일은 로컬, 체크포인트는 CI</h3>
+          <p>로컬 리뷰는 개발자가 매일 직접 돌립니다. 팀이 함께 보는 리뷰는 D7과 D14 두 번이고, CI가 자동으로 진행합니다.</p>
+        </div>
+        <div class="card">
+          <span class="k">원칙 4 · 배포는 스프린트 단위</span>
+          <h3>hotfix 브랜치를 쓰지 않는다</h3>
+          <p>배포는 D14에 release 브랜치로만 나갑니다. 배포 뒤 발견된 결함은 다음 스프린트 D1에 티켓으로 만들어 같은 흐름으로 고칩니다.</p>
+        </div>
+      </div>
+
+      <figure class="figure" style="margin:0">
+        <svg viewBox="0 0 940 300" role="img" aria-labelledby="fig-t fig-d">
+          <title id="fig-t">2주 스프린트 브랜치 흐름</title>
+          <desc id="fig-d">D1에 develop에서 feature 브랜치 두 개를 만들고 D7 CI 리뷰를 통과하면 develop에 머지한다. D8부터 D10까지 남은 작업을 하나 더 머지하고 D10에 release 브랜치를 만든다. D11부터 D13까지 QA 수정이 release에 들어가고, D14 CI 리뷰를 통과하면 main과 develop에 머지하고 태그를 붙인다.</desc>
+          <!-- week bands -->
+          <rect class="g-band" x="88" y="4" width="412" height="22" rx="4"/>
+          <rect class="g-band" x="508" y="4" width="412" height="22" rx="4"/>
+          <text class="g-wk" x="294" y="20" text-anchor="middle">1주차 · 개발 · 테스트 · 첫 리뷰</text>
+          <text class="g-wk" x="714" y="20" text-anchor="middle">2주차 · QA · 배포 · 데모</text>
+          <!-- review columns -->
+          <rect class="g-rvcol" x="448" y="36" width="44" height="232" rx="6"/>
+          <rect class="g-rvcol" x="868" y="36" width="44" height="232" rx="6"/>
+          <!-- day labels and grid -->
+          <g class="g-day" text-anchor="middle">
+            <text x="110" y="52">D1</text><text x="170" y="52">D2</text><text x="230" y="52">D3</text><text x="290" y="52">D4</text><text x="350" y="52">D5</text><text x="410" y="52">D6</text><text x="470" y="52">D7</text>
+            <text x="530" y="52">D8</text><text x="590" y="52">D9</text><text x="650" y="52">D10</text><text x="710" y="52">D11</text><text x="770" y="52">D12</text><text x="830" y="52">D13</text><text x="890" y="52">D14</text>
+          </g>
+          <g>
+            <line class="g-grid" x1="110" y1="60" x2="110" y2="262"/><line class="g-grid" x1="170" y1="60" x2="170" y2="262"/><line class="g-grid" x1="230" y1="60" x2="230" y2="262"/><line class="g-grid" x1="290" y1="60" x2="290" y2="262"/><line class="g-grid" x1="350" y1="60" x2="350" y2="262"/><line class="g-grid" x1="410" y1="60" x2="410" y2="262"/>
+            <line class="g-grid" x1="530" y1="60" x2="530" y2="262"/><line class="g-grid" x1="590" y1="60" x2="590" y2="262"/><line class="g-grid" x1="650" y1="60" x2="650" y2="262"/><line class="g-grid" x1="710" y1="60" x2="710" y2="262"/><line class="g-grid" x1="770" y1="60" x2="770" y2="262"/><line class="g-grid" x1="830" y1="60" x2="830" y2="262"/>
+          </g>
+          <!-- lane names -->
+          <text class="g-lane" x="0" y="89">main</text>
+          <text class="g-lane" x="0" y="134">release</text>
+          <text class="g-lane" x="0" y="179">develop</text>
+          <text class="g-lane" x="0" y="224">feature A</text>
+          <text class="g-lane" x="0" y="259">feature B</text>
+          <!-- main -->
+          <path class="g-main" d="M100 85 H920"/>
+          <!-- develop -->
+          <path class="g-dev" d="M100 175 H920"/>
+          <!-- feature A: D1~D7 (WF-201), D8~D10 (WF-203) -->
+          <path class="g-feat" d="M120 175 C135 175 135 220 150 220 H440 C455 220 455 175 470 175"/>
+          <path class="g-feat" d="M530 175 C545 175 545 220 560 220 H620 C635 220 635 175 650 175"/>
+          <!-- feature B: D1~D7 (WF-202) -->
+          <path class="g-feat" d="M120 175 C135 175 135 255 150 255 H440 C455 255 455 175 470 175"/>
+          <!-- release: D10 cut, D14 merge to main and develop -->
+          <path class="g-rel" d="M650 175 C665 175 665 130 680 130 H855 C870 130 870 85 885 85"/>
+          <path class="g-rel" d="M855 130 C870 130 870 175 885 175"/>
+          <!-- dots -->
+          <circle class="g-dot" cx="110" cy="85" r="5.5" style="stroke:var(--fg)"/>
+          <circle class="g-dot" cx="885" cy="85" r="6" style="stroke:var(--ok)"/>
+          <circle class="g-dot" cx="410" cy="220" r="4.5" style="stroke:var(--med)"/>
+          <circle class="g-dot" cx="410" cy="255" r="4.5" style="stroke:var(--med)"/>
+          <circle class="g-dot" cx="470" cy="175" r="6" style="stroke:var(--high)"/>
+          <circle class="g-dot" cx="650" cy="175" r="5" style="stroke:var(--accent)"/>
+          <circle class="g-dot" cx="710" cy="130" r="4.5" style="stroke:var(--rel)"/>
+          <circle class="g-dot" cx="770" cy="130" r="4.5" style="stroke:var(--rel)"/>
+          <!-- labels -->
+          <text class="g-tag" x="122" y="78">v2.3.0</text>
+          <text class="g-tag" x="876" y="76" text-anchor="end">v2.4.0</text>
+          <text class="g-note" x="295" y="213" text-anchor="middle">WF-201 · 매일 로컬 리뷰</text>
+          <text class="g-note" x="295" y="248" text-anchor="middle">WF-202 · 매일 로컬 리뷰</text>
+          <text class="g-note" x="404" y="275" text-anchor="end">D6 테스트</text>
+          <text class="g-note" x="590" y="213" text-anchor="middle">WF-203</text>
+          <text class="g-note" x="662" y="195">release/2.4.0 생성</text>
+          <text class="g-note" x="740" y="122" text-anchor="middle">QA 수정 (bugfix)</text>
+          <text class="g-rv" x="470" y="290" text-anchor="middle">CI 리뷰 ①</text>
+          <text class="g-rv" x="890" y="290" text-anchor="middle">CI 리뷰 ②</text>
+        </svg>
+        <ol class="flow-list" aria-label="브랜치 흐름 요약">
+          <li><b>D1</b><span>develop에서 <code>feature/WF-xxx</code> 생성</span></li>
+          <li><b>D2–6</b><span>feature에서 개발, 매일 로컬 리뷰, D6 테스트</span></li>
+          <li class="rv"><b>D7</b><span>PR → develop. <strong>CI 리뷰 ①</strong> 통과 후 머지</span></li>
+          <li><b>D8–10</b><span>리뷰 지적 수정과 남은 개발. D10에 <code>release/x.y.z</code> 생성</span></li>
+          <li><b>D11–13</b><span>QA. 버그는 <code>bugfix/*</code> → release</span></li>
+          <li class="rv"><b>D14</b><span>PR release → main. <strong>CI 리뷰 ②</strong> 통과 후 태그·배포·데모</span></li>
+        </ol>
+        <div class="legend">
+          <span><i style="background:var(--fg)"></i>main</span>
+          <span><i style="background:var(--accent)"></i>develop</span>
+          <span><i style="background:var(--muted)"></i>feature</span>
+          <span><i style="background:var(--rel)"></i>release · bugfix</span>
+          <span><i style="background:var(--high)"></i>CI 리뷰 시점</span>
+        </div>
+        <figcaption class="cap">D는 스프린트 일차입니다. 버전과 티켓 번호는 예시입니다.</figcaption>
+      </figure>
+    </section>
+
+    <!-- 02 -->
+    <section id="calendar">
+      <div class="sec-head">
+        <span class="num">02 · 스프린트 캘린더</span>
+        <h2>1주차는 테스트와 리뷰, 2주차는 QA와 배포</h2>
+        <p>D10은 개발 마지막 날이면서 release 브랜치를 만들고 QA를 시작하는 날입니다. 주황색 칸이 CI 리뷰 에이전트가 도는 날입니다.</p>
+      </div>
+
+      <div class="cal">
+        <div class="week">
+          <div class="week-head"><b>1주차 · D1–D7</b><span>계획 → 개발 → 테스트 → 첫 코드 리뷰</span></div>
+          <div class="days">
+            <div class="dc"><span class="d">D1</span><span class="ph plan">플래닝</span><p>스프린트 계획, Asana 티켓, feature 브랜치 생성</p></div>
+            <div class="dc"><span class="d">D2</span><span class="ph dev">개발</span><p>개발, 로컬 리뷰</p></div>
+            <div class="dc"><span class="d">D3</span><span class="ph dev">개발</span><p>개발, 로컬 리뷰</p></div>
+            <div class="dc"><span class="d">D4</span><span class="ph dev">개발</span><p>개발, 로컬 리뷰</p></div>
+            <div class="dc"><span class="d">D5</span><span class="ph dev">개발</span><p>개발, 로컬 리뷰</p></div>
+            <div class="dc"><span class="d">D6</span><span class="ph test">테스트</span><p>단위·통합 테스트, develop 최신화, PR 준비</p></div>
+            <div class="dc review"><span class="d">D7</span><span class="ph rv">코드 리뷰 ①</span><p>PR → develop. CI 리뷰와 Slack 알림, 통과하면 머지</p></div>
+          </div>
+        </div>
+        <div class="week">
+          <div class="week-head"><b>2주차 · D8–D14</b><span>마무리 개발 → QA → 배포 · 데모</span></div>
+          <div class="days">
+            <div class="dc"><span class="d">D8</span><span class="ph dev">개발</span><p>리뷰 지적 수정, 남은 개발</p></div>
+            <div class="dc"><span class="d">D9</span><span class="ph dev">개발</span><p>남은 개발, 로컬 리뷰</p></div>
+            <div class="dc"><span class="d">D10</span><span class="ph test">개발 마감</span><p>기능 동결, release 생성, QA 빌드, 테스트 시작</p></div>
+            <div class="dc"><span class="d">D11</span><span class="ph qa">QA</span><p>QA, 버그는 bugfix → release</p></div>
+            <div class="dc"><span class="d">D12</span><span class="ph qa">QA</span><p>QA, 회귀 테스트</p></div>
+            <div class="dc"><span class="d">D13</span><span class="ph qa">QA 확정</span><p>QA 종료, 배포 여부 결정</p></div>
+            <div class="dc review"><span class="d">D14</span><span class="ph ship">배포 · 데모</span><p>PR → main. CI 리뷰 ②, 태그, 배포, 데모, 회고</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 -->
+    <section id="review">
+      <div class="sec-head">
+        <span class="num">03 · 리뷰 두 층</span>
+        <h2>로컬 리뷰는 개발자의 일, CI 리뷰는 팀의 관문</h2>
+        <p>로컬 리뷰는 결과를 모으지도 않고 머지를 막지도 않습니다. 머지를 막는 것은 CI 리뷰뿐이고, 팀이 정한 체크포인트는 D7과 D14입니다.</p>
+      </div>
+
+      <div class="layers">
+        <div class="layer">
+          <span class="k">로컬 · 매일 · 개발자</span>
+          <h3>push 전에 스스로 거른다</h3>
+          <dl>
+            <dt>Claude Code</dt><dd><code>/code-review</code> 결함 찾기, <code>/simplify</code> 중복과 불필요한 복잡도 정리, <code>/security-review</code> 보안 점검</dd>
+            <dt>Codex</dt><dd><code>/review</code></dd>
+            <dt>언제</dt><dd>하루 작업을 push하기 전. 최소 하루 한 번</dd>
+            <dt>결과</dt><dd>개발자가 직접 고치고 커밋합니다. 따로 기록하거나 보고하지 않습니다</dd>
+          </dl>
+        </div>
+        <div class="layer ci">
+          <span class="k">CI · D7 / D14 · 리뷰 에이전트</span>
+          <h3>PR이 열리면 자동으로 돈다</h3>
+          <dl>
+            <dt>트리거</dt><dd>D7 PR feature → develop, D14 PR release → main</dd>
+            <dt>범위</dt><dd>PR의 base 브랜치와 비교한 전체 변경</dd>
+            <dt>판정</dt><dd>critical·high가 있으면 필수 체크 <code>ocr-review</code> 실패 → 머지 차단</dd>
+            <dt>알림</dt><dd>통과와 차단 모두 Slack에 보냅니다. 차단이면 PR 작성자를 멘션하고 지적마다 ID를 붙입니다</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="code">
+        <span class="fname">.github/workflows/ocr-review.yml · on (OCR 가이드에서 바꿀 부분)</span>
+<pre><span class="c"># feature/** push 트리거는 빼고, develop·main으로 가는 PR에서만 돈다</span>
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened]</pre>
+      </div>
+      <p class="note">D8–D10에 develop으로 들어가는 추가 PR도 같은 트리거로 자동 리뷰됩니다. 일정을 따로 잡지 않고 게이트만 통과하면 됩니다. bugfix → release PR은 CI 리뷰를 돌리지 않습니다. 대신 D14 리뷰가 release 전체를 다시 봅니다.</p>
+    </section>
+
+    <!-- 04 -->
+    <section id="steps">
+      <div class="sec-head">
+        <span class="num">04 · 일정별 진행</span>
+        <h2>D1부터 D14까지 할 일</h2>
+      </div>
+
+      <ol class="phases">
+        <li class="phase">
+          <div class="phase-tag"><b>D1</b><span>플래닝</span></div>
+          <div class="phase-body">
+            <p>스프린트 목표와 범위를 정하고, Asana에 릴리즈 태스크(v2.4.0)와 기능 티켓을 만듭니다. 각자 develop에서 feature 브랜치를 만듭니다.</p>
+            <div class="code"><span class="fname">terminal · 각자</span>
+<pre>git switch develop &amp;&amp; git pull
+git switch -c feature/WF-201-login-lock</pre></div>
+          </div>
+        </li>
+
+        <li class="phase">
+          <div class="phase-tag"><b>D2–D6</b><span>개발 · 테스트</span></div>
+          <div class="phase-body">
+            <p>feature 브랜치에서 개발합니다. push하기 전에 로컬 리뷰를 돌리고 나온 문제를 고칩니다. feature 브랜치에 push해도 CI 리뷰는 돌지 않습니다.</p>
+            <div class="code"><span class="fname">매일 · push 전</span>
+<pre><span class="c"># Claude Code</span>
+/code-review
+/simplify
+/security-review
+<span class="c"># Codex</span>
+/review
+
+git commit -am "feat(auth): 로그인 5회 실패 시 계정 잠금 [WF-201]"
+git push -u origin feature/WF-201-login-lock</pre></div>
+            <p>D6에는 새 기능을 넣지 않습니다. 단위·통합 테스트를 채우고, develop 최신 내용을 받아 충돌을 미리 풉니다.</p>
+          </div>
+        </li>
+
+        <li class="phase rv">
+          <div class="phase-tag"><b>D7</b><span>코드 리뷰 ①</span></div>
+          <div class="phase-body">
+            <p>develop으로 PR을 엽니다. CI 리뷰 에이전트가 자동으로 돌고 결과를 Slack으로 보냅니다.</p>
+            <div class="code"><span class="fname">terminal</span>
+<pre>gh pr create --base develop --title "WF-201 로그인 5회 실패 시 계정 잠금" \
+  --body "Asana: https://app.asana.com/... (WF-201)"</pre></div>
+            <ul>
+              <li><b>통과</b>: 동료 1명의 승인을 받고 squash 머지합니다. Asana 티켓을 “develop 반영”으로 옮깁니다.</li>
+              <li><b>차단</b>: 같은 브랜치에서 고쳐 push하면 리뷰가 다시 돕니다. 오탐이면 <code>/ocr-triage &lt;id&gt; false_positive "사유"</code>를 남기고 테크 리드가 머지 여부를 정합니다.</li>
+              <li>medium 이하는 머지를 막지 않습니다. 이번에 고치거나 D8에 처리할 티켓으로 남깁니다.</li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="phase">
+          <div class="phase-tag"><b>D8–D10</b><span>마무리 · 동결</span></div>
+          <div class="phase-body">
+            <p>D7 리뷰에서 남은 지적과 남은 개발을 끝냅니다. 이 PR들도 develop 게이트를 그대로 통과해야 합니다. D10 오후에 기능을 동결하고 테크 리드가 release 브랜치를 만듭니다. 이때부터 develop에는 다음 스프린트 작업이 들어가도 됩니다.</p>
+            <div class="code"><span class="fname">terminal · D10 테크 리드</span>
+<pre>git switch develop &amp;&amp; git pull
+git switch -c release/2.4.0
+./scripts/bump_version.sh 2.4.0
+git commit -am "chore(release): 버전 2.4.0"
+git push -u origin release/2.4.0</pre></div>
+          </div>
+        </li>
+
+        <li class="phase">
+          <div class="phase-tag"><b>D11–D13</b><span>QA</span></div>
+          <div class="phase-body">
+            <p>release 빌드로 QA를 합니다. 버그는 Asana에 티켓으로 만들고, develop이 아니라 release에서 bugfix 브랜치를 땁니다. 고친 내용은 D14에 release가 develop으로 돌아갈 때 함께 들어갑니다.</p>
+            <div class="code"><span class="fname">terminal · 담당자</span>
+<pre>git switch release/2.4.0 &amp;&amp; git pull
+git switch -c bugfix/WF-209-csv-bom
+<span class="c"># 로컬 리뷰 후</span>
+gh pr create --base release/2.4.0 --title "WF-209 CSV 한글 깨짐"</pre></div>
+            <p>D13에 QA를 끝내고 배포 여부를 정합니다. 해결되지 않은 critical 버그가 있으면 그 기능을 이번 배포에서 뺄지 이때 결정합니다.</p>
+          </div>
+        </li>
+
+        <li class="phase rv">
+          <div class="phase-tag"><b>D14</b><span>코드 리뷰 ② · 배포</span></div>
+          <div class="phase-body">
+            <p>release → main PR을 열면 CI 리뷰 에이전트가 main과 비교해 이번 릴리즈 전체를 리뷰하고 Slack으로 알립니다.</p>
+            <ul>
+              <li><b>통과</b>: release → main, release → develop 두 PR을 merge commit으로 머지합니다(squash 금지). main에 <code>v2.4.0</code> 태그를 붙여 배포한 뒤 release 브랜치를 지웁니다.</li>
+              <li><b>차단</b>: release에서 bugfix로 고치고 다시 리뷰받습니다. 그날 안에 해결되지 않으면 테크 리드가 배포를 미루거나 해당 기능을 빼고 배포합니다.</li>
+              <li>배포 후 데모와 회고를 합니다. 남은 지적과 배포 후 결함은 다음 스프린트 백로그로 넘깁니다.</li>
+            </ul>
+            <div class="code"><span class="fname">terminal · 테크 리드 (두 PR 머지 후)</span>
+<pre>git switch main &amp;&amp; git pull
+git tag -a v2.4.0 -m "v2.4.0"
+git push origin v2.4.0
+git push origin --delete release/2.4.0</pre></div>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 05 -->
+    <section id="branches">
+      <div class="sec-head">
+        <span class="num">05 · 브랜치 규칙</span>
+        <h2>만드는 곳, 머지하는 곳, 리뷰받는 시점</h2>
+      </div>
+      <div class="tbl">
+        <table>
+          <colgroup><col style="width:24%"><col style="width:15%"><col style="width:17%"><col style="width:12%"><col></colgroup>
+          <thead><tr><th>브랜치</th><th>만드는 곳</th><th>PR 대상</th><th>기간</th><th>CI 리뷰</th></tr></thead>
+          <tbody>
+            <tr><td data-l="브랜치"><code>feature/WF-201-login-lock</code></td><td data-l="만드는 곳">develop</td><td data-l="PR 대상">develop</td><td data-l="기간">D1–D10</td><td data-l="CI 리뷰">develop PR마다. 정식 체크포인트는 D7</td></tr>
+            <tr><td data-l="브랜치"><code>release/2.4.0</code></td><td data-l="만드는 곳">develop (D10)</td><td data-l="PR 대상">main, 그다음 develop</td><td data-l="기간">D10–D14</td><td data-l="CI 리뷰">main PR (D14)</td></tr>
+            <tr><td data-l="브랜치"><code>bugfix/WF-209-csv-bom</code></td><td data-l="만드는 곳">release</td><td data-l="PR 대상">release</td><td data-l="기간">D11–D13</td><td data-l="CI 리뷰">없음. 로컬 리뷰와 승인 1명. D14 리뷰에 포함</td></tr>
+            <tr><td data-l="브랜치"><code>develop</code> · <code>main</code></td><td data-l="만드는 곳">-</td><td data-l="PR 대상">-</td><td data-l="기간">상시</td><td data-l="CI 리뷰">직접 push 금지. Ruleset으로 PR과 <code>ocr-review</code> 체크 필수</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code"><span class="fname">커밋 · PR 제목</span>
+<pre><span class="c"># 커밋</span>
+feat(auth): 로그인 5회 실패 시 계정 잠금 [WF-201]
+<span class="c"># PR 제목은 티켓 번호로 시작</span>
+WF-201 로그인 5회 실패 시 계정 잠금</pre></div>
+    </section>
+
+    <!-- 06 -->
+    <section id="checks">
+      <div class="sec-head">
+        <span class="num">06 · 완료 기준</span>
+        <h2>다음 단계로 넘어가기 전에 확인할 것</h2>
+      </div>
+      <div class="checks">
+        <div>
+          <h3>D1 → 개발 시작</h3>
+          <ul>
+            <li>모든 작업에 Asana 티켓과 담당자가 있다</li>
+            <li>브랜치 이름에 티켓 번호가 있다</li>
+          </ul>
+        </div>
+        <div>
+          <h3>D7 → develop 머지</h3>
+          <ul>
+            <li>D6에 테스트를 채웠고 develop과 충돌이 없다</li>
+            <li><code>ocr-review</code> 체크가 통과했다</li>
+            <li>차단됐던 지적은 고쳤거나 오탐 판정을 남겼다</li>
+            <li>동료 1명이 승인했다</li>
+          </ul>
+        </div>
+        <div>
+          <h3>D10 → release 생성</h3>
+          <ul>
+            <li>릴리즈 태스크의 티켓이 모두 develop에 머지되었다</li>
+            <li>D7 리뷰에서 넘긴 지적이 처리되었거나 다음 스프린트 티켓이 되었다</li>
+          </ul>
+        </div>
+        <div>
+          <h3>D14 → 배포</h3>
+          <ul>
+            <li>QA 버그가 모두 bugfix PR로 release에 들어갔다</li>
+            <li>main PR의 <code>ocr-review</code> 체크가 통과했다</li>
+            <li>main과 develop 두 PR 모두 merge commit으로 머지했다</li>
+            <li>태그를 붙이고 배포했다. 데모와 회고를 마쳤다</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <p>워크플로 설치, Slack Webhook, Ruleset은 <a href="../../code-review-automation/v0.1/review-gate.html">OCR 리뷰 게이트 운영 가이드</a>를 따르고, CI 리뷰를 API 키와 Max 구독 중 어느 쪽으로 돌릴지는 <a href="../../code-review-automation/v0.1/review-modes.html">리뷰 방식 비교</a>를 따릅니다.</p>
+  <p>이 문서에서 뺀 것: hotfix 브랜치, 고객사별 라이선스와 패키지, 리뷰 원장과 골든셋 구성. 판정(<code>/ocr-triage</code>) 수집과 골든셋 설정은 별도 문서로 정리할 예정입니다.</p>
+</footer>
+</body>
+</html>

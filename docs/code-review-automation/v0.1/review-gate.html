@@ -1,0 +1,1174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OCR 리뷰 게이트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: sticky table of contents on the left, one readable column of runbook steps on the right; stacks on phones. */
+:root {
+  --bg: #F4F5F7;
+  --surface: #FFFFFF;
+  --sunken: #EBEDF1;
+  --fg: #1A1F29;
+  --muted: #586172;
+  --line: #D8DCE3;
+  --accent: #1F5FBF;
+  --accent-soft: #E2EBF9;
+  --crit: #C42B2B;  --crit-soft: #FBE8E8;
+  --high: #C95308;  --high-soft: #FDEDE1;
+  --med:  #946C00;  --med-soft:  #FAF2D9;
+  --low:  #586172;  --low-soft:  #EBEDF1;
+  --ok:   #1C7543;  --ok-soft:   #E1F2E8;
+  --code-bg: #161B24;
+  --code-fg: #DCE3EE;
+  --code-dim: #8B96A8;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+    --accent: #80A8F0; --accent-soft: #1C2940;
+    --crit: #F07A7A; --crit-soft: #3A1D20; --high: #F29C5E; --high-soft: #3A2719;
+    --med: #E0BA4F; --med-soft: #342C15; --low: #9AA3B3; --low-soft: #222936;
+    --ok: #5DC28C; --ok-soft: #163225;
+    --code-bg: #0A0D12; --code-fg: #DCE3EE; --code-dim: #7D889A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+  --accent: #80A8F0; --accent-soft: #1C2940;
+  --crit: #F07A7A; --crit-soft: #3A1D20; --high: #F29C5E; --high-soft: #3A2719;
+  --med: #E0BA4F; --med-soft: #342C15; --low: #9AA3B3; --low-soft: #222936;
+  --ok: #5DC28C; --ok-soft: #163225;
+  --code-bg: #0A0D12; --code-fg: #DCE3EE; --code-dim: #7D889A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.75;
+  padding-inline: 20px;
+  padding-block: 0 80px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, pre, kbd { font-family: var(--font-mono); }
+:not(pre) > code {
+  font-size: 0.86em;
+  background: var(--sunken);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+h1, h2, h3 { text-wrap: balance; line-height: 1.35; margin: 0; }
+p { margin: 0; }
+
+.wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 56px;
+}
+
+/* ---------- header ---------- */
+.masthead {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding-block: 56px 40px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 40px;
+  display: grid;
+  gap: 14px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.masthead h1 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; letter-spacing: -0.01em; }
+.masthead .lede { max-width: 68ch; color: var(--muted); font-size: 16.5px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.meta-row span { display: inline-flex; gap: 6px; align-items: baseline; }
+.meta-row b { color: var(--fg); font-weight: 500; }
+
+/* ---------- toc ---------- */
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+.toc p { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a {
+  display: grid; grid-template-columns: 26px 1fr; padding: 5px 8px; border-radius: 6px;
+  color: var(--muted); text-decoration: none; line-height: 1.5;
+}
+.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; }
+.toc a:hover { background: var(--sunken); color: var(--fg); }
+
+/* ---------- content ---------- */
+main { min-width: 0; display: grid; gap: 72px; }
+section { display: grid; gap: 20px; min-width: 0; scroll-margin-top: 24px; }
+.sec-head { display: grid; gap: 6px; }
+.sec-head .num { font-family: var(--font-mono); font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+section > .sec-head h2 { font-size: 25px; font-weight: 700; }
+.sec-head p { color: var(--muted); max-width: 70ch; }
+h3 { font-size: 17.5px; font-weight: 700; }
+.prose { display: grid; gap: 12px; max-width: 72ch; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+
+/* requirement summary */
+.reqs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.req { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; align-content: start; }
+.req .where { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.req h3 { font-size: 16px; }
+.req p { color: var(--muted); font-size: 14.5px; }
+
+/* flow */
+.flow { display: grid; gap: 0; }
+.stage { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; padding: 18px 0; border-top: 1px solid var(--line); }
+.stage:last-child { border-bottom: 1px solid var(--line); }
+.stage .loc { display: grid; gap: 4px; align-content: start; }
+.stage .loc span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; }
+.stage .loc b { font-size: 14px; }
+.stage .body { display: grid; gap: 6px; min-width: 0; }
+.stage .body p { color: var(--muted); font-size: 14.5px; }
+
+/* figures */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 10px; min-width: 0; }
+.figure .cap { font-size: 13px; color: var(--muted); }
+.scroll-x { overflow-x: auto; }
+svg text { font-family: var(--font-body); }
+.g-lane { stroke: var(--line); stroke-width: 2; fill: none; }
+.g-dev { stroke: var(--accent); stroke-width: 3; fill: none; }
+.g-feat { stroke: var(--muted); stroke-width: 2.5; fill: none; }
+.g-rev { stroke: var(--high); stroke-width: 2.5; fill: none; }
+.g-dot { fill: var(--surface); stroke-width: 2.5; }
+.g-label { fill: var(--fg); font-size: 13px; font-weight: 500; }
+.g-sub { fill: var(--muted); font-size: 11.5px; }
+.g-bad { fill: var(--crit); font-size: 12px; font-weight: 700; }
+.g-good { fill: var(--ok); font-size: 12px; font-weight: 700; }
+.g-info { fill: var(--accent); font-size: 12px; font-weight: 700; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 500; color: var(--muted); background: var(--sunken); letter-spacing: 0.02em; }
+td code { white-space: nowrap; }
+
+/* steps */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; counter-reset: step; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; }
+.steps > li::before {
+  content: counter(step);
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent);
+}
+.step-body { display: grid; gap: 10px; min-width: 0; }
+.step-body > p, .step-body > ul { max-width: 70ch; }
+.step-body ul { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; }
+.who { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-family: var(--font-mono); font-size: 11.5px; padding: 1px 8px; border-radius: 999px;
+  background: var(--sunken); color: var(--muted); border: 1px solid var(--line); white-space: nowrap;
+}
+.chip.local { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.chip.ci { color: var(--high); background: var(--high-soft); border-color: transparent; }
+.chip.slack { color: var(--med); background: var(--med-soft); border-color: transparent; }
+.chip.pr { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+
+/* code */
+.code { position: relative; background: var(--code-bg); color: var(--code-fg); border-radius: var(--radius); min-width: 0; }
+.code .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px 0 16px; }
+.code .fname { font-family: var(--font-mono); font-size: 12px; color: var(--code-dim); overflow-wrap: anywhere; }
+.code pre { margin: 0; padding: 10px 16px 16px; overflow-x: auto; font-size: 13px; line-height: 1.65; tab-size: 2; }
+.code pre.tall { max-height: 560px; overflow-y: auto; }
+.code .c { color: var(--code-dim); }
+.copy {
+  font-family: var(--font-body); font-size: 12px; color: var(--code-fg);
+  background: transparent; border: 1px solid #3A4352; border-radius: 6px; padding: 3px 10px; cursor: pointer; flex: none;
+}
+.copy:hover { background: #262E3B; }
+
+/* callouts */
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 14.5px; max-width: 76ch; }
+.note.warn { border-color: var(--high); background: var(--high-soft); }
+.note b { font-weight: 700; }
+
+/* mock: chat message */
+.mock { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; min-width: 0; }
+.mock-head { font-size: 12px; color: var(--muted); padding: 8px 14px; background: var(--sunken); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 14px; font-size: 14px; line-height: 1.6; }
+.avatar { width: 36px; height: 36px; border-radius: 8px; background: var(--code-bg); color: var(--code-fg); display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.msg .name { font-weight: 700; }
+.msg .name small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.msg .lines { display: grid; gap: 3px; min-width: 0; }
+.msg blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
+.msg pre { margin: 4px 0; padding: 8px 10px; background: var(--sunken); border-radius: 6px; font-size: 12.5px; overflow-x: auto; }
+.msg .issue { overflow-wrap: anywhere; }
+.sev { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.sev.critical { color: var(--crit); background: var(--crit-soft); }
+.sev.high { color: var(--high); background: var(--high-soft); }
+.sev.medium { color: var(--med); background: var(--med-soft); }
+.sev.low { color: var(--low); background: var(--low-soft); }
+
+/* mock: merge box */
+.merge { display: grid; gap: 0; }
+.merge-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.merge-row:last-child { border-bottom: 0; }
+.merge-row .ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.ic.bad { background: var(--crit-soft); color: var(--crit); }
+.ic.good { background: var(--ok-soft); color: var(--ok); }
+.merge-row small { color: var(--muted); display: block; }
+.btn-mock { display: inline-block; margin-top: 8px; font-size: 13px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); background: var(--sunken); }
+.btn-mock.go { color: #fff; background: var(--ok); border-color: transparent; }
+
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+/* verdict matrix */
+.v { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
+.v.pass { color: var(--ok); background: var(--ok-soft); }
+.v.block { color: var(--crit); background: var(--crit-soft); }
+.v.info { color: var(--muted); background: var(--sunken); }
+
+details { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+details summary { cursor: pointer; padding: 12px 16px; font-weight: 500; }
+details > div { padding: 0 16px 16px; display: grid; gap: 10px; }
+
+footer { max-width: 1160px; margin: 72px auto 0; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+
+@media (max-width: 960px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .toc { position: static; }
+  .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  body { font-size: 15px; padding-inline: 16px; }
+  .reqs, .pair { grid-template-columns: minmax(0, 1fr); }
+  .stage { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .toc ol { grid-template-columns: minmax(0, 1fr); }
+  .steps > li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .masthead { padding-block: 36px 28px; }
+}
+
+.roles { display: grid; gap: 12px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.roles h3 { font-size: 17px; }
+.roles .table-wrap { background: var(--bg); }
+.roles .plain { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 14.5px; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <span class="eyebrow">Team Runbook · open-code-review v1.12 기준</span>
+  <h1>OCR 리뷰 게이트 운영 가이드</h1>
+  <p class="lede">로컬에서는 Claude Code나 Codex로 먼저 리뷰하고, push가 되면 GitHub Actions에서 open-code-review(<code>ocr</code>)가 다시 리뷰합니다. critical·high 이슈가 나오면 Slack으로 알리고, 수정되기 전까지는 <code>develop</code>으로 머지할 수 없게 막습니다. 이 문서는 그 구성 방법과 실제 한 사이클을 따라가며 설명합니다.</p>
+  <div class="meta-row">
+    <span>대상 <b>팀 개발자 · 저장소 관리자</b></span>
+    <span>소요 <b>최초 설정 약 30분</b></span>
+    <span>필요 권한 <b>저장소 Admin, Slack 앱 생성 권한</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="목차">
+    <p>목차</p>
+    <ol>
+      <li><a href="#overview">전체 구조</a></li>
+      <li><a href="#prereq">준비물</a></li>
+      <li><a href="#setup">설정 따라하기</a></li>
+      <li><a href="#daily">개발자 루틴</a></li>
+      <li><a href="#cycle">예시 사이클</a></li>
+      <li><a href="#verdict">판정 기준</a></li>
+      <li><a href="#ops">운영 가이드</a></li>
+      <li><a href="#trouble">문제 해결</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 1. overview -->
+    <section id="overview">
+      <div class="sec-head">
+        <span class="num">01 · 전체 구조</span>
+        <h2>네 단계로 이루어진 리뷰 흐름</h2>
+        <p>리뷰를 두 번 거칩니다. 로컬 리뷰는 개발자를 돕는 단계라 건너뛸 수 있고, CI 리뷰는 머지를 실제로 막는 단계입니다.</p>
+      </div>
+
+      <div class="reqs">
+        <div class="req">
+          <span class="where">1 · 로컬</span>
+          <h3>Claude Code / Codex로 사전 리뷰</h3>
+          <p><code>/code-review</code>, <code>/simplify</code>, Codex <code>/review</code>로 고친 뒤 머지를 준비합니다.</p>
+        </div>
+        <div class="req">
+          <span class="where">2 · GitHub Actions</span>
+          <h3>push되면 ocr 자동 리뷰</h3>
+          <p><code>feature/code-review</code>에 push하면 게이트 리뷰가, <code>develop</code>에 push(머지)되면 사후 리뷰가 실행됩니다.</p>
+        </div>
+        <div class="req">
+          <span class="where">3 · Slack</span>
+          <h3>critical·high만 알림</h3>
+          <p>커밋 목록, push한 사람, 심각도별 건수, 주요 이슈 10건, 전체 리포트 링크를 채널로 보냅니다.</p>
+        </div>
+        <div class="req">
+          <span class="where">4 · GitHub Ruleset</span>
+          <h3>통과해야 develop 머지</h3>
+          <p><code>ocr-review</code> 체크가 실패한 PR은 머지 버튼이 잠깁니다. 수정 후 다시 push해서 통과해야 풀립니다.</p>
+        </div>
+      </div>
+
+
+      <div class="roles" id="roles">
+        <h3>역할 분담: 리뷰는 찾고 알리기까지만</h3>
+        <p class="cap">리뷰는 코드를 고치지 않고, 결함을 찾아 리포트하는 데서 끝납니다. 머지를 실제로 막는 것은 GitHub이고, 결함을 처리하는 것은 사람입니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>역할</th><th>담당</th><th>하는 일</th><th>하지 않는 일</th></tr></thead>
+            <tbody>
+              <tr><td><b>리뷰</b></td><td>ocr</td><td>코드를 읽고 결함을 찾아 리포트 (<code>result.json</code>)</td><td>코드 수정, 머지 결정</td></tr>
+              <tr><td><b>알림</b></td><td>워크플로 Slack 단계</td><td>critical·high가 있으면 채널에 리포트 요약 전송</td><td></td></tr>
+              <tr><td><b>머지 차단 신호</b></td><td>워크플로 Gate 단계</td><td>판정을 체크 상태(✓/✗)로 표시해 “머지하면 안 됨”을 알림</td><td>실제 차단</td></tr>
+              <tr><td><b>머지 차단 집행</b></td><td>GitHub Ruleset</td><td><code>ocr-review</code> 체크가 ✗이면 머지 버튼을 잠금</td><td></td></tr>
+              <tr><td><b>결함 처리</b></td><td>개발자</td><td>리포트를 보고 수정하거나 오탐으로 판단</td><td></td></tr>
+              <tr><td><b>예외 승인</b></td><td>팀 리드</td><td>오탐일 때 bypass 권한으로 머지</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul class="plain">
+          <li><b>알림만 할지, 차단까지 할지는 Ruleset이 정합니다.</b> <code>ocr-review</code>를 필수 체크로 두면 머지가 잠기고, 필수 체크에서 빼면 ✗ 표시와 Slack 알림만 남습니다. 리뷰 워크플로는 고치지 않아도 됩니다.</li>
+          <li><b>CI의 리뷰는 읽기 전용입니다.</b> ocr에는 파일을 쓰는 도구가 없고, Claude Code 방식은 <code>--allowedTools</code>로 읽기 도구만 허용합니다.</li>
+          <li><b>로컬 자동 수정 도구는 이 체계 밖입니다.</b> <code>/code-review --fix</code>, <code>/simplify</code>, ocr 플러그인의 Claude Code 명령은 코드를 고칩니다. 개발자가 자기 PC에서 고르는 도구이고, CI 리뷰와는 섞이지 않습니다.</li>
+        </ul>
+      </div>
+      <div class="figure">
+        <div class="scroll-x">
+          <svg viewBox="0 0 760 250" width="760" height="250" role="img" aria-labelledby="gTitle">
+            <title id="gTitle">브랜치 흐름: feature/login-lock 작업을 feature/code-review에 머지해 push하면 리뷰 실패, 수정 후 재push하면 통과, PR로 develop에 머지된 뒤 사후 리뷰가 실행된다</title>
+            <text class="g-label" x="8" y="54">feature/login-lock</text>
+            <text class="g-sub" x="8" y="70">개인 작업 브랜치</text>
+            <text class="g-label" x="8" y="129">feature/code-review</text>
+            <text class="g-sub" x="8" y="145">리뷰 게이트 브랜치</text>
+            <text class="g-label" x="8" y="204">develop</text>
+            <text class="g-sub" x="8" y="220">릴리즈 통합 브랜치</text>
+
+            <line class="g-dev" x1="160" y1="200" x2="750" y2="200"/>
+            <path class="g-feat" d="M180 200 C 200 200, 205 50, 230 50 L 540 50"/>
+            <path class="g-rev" d="M180 200 C 210 200, 230 125, 260 125 L 600 125"/>
+            <path class="g-feat" d="M310 50 C 330 50, 340 125, 370 125"/>
+            <path class="g-feat" d="M530 50 C 550 50, 560 125, 590 125"/>
+            <path class="g-rev" d="M590 125 C 630 125, 650 200, 690 200"/>
+
+            <circle class="g-dot" cx="180" cy="200" r="7" style="stroke: var(--accent)"/>
+            <circle class="g-dot" cx="250" cy="50" r="6" style="stroke: var(--muted)"/>
+            <circle class="g-dot" cx="310" cy="50" r="6" style="stroke: var(--muted)"/>
+            <circle class="g-dot" cx="530" cy="50" r="6" style="stroke: var(--muted)"/>
+            <circle class="g-dot" cx="370" cy="125" r="8" style="stroke: var(--crit)"/>
+            <circle class="g-dot" cx="590" cy="125" r="8" style="stroke: var(--ok)"/>
+            <circle class="g-dot" cx="690" cy="200" r="8" style="stroke: var(--accent)"/>
+
+            <text class="g-sub" x="232" y="34">feat 커밋 2개</text>
+            <text class="g-sub" x="500" y="34">fix 커밋</text>
+            <text class="g-bad" x="352" y="160">push #1 → ✗ blocked</text>
+            <text class="g-sub" x="352" y="176">Slack 알림, PR 머지 잠김</text>
+            <text class="g-good" x="572" y="160">push #2 → ✓ pass</text>
+            <text class="g-info" x="640" y="236">PR 머지 → 사후 리뷰</text>
+          </svg>
+        </div>
+        <p class="cap">이 문서의 <a href="#cycle">예시 사이클</a>이 그대로 이 그림을 따라갑니다. 작업 브랜치는 개인 것이고, 게이트 역할은 <code>feature/code-review</code>가 맡습니다.</p>
+      </div>
+
+      <div class="flow">
+        <div class="stage">
+          <div class="loc"><span>LOCAL</span><b>개발자 PC</b></div>
+          <div class="body">
+            <h3>사전 리뷰 후 게이트 브랜치로 push</h3>
+            <p>작업 브랜치에서 Claude Code나 Codex로 리뷰하고 수정합니다. 끝나면 <code>feature/code-review</code>에 머지해 push합니다. 이 단계의 결과는 머지 판단에 쓰이지 않습니다.</p>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="loc"><span>CI · gate mode</span><b>GitHub Actions</b></div>
+          <div class="body">
+            <h3>develop 대비 브랜치 전체를 리뷰</h3>
+            <p>push가 일어날 때마다 <code>merge-base(develop, HEAD)..HEAD</code> 전체를 다시 리뷰합니다. 이번 push의 커밋만 보면 앞선 push에서 지적된 이슈가 고쳐졌는지 알 수 없기 때문입니다. critical·high가 하나라도 있으면 <code>ocr-review</code> 체크가 실패합니다.</p>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="loc"><span>NOTIFY</span><b>Slack 채널</b></div>
+          <div class="body">
+            <h3>막혔을 때만 알림</h3>
+            <p>critical·high가 나왔거나 리뷰가 실패·미완료면 알림을 보냅니다. 통과 알림은 저장소 변수 <code>OCR_SLACK_ON_PASS=true</code>를 설정했을 때만 보냅니다.</p>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="loc"><span>GATE</span><b>Pull Request</b></div>
+          <div class="body">
+            <h3>체크가 통과해야 머지</h3>
+            <p>Ruleset에서 <code>ocr-review</code>를 필수 체크로 지정합니다. 머지된 뒤에는 develop push로 사후 리뷰가 한 번 더 돌고, 이 리뷰는 알림만 보내고 아무것도 막지 않습니다.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. prerequisites -->
+    <section id="prereq">
+      <div class="sec-head">
+        <span class="num">02 · 준비물</span>
+        <h2>시작 전에 확인할 것</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>항목</th><th>용도</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td>LLM API 키</td><td>CI에서 ocr가 리뷰할 때 사용</td><td>Anthropic, OpenAI, Gemini, Bedrock 등. <code>ocr review</code>는 API 키가 필요합니다. Max 구독으로 운영하려면 <b>OCR 리뷰 방식 비교</b> 문서의 Max 구독 방식을 보세요.</td></tr>
+            <tr><td>Slack Incoming Webhook URL</td><td>리뷰 결과 알림</td><td>알림 받을 채널 하나당 하나</td></tr>
+            <tr><td>저장소 Admin 권한</td><td>Secrets, Variables, Ruleset 설정</td><td>최초 1회</td></tr>
+            <tr><td><code>develop</code> 브랜치</td><td>머지 대상이자 리뷰 기준점</td><td>워크플로의 <code>BASE_BRANCH</code></td></tr>
+            <tr><td>개발자 로컬 도구</td><td>사전 리뷰</td><td>Claude Code 또는 Codex CLI. ocr 로컬 설치는 선택</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">CI 리뷰 중에는 변경된 코드(diff)와 에이전트가 읽은 파일 일부가 <b>설정한 LLM API로 전송</b>됩니다. 사내 보안 정책을 먼저 확인하세요. <code>.env</code>, SSH 키 같은 시크릿 경로는 ocr가 기본으로 제외합니다.</p>
+    </section>
+
+    <!-- 3. setup -->
+    <section id="setup">
+      <div class="sec-head">
+        <span class="num">03 · 설정 따라하기</span>
+        <h2>저장소에 게이트 설치하기</h2>
+        <p>저장소 관리자가 한 번만 하면 됩니다. 순서가 중요합니다. 워크플로가 한 번 실행되어야 Ruleset에서 체크 이름을 고를 수 있습니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip slack">Slack</span></div>
+            <h3>Slack Incoming Webhook 만들기</h3>
+            <ul>
+              <li><a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a>에서 <b>Create New App → From scratch</b>를 선택합니다.</li>
+              <li><b>Incoming Webhooks</b>를 켜고 <b>Add New Webhook to Workspace</b>에서 알림 채널(예: <code>#code-review-alerts</code>)을 고릅니다.</li>
+              <li>발급된 <code>https://hooks.slack.com/services/…</code> URL을 복사합니다.</li>
+            </ul>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip pr">GitHub · Settings</span></div>
+            <h3>Secrets와 Variables 등록</h3>
+            <p><b>Settings → Secrets and variables → Actions</b>에서 등록합니다.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>종류</th><th>이름</th><th>값 예시</th><th>설명</th></tr></thead>
+                <tbody>
+                  <tr><td>Secret</td><td><code>OCR_API_KEY</code></td><td><code>sk-ant-…</code></td><td>LLM API 키 (필수)</td></tr>
+                  <tr><td>Secret</td><td><code>SLACK_WEBHOOK_URL</code></td><td><code>https://hooks.slack.com/…</code></td><td>1단계에서 복사한 URL (필수)</td></tr>
+                  <tr><td>Variable</td><td><code>OCR_MODEL</code></td><td><code>claude-sonnet-5-5</code></td><td>리뷰 모델 ID (필수)</td></tr>
+                  <tr><td>Variable</td><td><code>OCR_PROVIDER</code></td><td><code>anthropic</code></td><td>기본값 anthropic. <code>openai</code>, <code>gemini</code>, <code>bedrock</code> 등</td></tr>
+                  <tr><td>Variable</td><td><code>OCR_VERSION</code></td><td><code>1.12.11</code></td><td>버전 고정 권장. 비우면 latest</td></tr>
+                  <tr><td>Variable</td><td><code>OCR_EFFORT</code></td><td><code>medium</code></td><td><code>low</code> 1회, <code>medium</code> 2회, <code>high</code> 3회 리뷰 라운드</td></tr>
+                  <tr><td>Variable</td><td><code>OCR_MAX_TOKENS_BUDGET</code></td><td><code>5000000</code></td><td>실행 1회당 토큰 상한. 넘으면 결과가 <code>incomplete</code></td></tr>
+                  <tr><td>Variable</td><td><code>OCR_LANGUAGE</code></td><td><code>Korean</code></td><td>리뷰 코멘트 언어</td></tr>
+                  <tr><td>Variable</td><td><code>OCR_SLACK_ON_PASS</code></td><td><code>false</code></td><td><code>true</code>면 통과했을 때도 알림</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip">저장소 파일</span><span class="chip">권장</span></div>
+            <h3>팀 리뷰 규칙과 심각도 기준 커밋</h3>
+            <p>게이트는 critical·high 여부로 결정되므로 <b>무엇이 critical·high인지 팀 기준을 규칙으로 적어 두는 것</b>이 판정을 안정시키는 가장 좋은 방법입니다. <code>merge_system_rule: true</code>를 두면 ocr의 언어별 기본 규칙이 유지되고 그 위에 팀 규칙이 더해집니다.</p>
+            <div class="code">
+              <div class="bar"><span class="fname">.opencodereview/rule.json</span><button class="copy" type="button" data-copy="code-rule">복사</button></div>
+<pre id="code-rule">{
+  "exclude": ["**/generated/**", "docs/**", "**/*.min.js"],
+  "rules": [
+    {
+      "path": "**/*",
+      "rule": "심각도 기준: critical = 보안 취약점(인젝션, 인증/인가 우회, 시크릿 노출) 또는 데이터 손실. high = 운영 장애로 이어질 수 있는 버그(동시성, 트랜잭션 누락, NPE, 잘못된 에러 처리). 스타일과 네이밍은 low로 분류한다.",
+      "merge_system_rule": true
+    }
+  ]
+}</pre>
+            </div>
+            <p>적용될 규칙은 로컬에서 <code>ocr rules check src/auth/attempts.py</code>로 미리 확인할 수 있습니다.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip">저장소 파일</span><span class="chip ci">GitHub Actions</span></div>
+            <h3>워크플로 파일을 develop에 커밋</h3>
+            <p>아래 파일을 <code>.github/workflows/ocr-review.yml</code>로 저장해 <b>develop에 먼저</b> 넣습니다. push 트리거 워크플로는 push된 커밋 안에 이 파일이 있어야 실행됩니다. develop에서 새로 만든 브랜치는 이 파일을 자동으로 물려받습니다.</p>
+            <div class="code">
+              <div class="bar"><span class="fname">.github/workflows/ocr-review.yml</span><button class="copy" type="button" data-copy="code-wf">복사</button></div>
+<pre id="code-wf" class="tall">name: OCR Review
+
+on:
+  push:
+    branches:
+      - feature/code-review   # 리뷰 게이트 브랜치. 모든 feature 브랜치에 적용하려면 'feature/**'
+      - develop               # 머지 후 사후 리뷰 (리포트 전용, 머지를 막지 않음)
+
+concurrency:
+  group: ocr-review-${{ github.ref }}
+  # 게이트 브랜치는 최신 커밋만 의미가 있으므로 이전 실행을 취소한다
+  cancel-in-progress: ${{ github.ref_name != 'develop' }}
+
+permissions:
+  contents: read
+
+env:
+  BASE_BRANCH: develop
+
+jobs:
+  ocr-review:
+    name: ocr-review          # Ruleset의 required status check 이름과 같아야 한다
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # origin/develop 과의 merge-base 계산에 전체 히스토리가 필요
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ocr
+        env:
+          OCR_VERSION: ${{ vars.OCR_VERSION || 'latest' }}
+        run: npm install -g "@alibaba-group/open-code-review@${OCR_VERSION}"
+
+      - name: Configure LLM
+        env:
+          OCR_PROVIDER: ${{ vars.OCR_PROVIDER || 'anthropic' }}
+          OCR_MODEL: ${{ vars.OCR_MODEL }}
+          OCR_API_KEY: ${{ secrets.OCR_API_KEY }}
+          OCR_LANGUAGE: ${{ vars.OCR_LANGUAGE || 'Korean' }}
+        run: |
+          ocr config set provider "$OCR_PROVIDER"
+          ocr config set model "$OCR_MODEL"
+          ocr config set "providers.${OCR_PROVIDER}.api_key" "$OCR_API_KEY"
+          ocr config set language "$OCR_LANGUAGE"
+          ocr llm test
+
+      - name: Resolve review range
+        id: range
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_NAME" == "$BASE_BRANCH" ]]; then
+            MODE=report
+            # 이번 push로 develop에 들어온 변경만 리뷰
+            if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2&gt;/dev/null; then
+              FROM="${AFTER}^"
+            else
+              FROM="$BEFORE"
+            fi
+          else
+            MODE=gate
+            # 게이트는 매번 브랜치 전체(develop 대비)를 다시 본다.
+            # push 단위로만 보면 이전 push에서 나온 미수정 이슈가 가려진다.
+            FROM="origin/${BASE_BRANCH}"
+          fi
+          BASE_SHA=$(git merge-base "$FROM" "$AFTER")
+          git log -n 100 --no-merges --format='- %h %s' "${BASE_SHA}..${AFTER}" &gt; commits.md
+          { echo "## 이번 리뷰에 포함된 커밋"; cat commits.md; } &gt; background.md
+          {
+            echo "mode=$MODE"
+            echo "from=$FROM"
+            echo "base_sha=$BASE_SHA"
+          } &gt;&gt; "$GITHUB_OUTPUT"
+
+      - name: Run OCR review
+        id: review
+        env:
+          FROM: ${{ steps.range.outputs.from }}
+          AFTER: ${{ github.sha }}
+          OCR_EFFORT: ${{ vars.OCR_EFFORT || 'medium' }}
+          OCR_BUDGET: ${{ vars.OCR_MAX_TOKENS_BUDGET || '5000000' }}
+        run: |
+          set +e
+          ocr review --from "$FROM" --to "$AFTER" \
+            --format json --audience agent --output result.json \
+            --background-file background.md \
+            --effort "$OCR_EFFORT" \
+            --max-tokens-budget "$OCR_BUDGET"
+          echo "exit_code=$?" &gt;&gt; "$GITHUB_OUTPUT"
+
+      - name: Evaluate result
+        id: verdict
+        env:
+          EXIT_CODE: ${{ steps.review.outputs.exit_code }}
+        run: |
+          if [[ "$EXIT_CODE" != "0" || ! -s result.json ]]; then
+            echo '{"status":"error","comments":[]}' &gt; result.json
+          fi
+          STATUS=$(jq -r '.status // "unknown"' result.json)
+          BLOCKERS=$(jq '[.comments[]? | select(.severity == "critical" or .severity == "high")] | length' result.json)
+          if [[ "$STATUS" == "error" ]]; then
+            VERDICT=error
+          elif (( BLOCKERS &gt; 0 )); then
+            VERDICT=blocked
+          elif [[ "$STATUS" =~ ^(failed|partial|completed_with_errors)$ ]]; then
+            VERDICT=incomplete   # 일부 파일을 리뷰하지 못함: 통과로 치지 않는다
+          else
+            VERDICT=pass
+          fi
+          {
+            echo "verdict=$VERDICT"
+            echo "status=$STATUS"
+            echo "blockers=$BLOCKERS"
+          } &gt;&gt; "$GITHUB_OUTPUT"
+
+      - name: Write report
+        if: always() &amp;&amp; steps.verdict.outcome == 'success'
+        env:
+          VERDICT: ${{ steps.verdict.outputs.verdict }}
+          MODE: ${{ steps.range.outputs.mode }}
+        run: |
+          {
+            echo "## OCR 리뷰 결과: \`$VERDICT\` (mode: $MODE)"
+            echo
+            echo "| critical | high | medium | low |"
+            echo "|---:|---:|---:|---:|"
+            jq -r '(.comments // []) as $c
+              | ["critical", "high", "medium", "low"]
+              | map(. as $s | [$c[] | select(.severity == $s)] | length | tostring)
+              | "| " + join(" | ") + " |"' result.json
+            echo
+            jq -r '
+              def rank: (.severity as $s | {"critical": 0, "high": 1, "medium": 2, "low": 3} | .[$s]) // 4;
+              (.comments // [])
+              | sort_by(rank)[]
+              | "- **[\(.severity)]** `\(.path):\(.start_line)` (\(.category // "-")) \(.content | gsub("\\s+"; " "))"' result.json
+          } &gt;&gt; "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-result-${{ github.run_id }}
+          path: |
+            result.json
+            background.md
+          if-no-files-found: ignore
+
+      - name: Notify Slack
+        if: always()
+        continue-on-error: true   # Slack 장애가 게이트 결과를 바꾸지 않도록
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_ON_PASS: ${{ vars.OCR_SLACK_ON_PASS || 'false' }}
+          VERDICT: ${{ steps.verdict.outputs.verdict }}
+          MODE: ${{ steps.range.outputs.mode }}
+          BASE_SHA: ${{ steps.range.outputs.base_sha }}
+          AFTER: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          SERVER: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          VERDICT="${VERDICT:-error}"
+          if [[ "$VERDICT" == "pass" &amp;&amp; "$SLACK_ON_PASS" != "true" ]]; then
+            echo "통과: Slack 알림 생략"; exit 0
+          fi
+          if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
+            echo "::warning::SLACK_WEBHOOK_URL 시크릿이 없어 알림을 보내지 않았습니다"; exit 0
+          fi
+          [[ -s result.json ]] || echo '{"comments":[]}' &gt; result.json
+          [[ -f commits.md ]] || : &gt; commits.md
+          COMPARE="$SERVER/$REPO/compare/${BASE_SHA}...${AFTER}"
+          [[ -n "$BASE_SHA" ]] || COMPARE="$SERVER/$REPO/commit/$AFTER"
+
+          jq -n \
+            --arg verdict "$VERDICT" --arg mode "$MODE" \
+            --arg repo "$REPO" --arg branch "$BRANCH" --arg actor "$ACTOR" \
+            --arg sha "${AFTER:0:7}" --arg compare "$COMPARE" \
+            --arg run "$SERVER/$REPO/actions/runs/$RUN_ID" \
+            --rawfile commits commits.md \
+            --slurpfile res result.json '
+            def esc: gsub("&amp;"; "&amp;amp;") | gsub("&lt;"; "&amp;lt;") | gsub("&gt;"; "&amp;gt;");
+            def cnt($s): [.[] | select(.severity == $s)] | length;
+            ($res[0].comments // []) as $c
+            | ({
+                pass: ":white_check_mark: 통과: critical/high 없음",
+                blocked: ":rotating_light: critical/high 발견",
+                incomplete: ":warning: 리뷰 미완료 (일부 파일 실패 또는 예산 초과)",
+                error: ":x: 리뷰 실행 실패"
+              } | .[$verdict]) as $headline
+            | (if $mode == "report" then
+                 (if $verdict == "pass" then "develop 사후 리뷰: 이상 없음"
+                  else "이미 develop에 반영된 변경입니다. 수정 PR을 올려 주세요." end)
+               else
+                 (if $verdict == "pass" then "develop 머지 가능"
+                  elif $verdict == "blocked" then "develop 머지 차단됨: 수정 후 다시 push 하세요"
+                  else "develop 머지 차단됨: Actions에서 Re-run 하세요" end)
+               end) as $impact
+            | ([$c[] | select(.severity == "critical" or .severity == "high")]
+                | sort_by(if .severity == "critical" then 0 else 1 end)
+                | .[:10]
+                | map("• *[\(.severity)]* `\(.path):\(.start_line)` \(.content | gsub("\\s+"; " ") | .[0:200] | esc)")
+                | join("\n")) as $issues
+            | {text: ([
+                "*[OCR 코드 리뷰]* \($headline)",
+                "&gt; \($impact)",
+                "*저장소* `\($repo)`   *브랜치* `\($branch)`   *푸시* \($actor | esc)",
+                "*범위* &lt;\($compare)|\($sha)&gt;   critical \($c | cnt("critical")) · high \($c | cnt("high")) · medium \($c | cnt("medium")) · low \($c | cnt("low"))",
+                (if ($commits | length) &gt; 0 then "*커밋*\n```\n\($commits | .[0:1500] | esc)```" else empty end),
+                (if $issues != "" then "*주요 이슈 (최대 10건)*\n\($issues)" else empty end),
+                "&lt;\($run)|전체 리포트와 제안 코드 보기&gt;"
+              ] | join("\n"))}' &gt; payload.json
+
+          curl -sS --fail -X POST -H 'Content-type: application/json' \
+            --data @payload.json "$SLACK_WEBHOOK_URL"
+
+      - name: Gate
+        if: always()
+        env:
+          VERDICT: ${{ steps.verdict.outputs.verdict }}
+          MODE: ${{ steps.range.outputs.mode }}
+          BLOCKERS: ${{ steps.verdict.outputs.blockers }}
+        run: |
+          if [[ "$MODE" == "report" ]]; then
+            echo "develop 사후 리뷰(리포트 전용). 결과: ${VERDICT:-error}"; exit 0
+          fi
+          case "${VERDICT:-error}" in
+            pass)       echo "통과: critical/high 없음. develop 머지 가능" ;;
+            blocked)    echo "::error::critical/high ${BLOCKERS}건. 수정 후 다시 push 하세요"; exit 1 ;;
+            incomplete) echo "::error::리뷰가 끝까지 수행되지 않았습니다. Re-run 하세요"; exit 1 ;;
+            *)          echo "::error::리뷰 실행 실패. 로그를 확인하세요"; exit 1 ;;
+          esac</pre>
+            </div>
+            <details>
+              <summary>이 워크플로가 하는 일 (단계별)</summary>
+              <div>
+                <ul>
+                  <li><b>Resolve review range</b>: develop이면 <code>report</code> 모드로 이번 push 범위(<code>before..after</code>)만, 그 외 브랜치는 <code>gate</code> 모드로 <code>origin/develop</code> 대비 전체를 리뷰합니다. 커밋 메시지는 <code>--background-file</code>로 넘겨 리뷰 맥락으로 씁니다.</li>
+                  <li><b>Run OCR review</b>: 결과를 <code>result.json</code>으로 받습니다. ocr는 이슈가 있어도 exit 0이므로 판정은 다음 단계에서 합니다.</li>
+                  <li><b>Evaluate result</b>: <code>pass</code> / <code>blocked</code> / <code>incomplete</code> / <code>error</code> 중 하나로 판정합니다 (<a href="#verdict">판정 기준</a> 참고).</li>
+                  <li><b>Write report</b>: 심각도별 건수와 전체 이슈 목록을 Actions 실행의 <b>Summary</b> 탭에 남깁니다.</li>
+                  <li><b>Upload result</b>: <code>result.json</code>(제안 코드 포함)을 아티팩트로 보관합니다.</li>
+                  <li><b>Notify Slack</b>: pass가 아니면 알림을 보냅니다. Slack 전송이 실패해도 게이트 결과는 바뀌지 않습니다.</li>
+                  <li><b>Gate</b>: gate 모드에서 pass가 아니면 job을 실패시켜 PR 머지를 막습니다.</li>
+                </ul>
+              </div>
+            </details>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip ci">GitHub Actions</span></div>
+            <h3>첫 실행으로 체크 이름 등록</h3>
+            <p>Ruleset에서 체크를 고르려면 해당 체크가 한 번 이상 실행된 기록이 있어야 합니다.</p>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span><button class="copy" type="button" data-copy="code-first">복사</button></div>
+<pre id="code-first">git switch develop &amp;&amp; git pull
+git switch -c feature/code-review
+git commit --allow-empty -m "chore: ocr-review 첫 실행"
+git push -u origin feature/code-review</pre>
+            </div>
+            <p><b>Actions</b> 탭에서 <code>OCR Review</code> 실행이 끝나는지, <b>Summary</b> 탭에 결과가 나오는지 확인합니다. 빈 커밋이라 리뷰 대상 파일이 없으므로 <code>pass</code>로 끝납니다. 확인이 끝나면 <code>git push origin --delete feature/code-review</code>로 테스트 브랜치를 지웁니다.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip pr">GitHub · Settings</span></div>
+            <h3>develop에 Ruleset 걸기</h3>
+            <p><b>Settings → Rules → Rulesets → New ruleset → New branch ruleset</b></p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>설정</th><th>값</th><th>이유</th></tr></thead>
+                <tbody>
+                  <tr><td>Ruleset name</td><td><code>develop-ocr-gate</code></td><td></td></tr>
+                  <tr><td>Enforcement status</td><td>Active</td><td></td></tr>
+                  <tr><td>Target branches</td><td>Include by pattern: <code>develop</code></td><td>필요하면 <code>main</code>, <code>release/**</code> 추가</td></tr>
+                  <tr><td>Restrict deletions</td><td>✓</td><td></td></tr>
+                  <tr><td>Require a pull request before merging</td><td>✓, Required approvals 1</td><td>develop에 직접 push하는 것을 막음</td></tr>
+                  <tr><td>Require status checks to pass</td><td>✓, <b>Add checks → <code>ocr-review</code></b></td><td>게이트의 핵심 설정</td></tr>
+                  <tr><td>Require branches to be up to date</td><td>끔 (권장)</td><td>켜면 develop이 바뀔 때마다 재리뷰가 필요해 비용이 늘어남</td></tr>
+                  <tr><td>Block force pushes</td><td>✓</td><td></td></tr>
+                  <tr><td>Bypass list</td><td>팀 리드 역할, <b>For pull requests only</b></td><td>오탐 때 예외 승인용. 사용 기록이 남음</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="note">push 이벤트로 생긴 체크도 같은 커밋 SHA를 head로 가진 PR의 필수 체크로 인정됩니다. 그래서 <code>pull_request</code> 트리거를 따로 두지 않아도 됩니다. 반대로 <b>트리거 목록에 없는 브랜치에서 develop으로 PR을 열면</b> 체크가 영원히 “Expected” 상태로 남아 머지할 수 없습니다. 의도한 동작이지만, 팀원에게 꼭 알려 주세요.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip pr">GitHub · Settings</span></div>
+            <h3>머지 후 브랜치 자동 삭제</h3>
+            <p><b>Settings → General → Pull Requests → Automatically delete head branches</b>를 켭니다. 머지가 끝나면 <code>feature/code-review</code>가 삭제되므로, 다음 리뷰는 항상 최신 develop에서 새로 시작합니다.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 4. daily -->
+    <section id="daily">
+      <div class="sec-head">
+        <span class="num">04 · 개발자 루틴</span>
+        <h2>로컬에서 하는 사전 리뷰</h2>
+        <p>CI에서 막히기 전에 대부분의 이슈를 로컬에서 걸러내는 것이 목표입니다. 둘 중 평소 쓰는 도구를 쓰면 됩니다.</p>
+      </div>
+      <div class="pair">
+        <div class="code">
+          <div class="bar"><span class="fname">Claude Code</span><button class="copy" type="button" data-copy="code-cc">복사</button></div>
+<pre id="code-cc"><span class="c"># 현재 변경사항의 버그 리뷰</span>
+/code-review
+<span class="c"># 큰 변경은 더 깊게</span>
+/code-review high
+<span class="c"># 리뷰 결과를 바로 적용</span>
+/code-review --fix
+<span class="c"># 기능 완성 후 중복·복잡도 정리 (바로 수정함)</span>
+/simplify</pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span class="fname">Codex CLI</span><button class="copy" type="button" data-copy="code-codex">복사</button></div>
+<pre id="code-codex"><span class="c"># 리뷰 프리셋 선택 메뉴가 열림</span>
+/review
+<span class="c">#  · base branch(develop) 대비 리뷰</span>
+<span class="c">#  · 커밋되지 않은 변경 리뷰</span>
+<span class="c">#  · 특정 커밋 리뷰</span>
+<span class="c">#  · 직접 지시문으로 리뷰</span></pre>
+        </div>
+      </div>
+      <details>
+        <summary>선택: CI와 같은 엔진으로 로컬에서 미리 돌려 보기</summary>
+        <div>
+          <p>API 키가 있는 개발자라면 CI와 같은 ocr 리뷰를 로컬에서 미리 돌릴 수 있습니다. 코드는 수정하지 않고 결과만 출력합니다.</p>
+          <div class="code">
+            <div class="bar"><span class="fname">terminal</span><button class="copy" type="button" data-copy="code-local-ocr">복사</button></div>
+<pre id="code-local-ocr">npm install -g @alibaba-group/open-code-review
+ocr config provider &amp;&amp; ocr config model &amp;&amp; ocr llm test
+
+ocr review --from origin/develop --to HEAD --preview   <span class="c"># 리뷰 대상 파일만 확인 (토큰 사용 없음)</span>
+ocr review --from origin/develop --to HEAD -b "로그인 실패 5회 시 계정 잠금"</pre>
+          </div>
+        </div>
+      </details>
+      <div class="prose">
+        <h3>머지 준비 체크리스트</h3>
+        <ul>
+          <li>로컬 리뷰에서 나온 버그·보안 지적을 처리했다.</li>
+          <li>커밋 메시지에 변경 의도를 적었다. CI 리뷰가 커밋 메시지를 배경 정보로 읽습니다.</li>
+          <li>최신 develop을 기준으로 작업 브랜치를 맞췄다 (<code>git pull --rebase origin develop</code> 또는 merge).</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 5. cycle -->
+    <section id="cycle">
+      <div class="sec-head">
+        <span class="num">05 · 예시 사이클</span>
+        <h2>리뷰부터 머지까지 한 바퀴</h2>
+        <p>개발자 A가 “로그인 5회 실패 시 계정 잠금” 기능을 develop에 넣는 과정입니다. 저장소 이름, 커밋, 이슈 내용은 설명을 위한 예시입니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip local">로컬</span><span class="chip">개발자 A</span></div>
+            <h3>작업 브랜치에서 개발하고 로컬 리뷰</h3>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span></div>
+<pre>git switch develop &amp;&amp; git pull
+git switch -c feature/login-lock
+<span class="c"># ... 구현 ...</span>
+git commit -am "feat(auth): 로그인 5회 실패 시 계정 잠금"</pre>
+            </div>
+            <p>Claude Code에서 <code>/code-review</code>를 실행해 예외 처리 누락 1건을 고치고, <code>/simplify</code>로 중복 코드를 정리해 커밋합니다 (<code>refactor: 실패 카운터 로직 분리</code>).</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip local">로컬</span></div>
+            <h3>게이트 브랜치에 머지하고 push</h3>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span></div>
+<pre>git fetch origin
+git switch -c feature/code-review origin/develop   <span class="c"># 이미 있으면: git switch feature/code-review &amp;&amp; git pull</span>
+git merge --no-ff feature/login-lock -m "Merge feature/login-lock"
+git push -u origin feature/code-review
+
+<span class="c"># PR은 지금 열어 두어도 됩니다. 체크 결과가 PR에 자동으로 붙습니다.</span>
+gh pr create --base develop --head feature/code-review \
+  --title "feat(auth): 로그인 실패 시 계정 잠금" --body "로그인 5회 실패 시 30분 잠금"</pre>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip ci">GitHub Actions</span><span class="chip">약 3~8분</span></div>
+            <h3>push #1: ocr가 critical·high를 찾아 체크 실패</h3>
+            <p>gate 모드로 develop 대비 전체 diff를 리뷰합니다. Actions 로그의 마지막 단계에 다음이 찍힙니다.</p>
+            <div class="code">
+              <div class="bar"><span class="fname">Gate · step log</span></div>
+<pre>Error: critical/high 2건. 수정 후 다시 push 하세요
+Error: Process completed with exit code 1.</pre>
+            </div>
+            <p>실행의 <b>Summary</b> 탭에는 전체 리포트가 남습니다.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>심각도</th><th>위치</th><th>분류</th><th>내용</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="sev critical">critical</span></td><td><code>src/auth/attempts.py:42</code></td><td>security</td><td>이메일 값을 f-string으로 SQL에 끼워 넣어 SQL 인젝션 위험. 파라미터 바인딩을 사용하세요.</td></tr>
+                  <tr><td><span class="sev high">high</span></td><td><code>src/auth/attempts.py:67</code></td><td>bug</td><td>실패 횟수를 읽고 +1 해서 다시 쓰는 방식이라 동시 요청 때 카운트가 누락되어 잠금을 우회할 수 있음. <code>UPDATE … SET count = count + 1</code>처럼 원자적으로 증가시키세요.</td></tr>
+                  <tr><td><span class="sev medium">medium</span></td><td><code>src/auth/views.py:31</code></td><td>security</td><td>잠금 안내 문구가 계정 존재 여부를 드러냄.</td></tr>
+                  <tr><td><span class="sev low">low</span></td><td><code>src/auth/views.py:12</code></td><td>style</td><td>상수 이름 <code>max</code>가 의미를 드러내지 않음.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip slack">Slack</span><span class="chip pr">Pull Request</span></div>
+            <h3>Slack 알림이 오고 PR 머지가 잠김</h3>
+            <div class="pair">
+              <div class="mock" aria-label="Slack 알림 예시 화면">
+                <div class="mock-head"><span>#code-review-alerts</span><span>예시 화면</span></div>
+                <div class="msg">
+                  <div class="avatar" aria-hidden="true">OCR</div>
+                  <div class="lines">
+                    <div class="name">OCR Review Bot <small>앱 · 오후 2:14</small></div>
+                    <div><b>[OCR 코드 리뷰]</b> 🚨 critical/high 발견</div>
+                    <blockquote>develop 머지 차단됨: 수정 후 다시 push 하세요</blockquote>
+                    <div><b>저장소</b> <code>our-team/auth-service</code> <b>브랜치</b> <code>feature/code-review</code> <b>푸시</b> dev-a</div>
+                    <div><b>범위</b> <a href="#cycle">7892262</a> &nbsp;critical 1 · high 1 · medium 1 · low 1</div>
+                    <div><b>커밋</b></div>
+<pre>- 4749886 refactor: 실패 카운터 로직 분리
+- df49299 feat(auth): 로그인 5회 실패 시 계정 잠금</pre>
+                    <div><b>주요 이슈 (최대 10건)</b></div>
+                    <div class="issue">• <span class="sev critical">critical</span> <code>src/auth/attempts.py:42</code> 이메일 값을 f-string으로 SQL에 끼워 넣어 SQL 인젝션 위험…</div>
+                    <div class="issue">• <span class="sev high">high</span> <code>src/auth/attempts.py:67</code> 실패 횟수를 읽고 +1 해서 다시 쓰는 방식이라…</div>
+                    <div><a href="#cycle">전체 리포트와 제안 코드 보기</a></div>
+                  </div>
+                </div>
+              </div>
+              <div class="mock" aria-label="PR 머지 영역 예시 화면">
+                <div class="mock-head"><span>PR #42 · develop ← feature/code-review</span><span>예시 화면</span></div>
+                <div class="merge">
+                  <div class="merge-row"><span class="ic bad" aria-hidden="true">✕</span><div><b>Some checks were not successful</b><small>1 failing check · <code>OCR Review / ocr-review</code> Failing after 5m</small></div></div>
+                  <div class="merge-row"><span class="ic bad" aria-hidden="true">!</span><div><b>Merging is blocked</b><small>Required status check “ocr-review” has failed.</small><span class="btn-mock">Merge pull request</span></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip local">로컬</span><span class="chip">개발자 A</span></div>
+            <h3>리포트를 받아 작업 브랜치에서 수정</h3>
+            <p>아티팩트로 받은 <code>result.json</code>에는 이슈마다 <code>existing_code</code>와 <code>suggestion_code</code>가 들어 있어, Claude Code에 그대로 넘기면 됩니다.</p>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span><button class="copy" type="button" data-copy="code-dl">복사</button></div>
+<pre id="code-dl">git switch feature/login-lock
+gh run list --workflow "OCR Review" --branch feature/code-review --limit 1   <span class="c"># run id 확인</span>
+gh run download &lt;run-id&gt; --dir .ocr                                        <span class="c"># .ocr/ocr-result-&lt;run-id&gt;/result.json</span></pre>
+            </div>
+            <div class="code">
+              <div class="bar"><span class="fname">Claude Code 프롬프트</span></div>
+<pre>.ocr 아래 result.json에서 severity가 critical, high인 이슈를 확인하고
+suggestion_code를 참고해서 수정해줘. medium 이하는 목록만 보여주고 고치지 마.</pre>
+            </div>
+            <p>수정 후 <code>/code-review</code>로 한 번 더 확인하고 커밋합니다. <code>.ocr/</code>는 <code>.gitignore</code>에 추가해 두세요.</p>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span></div>
+<pre>git commit -am "fix(auth): 실패 카운트 원자적 증가, SQL 파라미터 바인딩"</pre>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip local">로컬</span><span class="chip ci">GitHub Actions</span></div>
+            <h3>push #2: 다시 리뷰하고 통과</h3>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span></div>
+<pre>git switch feature/code-review
+git merge --no-ff feature/login-lock -m "Merge fix into feature/code-review"
+git push</pre>
+            </div>
+            <p>브랜치 전체를 다시 리뷰한 결과 critical 0 · high 0 · medium 1 · low 0이 나왔습니다. medium은 게이트를 막지 않습니다. 로그에는 <code>통과: critical/high 없음. develop 머지 가능</code>이 찍히고, 통과 알림은 기본 설정에서 보내지 않습니다.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip pr">Pull Request</span><span class="chip">리뷰어</span></div>
+            <h3>PR 승인 후 develop에 머지</h3>
+            <div class="mock" aria-label="통과 후 PR 머지 영역 예시 화면">
+              <div class="mock-head"><span>PR #42 · develop ← feature/code-review</span><span>예시 화면</span></div>
+              <div class="merge">
+                <div class="merge-row"><span class="ic good" aria-hidden="true">✓</span><div><b>All checks have passed</b><small><code>OCR Review / ocr-review</code> Successful in 4m</small></div></div>
+                <div class="merge-row"><span class="ic good" aria-hidden="true">✓</span><div><b>Changes approved</b><small>1 approving review</small></div></div>
+                <div class="merge-row"><span class="ic good" aria-hidden="true">✓</span><div><b>No conflicts with base branch</b><small>Merging can be performed automatically.</small><span class="btn-mock go">Merge pull request</span></div></div>
+              </div>
+            </div>
+            <p>남은 medium 이슈(계정 존재 여부 노출)는 PR 리뷰어가 판단합니다. 이번 PR에서 고치거나, 이슈로 등록해 두고 머지합니다. 머지 후 <code>feature/code-review</code>는 자동 삭제됩니다.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip ci">GitHub Actions</span></div>
+            <h3>develop 사후 리뷰</h3>
+            <p>머지로 develop에 push가 일어나면 report 모드 리뷰가 돌아갑니다. 머지 결과가 합쳐지면서 생긴 문제가 있는지 이번에 들어온 변경만 보고, critical·high가 나오면 “이미 develop에 반영된 변경입니다. 수정 PR을 올려 주세요.”라는 Slack 알림을 보냅니다. 이 리뷰는 아무것도 막지 않습니다.</p>
+            <p class="note">사이클 요약: <b>로컬 리뷰 → push #1 ✗ → Slack 알림, PR 잠김 → 수정 → push #2 ✓ → 승인, 머지 → 사후 리뷰</b>. 실행 비용은 ocr 리뷰 3회(게이트 2회 + 사후 1회)입니다.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 6. verdict -->
+    <section id="verdict">
+      <div class="sec-head">
+        <span class="num">06 · 판정 기준</span>
+        <h2>워크플로가 결과를 판정하는 방법</h2>
+        <p>ocr의 JSON 결과에서 <code>status</code>와 각 이슈의 <code>severity</code>(critical, high, medium, low 중 하나)를 읽어 판정합니다.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>판정</th><th>조건</th><th>feature/code-review (gate)</th><th>develop (report)</th><th>Slack</th></tr></thead>
+          <tbody>
+            <tr><td><code>pass</code></td><td>critical·high 0건, 리뷰 정상 완료</td><td><span class="v pass">통과 · 머지 가능</span></td><td><span class="v info">기록만</span></td><td><code>OCR_SLACK_ON_PASS=true</code>일 때만</td></tr>
+            <tr><td><code>blocked</code></td><td>critical 또는 high 1건 이상</td><td><span class="v block">실패 · 머지 잠김</span></td><td><span class="v info">알림만</span></td><td>보냄</td></tr>
+            <tr><td><code>incomplete</code></td><td>status가 <code>partial</code>, <code>failed</code>, <code>completed_with_errors</code> (일부 파일 실패, 예산 초과)</td><td><span class="v block">실패 · Re-run 필요</span></td><td><span class="v info">알림만</span></td><td>보냄</td></tr>
+            <tr><td><code>error</code></td><td>ocr 비정상 종료 (설정 오류, API 키, 네트워크)</td><td><span class="v block">실패</span></td><td><span class="v info">알림만</span></td><td>보냄</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note warn"><b>리뷰를 다 하지 못한 경우도 실패로 처리합니다.</b> 일부 파일을 리뷰하지 못한 상태로 통과시키면 게이트를 둔 의미가 없기 때문입니다. 재실행해도 계속 <code>incomplete</code>라면 <code>OCR_MAX_TOKENS_BUDGET</code>을 늘리거나 PR을 더 작게 나누세요.</p>
+    </section>
+
+    <!-- 7. ops -->
+    <section id="ops">
+      <div class="sec-head">
+        <span class="num">07 · 운영 가이드</span>
+        <h2>운영하면서 정해 둘 것</h2>
+      </div>
+      <div class="prose">
+        <h3>오탐(잘못된 지적)이 게이트를 막을 때</h3>
+        <ul>
+          <li><b>먼저 Re-run</b>: LLM 리뷰는 실행할 때마다 결과가 조금씩 다릅니다. 근거가 약한 지적은 재실행하면 사라지기도 합니다.</li>
+          <li><b>규칙 보강</b>: 같은 오탐이 반복되면 <code>.opencodereview/rule.json</code>에 팀 기준을 적어 둡니다. 예: “내부 관리 API의 인가는 게이트웨이에서 처리하므로 지적하지 않는다”.</li>
+          <li><b>예외 머지</b>: 급할 때는 Ruleset bypass 권한자(팀 리드)가 머지합니다. PR 코멘트에 오탐 근거를 남기는 것을 팀 규칙으로 정하세요.</li>
+        </ul>
+
+        <h3>동시에 여러 명이 작업한다면</h3>
+        <p><code>feature/code-review</code>는 브랜치 하나를 같이 쓰기 때문에 한 번에 한 기능씩 리뷰하는 구조입니다. 여러 명이 동시에 쓰면 서로의 변경이 섞여서 남의 이슈 때문에 막힙니다. 병렬 작업이 많은 팀이라면 워크플로 트리거를 <code>feature/**</code>로 바꾸고, 각자 작업 브랜치에서 develop으로 바로 PR을 여는 방식을 권합니다. 나머지 설정(Ruleset, Slack, 판정)은 그대로 쓸 수 있습니다.</p>
+
+        <h3>비용 관리</h3>
+        <ul>
+          <li>게이트 브랜치에 push할 때마다 브랜치 전체를 다시 리뷰하므로, <b>push 횟수만큼 비용</b>이 듭니다. 로컬에서 충분히 고친 뒤 push하세요.</li>
+          <li>같은 브랜치에 연달아 push하면 이전 실행은 자동 취소됩니다 (<code>concurrency</code> 설정).</li>
+          <li>develop 사후 리뷰가 필요 없다면 트리거에서 <code>develop</code>을 빼면 됩니다. 머지 1건당 리뷰가 1회 줄어듭니다.</li>
+          <li><code>OCR_EFFORT=low</code>는 기본값보다 비용이 약 절반이고, 대신 찾아내는 이슈가 줄어듭니다.</li>
+        </ul>
+
+        <h3>main, release 브랜치로 확장</h3>
+        <p>Ruleset 대상에 <code>main</code>, <code>release/**</code>를 추가하고, 해당 브랜치로 PR을 보내는 쪽 브랜치를 워크플로 트리거에 넣습니다. 기준 브랜치가 다르면 <code>BASE_BRANCH</code>를 브랜치별로 나눈 워크플로를 하나 더 두는 편이 단순합니다.</p>
+
+        <h3>한계</h3>
+        <ul>
+          <li>ocr는 오탐을 줄이는 쪽으로 설계되어 있어 <b>모든 결함을 찾지는 못합니다</b>. 사람의 PR 리뷰를 대신하지 않습니다.</li>
+          <li>변경 하나(diff)가 프롬프트 한도의 80%를 넘는 파일은 리뷰에서 빠집니다. 생성 파일, 대량 변경은 <code>exclude</code>로 빼세요.</li>
+          <li>시크릿 마스킹 기능은 없습니다. 민감한 파일은 <code>exclude</code>에 넣으세요.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 8. troubleshooting -->
+    <section id="trouble">
+      <div class="sec-head">
+        <span class="num">08 · 문제 해결</span>
+        <h2>자주 생기는 문제</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>증상</th><th>원인</th><th>해결</th></tr></thead>
+          <tbody>
+            <tr><td>PR 체크가 “Expected — Waiting for status”에서 멈춤</td><td>PR head 브랜치가 트리거 목록에 없거나, 그 브랜치에 워크플로 파일이 없음</td><td>브랜치 이름을 확인하고, 최신 develop을 머지해 워크플로 파일을 받아 옵니다.</td></tr>
+            <tr><td>Ruleset에서 <code>ocr-review</code>가 검색되지 않음</td><td>체크가 한 번도 실행되지 않음</td><td>설정 5단계(첫 실행)를 먼저 합니다. 이름을 직접 입력해도 됩니다.</td></tr>
+            <tr><td>Configure LLM 단계의 <code>ocr llm test</code> 실패</td><td>API 키, 모델 ID, provider 이름 불일치</td><td>Secrets와 Variables를 확인합니다. 로컬에서 <code>ocr llm providers</code>로 provider 이름을 확인할 수 있습니다.</td></tr>
+            <tr><td><code>fatal: Not a valid object name origin/develop</code></td><td>checkout이 얕게(shallow) 됨</td><td>checkout 단계에 <code>fetch-depth: 0</code>이 있는지 확인합니다.</td></tr>
+            <tr><td>계속 <code>incomplete</code>로 실패</td><td>토큰 예산 초과나 일부 파일 타임아웃</td><td>Summary와 아티팩트의 <code>warnings</code>를 확인합니다. 예산을 늘리거나 PR을 나눕니다.</td></tr>
+            <tr><td>Slack 알림이 오지 않음</td><td>Webhook 시크릿 누락, 통과 결과(기본 미발송), 채널 앱 제거</td><td>Notify Slack 단계 로그를 확인합니다. Slack 실패는 경고로만 남고 게이트에는 영향을 주지 않습니다.</td></tr>
+            <tr><td>고쳤는데 다른 이슈가 새로 나옴</td><td>매번 브랜치 전체를 다시 리뷰하고, LLM 결과가 실행마다 다름</td><td>새 지적이 타당하면 고치고, 오탐이면 운영 가이드의 오탐 절차를 따릅니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>이 문서의 워크플로 스크립트(범위 계산, 판정, 리포트, Slack 메시지 생성)는 가짜 ocr 결과로 pass, blocked, incomplete, error, develop 사후 리뷰 다섯 가지 경우를 로컬에서 시뮬레이션해 확인했습니다. 실제 GitHub 저장소에서는 아직 실행해 보지 않았으므로, 처음에는 테스트 저장소에서 한 사이클을 돌려 보세요.</p>
+  <p>참고: open-code-review 문서 (cli-reference, review-rules, integrations/ci) · GitHub Rulesets, Actions 문서</p>
+</footer>
+
+<script>
+document.querySelectorAll("[data-copy]").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var pre = document.getElementById(btn.getAttribute("data-copy"));
+    if (!pre) return;
+    var text = pre.innerText;
+    var reset = function () { setTimeout(function () { btn.textContent = "복사"; }, 1600); };
+    var selectFallback = function () {
+      var range = document.createRange();
+      range.selectNodeContents(pre);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      btn.textContent = "선택됨 · ⌘C";
+      reset();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { btn.textContent = "복사됨"; reset(); }, selectFallback);
+    } else {
+      selectFallback();
+    }
+  });
+});
+</script>
+</body>
+</html>
