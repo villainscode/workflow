@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, extname } from "node:path";
 import { parse } from "yaml";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { sql } from "drizzle-orm";
 import { categories, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 
 interface MenuNode { slug: string; name: string; menus?: MenuNode[] }
@@ -31,6 +32,22 @@ function walk(dir: string): string[] {
     const p = join(dir, e.name);
     return e.isDirectory() ? walk(p) : [p];
   });
+}
+
+const TEXT_EXT = new Set([".md", ".markdown", ".html", ".htm", ".txt", ".yaml", ".yml", ".csv", ".json", ".mmd"]);
+
+/** 검색용 본문. HTML은 스크립트·스타일을 빼고 글자만 남긴다 */
+function searchText(path: string): string {
+  const ext = extname(path).toLowerCase();
+  if (!TEXT_EXT.has(ext)) return "";
+  const raw = readFileSync(path, "utf8");
+  if (ext !== ".html" && ext !== ".htm") return raw;
+  return raw
+    .replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 const asDate = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : v == null ? null : String(v));
@@ -94,6 +111,9 @@ export function scanDocs(db: BetterSQLite3Database, docsRoot: string, repoRoot: 
             }).run();
           }
           if (!entryFound) warnings.push(`${relative(repoRoot, vDir)}: entry 파일(${v.entry}) 없음`);
+          if (entryFound && v.version === meta.current) {
+            tx.run(sql`INSERT INTO search (document_id, title, body) VALUES (${doc.id}, ${meta.title}, ${searchText(join(vDir, v.entry))})`);
+          }
         }
       }
     }

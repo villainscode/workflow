@@ -76,7 +76,7 @@ npm run build      # 타입 검사 후 site/dist로 빌드
 ```
 
 - **server/**: `scan.ts`가 `docs/_site/menus.yaml`과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
-- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장). `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
+- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **HTML 뷰어**: iframe에 `allow-same-origin` 없이 sandbox를 건다. 문서 안의 스크립트는 동작하지만 사이트 쪽에는 접근하지 못한다. 문서 안의 링크를 누르면 iframe 안에서 이동한다.
 - **업로드** (`server/store.ts`): 파일 → `meta.yaml`(주석·순서 유지) → 색인 순서로 쓴다.
@@ -102,6 +102,14 @@ npm run build      # 타입 검사 후 site/dist로 빌드
   - 이전 버전은 읽기 전용이다.
   - 새 Markdown 문서는 업로드 대화상자의 "새 Markdown 문서" 탭에서 `# 제목` 한 줄짜리 `.md`를 업로드하는 방식으로 만든다.
 - **버전 비교**: 텍스트 형식(md, html, yaml 등)이고 버전이 2개 이상이면 문서 상단에 "비교" 선택이 생긴다(`?cmp=<버전>`). `viewers/DiffViewer.tsx`가 jsdiff로 줄 단위 비교를 보여준다.
+- **관리** (`server/manage.ts`): 메뉴를 옮기거나 하위로 넣어도 `menus.yaml`만 바뀌고 폴더(`docs/<메뉴 slug>/`)는 그대로다.
+  - 다른 대분류로 옮기면 그 메뉴 문서들의 `meta.yaml` category를 맞춘다.
+  - 문서를 다른 메뉴로 옮기면 문서 폴더를 새 메뉴 폴더로 옮긴다.
+  - 메뉴·대분류는 비어 있을 때만 지운다.
+  - `menus.yaml` 맨 위 `#` 주석은 yaml 라이브러리가 첫 키에 붙여 버리므로, 원문에서 떼어 두었다가 저장할 때 다시 붙인다.
+- **휴지통**: 문서 폴더를 `docs/_trash/<로컬 시각 yyyyMMddHHmmss>--<메뉴>--<문서>/`로 옮긴다. 스캔은 `_`로 시작하는 폴더를 건너뛴다. 복원할 때 원래 메뉴가 없으면 메뉴를 고르게 한다.
+- **검색**: 색인할 때 각 문서 최신 버전의 대표 파일 본문을 FTS5 trigram 테이블 `search`에 넣는다. HTML은 script·style·svg를 빼고 글자만 넣는다. 질의는 trigram 색인 위의 `LIKE '%q%'`라서 한국어 두 글자 단어와 조사가 붙은 말도 찾는다. 제목에 맞은 문서를 먼저 보여준다.
+- **조회 재시도**: 404(옮겨지거나 지워진 문서)는 재시도하지 않는다. 관리 작업 뒤 목록 새로고침은 기다리지 않는다. 기다리면 옛 주소의 404 재시도 때문에 화면 이동이 늦어진다.
 - **업로드 진입점**: 모두 `upload/UploadContext.tsx`의 `useOpenUpload()`로 연다.
   - 상단 "업로드" 버튼
   - 메뉴별 `+` 버튼

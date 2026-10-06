@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, normalize, relative, isAbsolute } from "node:path";
 import { unzipSync } from "fflate";
-import { Document, parseDocument, YAMLMap, YAMLSeq } from "yaml";
+import { Document, parseDocument, YAMLSeq } from "yaml";
 
 /** docs/에 파일과 yaml을 쓰는 작업. 원본(파일)을 먼저 쓰고, 색인은 호출한 쪽에서 다시 만든다. */
 
@@ -191,23 +191,4 @@ export function saveEdit(docsRoot: string, menu: string, doc: string,
     path: p, data: p === base.entry ? new TextEncoder().encode(input.content) : readFileSync(join(baseDir, p)),
   }));
   return upload(docsRoot, { menu, doc, entry: base.entry, note: input.note, version: input.version, source: "edit", files });
-}
-
-export function addMenu(docsRoot: string, categoryKey: string, name: string, slug?: string) {
-  const path = join(docsRoot, "_site/menus.yaml");
-  const doc = parseDocument(readFileSync(path, "utf8"));
-  const cats = doc.get("categories") as YAMLSeq<YAMLMap>;
-  const cat = cats.items.find((c) => c.get("key") === categoryKey);
-  if (!cat) throw new StoreError(404, `대분류 ${categoryKey}이(가) 없습니다`);
-
-  const s = (slug?.trim() || slugify(name));
-  if (!SLUG_RE.test(s) || s === "doc") throw new StoreError(400, "메뉴 slug를 영문 소문자, 숫자, 하이픈으로 입력하세요");
-  if (findMenuCategory(docsRoot, s) || existsSync(join(docsRoot, s))) throw new StoreError(409, `메뉴 slug ${s}이(가) 이미 있습니다`);
-
-  let menus = cat.get("menus") as YAMLSeq | undefined;
-  if (!menus || !(menus instanceof YAMLSeq)) { menus = new YAMLSeq(); cat.set("menus", menus); }
-  menus.flow = false;
-  menus.add(doc.createNode({ slug: s, name: name.trim() }));
-  writeFileSync(path, doc.toString({ lineWidth: 0 }));
-  return { category: categoryKey, slug: s };
 }

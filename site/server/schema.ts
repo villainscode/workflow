@@ -51,6 +51,7 @@ export const versionFiles = sqliteTable("version_file", {
 });
 
 export const DDL = `
+DROP TABLE IF EXISTS search;
 DROP TABLE IF EXISTS version_file;
 DROP TABLE IF EXISTS document_version;
 DROP TABLE IF EXISTS document;
@@ -66,4 +67,6 @@ CREATE TABLE document_version (id INTEGER PRIMARY KEY AUTOINCREMENT, document_id
   version TEXT NOT NULL, note TEXT, source TEXT, created_at TEXT, UNIQUE(document_id, version));
 CREATE TABLE version_file (id INTEGER PRIMARY KEY AUTOINCREMENT, version_id INTEGER NOT NULL REFERENCES document_version(id),
   path TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, is_entry INTEGER NOT NULL);
+-- 검색 색인. trigram이라 LIKE '%리뷰%' 같은 부분 일치를 색인으로 찾는다(한국어 조사가 붙어도 찾힌다)
+CREATE VIRTUAL TABLE search USING fts5(document_id UNINDEXED, title, body, tokenize = 'trigram');
 `;

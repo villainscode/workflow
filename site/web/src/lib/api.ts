@@ -14,9 +14,13 @@ export interface DocDetail {
   status: string; currentVersion: string; notionUrl: string | null; gdriveUrl: string | null; versions: DocVersion[];
 }
 
+export class HttpError extends Error {
+  constructor(public status: number, url: string) { super(`${status} ${url}`); }
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${url}`);
+  if (!res.ok) throw new HttpError(res.status, url);
   return res.json() as Promise<T>;
 }
 

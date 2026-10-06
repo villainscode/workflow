@@ -10,7 +10,11 @@ import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
 import { DDL, categories, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
-import { StoreError, addMenu, saveEdit, upload, type IncomingFile } from "./store.ts";
+import { StoreError, saveEdit, upload, type IncomingFile } from "./store.ts";
+import {
+  addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc,
+  trashDoc, updateCategory, updateDoc,
+} from "./manage.ts";
 import { convert, type Target } from "./convert.ts";
 
 const SITE_ROOT = resolve(import.meta.dirname, "..");
@@ -124,10 +128,62 @@ app.post<{ Params: { menu: string; doc: string }; Body: { baseVersion: string; c
   },
 );
 
-app.post<{ Body: { category: string; name: string; slug?: string } }>("/api/menus", async (req) => {
-  const result = addMenu(DOCS_ROOT, req.body.category, req.body.name, req.body.slug);
-  reindex("menu");
-  return result;
+// ---------- 관리: 고친 뒤 바로 다시 색인한다 ----------
+type MenuParams = { Params: { slug: string } };
+type DocParams = { Params: { menu: string; doc: string } };
+const done = <T>(reason: string, result: T) => { reindex(reason); return result ?? { ok: true }; };
+
+app.post<{ Body: { category: string; name: string; slug?: string; parent?: string } }>("/api/menus", async (req) =>
+  done("menu", addMenu(DOCS_ROOT, req.body.category, req.body.name, req.body.slug, req.body.parent)));
+app.patch<MenuParams & { Body: { name: string } }>("/api/menus/:slug", async (req) =>
+  done("menu", renameMenu(DOCS_ROOT, req.params.slug, req.body.name)));
+app.post<MenuParams & { Body: { category: string; parent?: string | null; index?: number } }>("/api/menus/:slug/move", async (req) =>
+  done("menu", moveMenu(DOCS_ROOT, req.params.slug, req.body)));
+app.delete<MenuParams>("/api/menus/:slug", async (req) => done("menu", deleteMenu(DOCS_ROOT, req.params.slug)));
+
+app.post<{ Body: { name: string; key?: string } }>("/api/categories", async (req) =>
+  done("category", addCategory(DOCS_ROOT, req.body.name, req.body.key)));
+app.patch<{ Params: { key: string }; Body: { name?: string; index?: number } }>("/api/categories/:key", async (req) =>
+  done("category", updateCategory(DOCS_ROOT, req.params.key, req.body)));
+app.delete<{ Params: { key: string } }>("/api/categories/:key", async (req) =>
+  done("category", deleteCategory(DOCS_ROOT, req.params.key)));
+
+app.patch<DocParams & { Body: { title?: string; status?: string } }>("/api/docs/:menu/:doc", async (req) =>
+  done("doc", updateDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
+app.post<DocParams & { Body: { menu: string } }>("/api/docs/:menu/:doc/move", async (req) =>
+  done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body.menu)));
+app.delete<DocParams>("/api/docs/:menu/:doc", async (req) => done("trash", trashDoc(DOCS_ROOT, req.params.menu, req.params.doc)));
+
+app.get("/api/trash", async () => listTrash(DOCS_ROOT));
+app.post<{ Params: { id: string }; Body: { menu?: string } }>("/api/trash/:id/restore", async (req) =>
+  done("restore", restoreDoc(DOCS_ROOT, req.params.id, req.body?.menu)));
+app.delete<{ Params: { id: string } }>("/api/trash/:id", async (req) => done("purge", purgeDoc(DOCS_ROOT, req.params.id)));
+
+// ---------- 검색: 제목·메뉴·본문 부분 일치. 제목에 맞은 문서를 먼저 ----------
+app.get<{ Querystring: { q?: string; category?: string; kind?: string } }>("/api/search", async (req) => {
+  const q = (req.query.q ?? "").trim();
+  if (!q) return [];
+  const like = `%${q.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
+  const rows = sqlite.prepare(`
+    SELECT d.slug, d.menu_slug AS menuSlug, d.title, d.kind, d.status, m.category_key AS category, m.name AS menuName,
+           s.body, (s.title LIKE @like ESCAPE '\\') AS inTitle
+    FROM search s JOIN document d ON d.id = s.document_id JOIN menu m ON m.slug = d.menu_slug
+    WHERE (s.title LIKE @like ESCAPE '\\' OR s.body LIKE @like ESCAPE '\\' OR m.name LIKE @like ESCAPE '\\')
+      AND (@category IS NULL OR m.category_key = @category)
+      AND (@kind IS NULL OR d.kind = @kind)
+    ORDER BY inTitle DESC, d.title
+    LIMIT 50`).all({ like, category: req.query.category || null, kind: req.query.kind || null }) as
+    { slug: string; menuSlug: string; title: string; kind: string; status: string; category: string; menuName: string; body: string; inTitle: number }[];
+
+  const lower = q.toLowerCase();
+  return rows.map(({ body, inTitle, ...r }) => {
+    const text = body ?? "";
+    const at = text.toLowerCase().indexOf(lower);
+    let count = 0;
+    for (let i = text.toLowerCase().indexOf(lower); i >= 0; i = text.toLowerCase().indexOf(lower, i + lower.length)) count++;
+    const snippet = at < 0 ? "" : (at > 60 ? "…" : "") + text.slice(Math.max(0, at - 60), at + q.length + 100).replace(/\s+/g, " ") + "…";
+    return { ...r, inTitle: !!inTitle, matches: count, snippet };
+  });
 });
 
 // 변환 결과. 예: /api/convert/pdf/<메뉴>/<문서>/<버전>/slides.pptx

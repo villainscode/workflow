@@ -5,6 +5,7 @@ import { useLiveUpdates } from "../lib/live.ts";
 import { UploadProvider, useOpenUpload } from "./upload/UploadContext.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { EmptyState } from "./EmptyState.tsx";
+import { SearchBox } from "./SearchBox.tsx";
 
 export function Layout() {
   return (
@@ -29,7 +30,7 @@ function Shell() {
 
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-3 sm:px-4">
+      <header className="flex flex-wrap items-center gap-x-1 border-b border-line bg-surface px-3 sm:flex-nowrap sm:px-4">
         <button
           className="mr-1 rounded-md px-2 py-1 text-muted hover:bg-sunken md:hidden"
           onClick={() => setDrawerOpen((v) => !v)}
@@ -53,8 +54,9 @@ function Shell() {
             </NavLink>
           ))}
         </nav>
+        <SearchBox />
         <button
-          className="ml-auto shrink-0 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90"
+          className="ml-auto shrink-0 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 sm:ml-2"
           onClick={() => openUpload({ category })}
         >
           업로드
