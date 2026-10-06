@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useParams } from "react-router";
 import { useTree } from "../lib/api.ts";
+import { useLiveUpdates } from "../lib/live.ts";
+import { UploadProvider, useOpenUpload } from "./upload/UploadContext.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 
 export function Layout() {
+  return (
+    <UploadProvider>
+      <Shell />
+    </UploadProvider>
+  );
+}
+
+function Shell() {
+  useLiveUpdates();
+  const openUpload = useOpenUpload();
   const { category } = useParams();
   const { data: tree, error } = useTree();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -41,6 +53,12 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <button
+          className="ml-auto shrink-0 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90"
+          onClick={() => openUpload({ category })}
+        >
+          업로드
+        </button>
       </header>
 
       <div className="relative grid min-h-0 md:grid-cols-[272px_minmax(0,1fr)]">

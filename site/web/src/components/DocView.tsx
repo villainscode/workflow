@@ -1,5 +1,6 @@
 import { useParams, useSearchParams } from "react-router";
-import { useDoc } from "../lib/api.ts";
+import { fileSrc, useDoc } from "../lib/api.ts";
+import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { StatusBadge } from "./StatusBadge.tsx";
 import { Viewer } from "../viewers/Viewer.tsx";
@@ -8,6 +9,7 @@ export function DocView() {
   const { menu = "", doc = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const { data, error, isLoading } = useDoc(menu, doc);
+  const openUpload = useOpenUpload();
 
   if (isLoading) return <EmptyState title="불러오는 중…" />;
   if (error || !data) return <EmptyState title="문서를 열 수 없습니다" body={String(error ?? "")} />;
@@ -37,6 +39,12 @@ export function DocView() {
         {entry && (
           <a className="text-xs text-accent hover:underline" href={entry.url} download>다운로드</a>
         )}
+        <button
+          className="rounded-md border border-line px-2 py-0.5 text-xs hover:bg-sunken"
+          onClick={() => openUpload({ menu, doc })}
+        >
+          새 버전
+        </button>
         {data.notionUrl && <a className="text-xs text-accent hover:underline" href={data.notionUrl} target="_blank" rel="noreferrer">Notion</a>}
         {data.gdriveUrl && <a className="text-xs text-accent hover:underline" href={data.gdriveUrl} target="_blank" rel="noreferrer">Drive</a>}
         {version.note && (
@@ -47,7 +55,7 @@ export function DocView() {
         )}
       </div>
       <div className="min-h-0 min-w-0 bg-bg">
-        {entry ? <Viewer key={entry.url} file={entry} /> : <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />}
+        {entry ? <Viewer key={fileSrc(entry)} file={entry} /> : <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />}
       </div>
     </div>
   );

@@ -14,7 +14,11 @@ export function ImageViewer({ url }: { url: string }) {
             <button className={btn} onClick={() => centerView(1)}>1:1</button>
             <button className={btn} onClick={() => resetTransform()}>맞춤</button>
           </div>
-          <TransformComponent wrapperClass="!h-full !w-full" contentClass="!h-full !w-full grid place-items-center p-6">
+          <TransformComponent
+            wrapperStyle={{ width: "100%", height: "100%" }}
+            // 라이브러리가 콘텐츠를 display:flex로 두므로 flex 기준으로 가운데 정렬한다
+            contentStyle={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center", padding: 24 }}
+          >
             <img src={url} alt="" className="max-h-full max-w-full object-contain" draggable={false} />
           </TransformComponent>
         </div>

@@ -76,11 +76,31 @@ npm run build      # 타입 검사 후 site/dist로 빌드
 ```
 
 - **server/**: `scan.ts`가 `docs/_site/menus.yaml`과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
-- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/reindex`. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
+- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과). `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **HTML 뷰어**: iframe에 `allow-same-origin` 없이 sandbox를 건다. 문서 안의 스크립트는 동작하지만 사이트 쪽에는 접근하지 못한다. 문서 안의 링크를 누르면 iframe 안에서 이동한다.
-- 1단계에는 파일 감시가 없다. 사이트 밖에서 `docs/`를 고쳤다면 `POST /api/reindex`를 호출하거나 서버를 다시 시작한다.
-- 화면 확인: headless Chrome `--screenshot`은 iframe 내용을 그리기 전에 찍혀 빈 화면이 나올 수 있다. 사이트 화면은 Mermaid CLI와 함께 전역 설치된 puppeteer(`$(npm root -g)/@mermaid-js/mermaid-cli/node_modules/puppeteer`)로 `networkidle0`까지 기다린 뒤 찍는다.
+- **업로드** (`server/store.ts`): 파일 → `meta.yaml`(주석·순서 유지) → 색인 순서로 쓴다.
+  - 버전은 문서마다 다음 번호(`v0.1` → `v0.2`)를 자동으로 정하고, 직접 지정할 수도 있다.
+  - 직전 버전과 파일 구성·내용(sha256)이 같으면 409로 거부한다.
+  - zip 하나는 풀어서 쓰고, 폴더째 올리면 공통 최상위 폴더 이름을 뗀다.
+  - 대표 파일은 `index.html` → 첫 HTML → 가장 얕은 첫 파일 순서로 고른다.
+  - `..`나 숨김 파일 경로는 버린다.
+  - 새 메뉴는 `menus.yaml`에 추가된다.
+- **실시간 반영**: chokidar가 `docs/`를 감시하고, 변경이 생기면 300ms 동안 모았다가 한 번 다시 색인한 뒤 SSE로 알린다. 화면은 `useLiveUpdates`로 목록과 문서 정보를 다시 불러온다. 파일 URL에 `?h=<sha256 앞 12자리>`를 붙여 같은 경로의 내용이 바뀌어도 iframe·이미지가 새로 고쳐진다.
+- **변환** (`server/convert.ts`): PPTX·DOCX → PDF는 `soffice --headless`, draw.io → SVG는 `drawio -x`로 변환한다.
+  - 결과는 원본 sha256을 이름으로 `site/data/cache/`에 캐시한다. 변환기를 고쳤다면 캐시 파일을 지워야 다시 변환된다.
+  - LibreOffice는 한 번에 하나씩 순서대로 돌리고, 별도 프로필(`cache/lo-profile`)을 쓴다.
+  - **macOS headless LibreOffice는 기본 상태에서 시스템 폰트를 보지 못해 한글이 빠진 PDF를 만든다.** 그래서 시스템 폰트 폴더를 넣은 `cache/fonts.conf`를 만들어 `FONTCONFIG_FILE`로 넘긴다.
+- **뷰어**: 형식별 분기는 `web/src/viewers/Viewer.tsx`에 있다.
+  - PDF는 브라우저 내장 뷰어로 연다. Chrome은 sandbox iframe에서 PDF를 열지 않아 sandbox를 걸지 않는다.
+  - DOCX는 `docx-preview`로 렌더링하고, PDF 변환으로 볼 수도 있다.
+  - XLSX·CSV는 SheetJS로 읽는다. SheetJS는 npm 레지스트리 버전이 오래되어 공식 CDN tgz로 설치했다. CSV는 UTF-8 텍스트로 읽는다.
+- **업로드 진입점**: 모두 `upload/UploadContext.tsx`의 `useOpenUpload()`로 연다.
+  - 상단 "업로드" 버튼
+  - 메뉴별 `+` 버튼
+  - 메뉴에 파일 끌어다 놓기
+  - 문서 화면의 "새 버전"
+- 화면 확인: headless Chrome `--screenshot`은 iframe 내용을 그리기 전에 찍혀 빈 화면이 나올 수 있다. 사이트 화면은 Mermaid CLI와 함께 전역 설치된 puppeteer(`$(npm root -g)/@mermaid-js/mermaid-cli/node_modules/puppeteer`)로 찍는다. SSE 연결이 계속 열려 있어 `networkidle0`은 끝나지 않으므로 `domcontentloaded` 후 요소를 기다린다.
 
 ## 산출물 형식과 도구
 

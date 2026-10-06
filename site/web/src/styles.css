@@ -55,3 +55,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--fo
 :root[data-theme="dark"] .shiki, :root[data-theme="dark"] .shiki span { color: var(--shiki-dark) !important; }
 /* 코드는 가로 스크롤 대신 줄바꿈 */
 .shiki { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; }
+
+/* docx-preview: 페이지를 가운데에 두고, 페이지 폭보다 좁으면 영역 안에서 축소한다 */
+.docx-host .docx-wrapper { background: var(--bg); padding: 16px; }
+.docx-host .docx-wrapper > section.docx { box-shadow: 0 1px 4px rgb(0 0 0 / 0.15); margin-bottom: 16px; }
+@media (max-width: 900px) { .docx-host .docx-wrapper > section.docx { zoom: 0.6; } }

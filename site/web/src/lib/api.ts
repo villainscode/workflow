@@ -23,4 +23,50 @@ async function getJson<T>(url: string): Promise<T> {
 export const useTree = () => useQuery({ queryKey: ["tree"], queryFn: () => getJson<Tree>("/api/tree") });
 
 export const useDoc = (menu: string, doc: string) =>
-  useQuery({ queryKey: ["doc", menu, doc], queryFn: () => getJson<DocDetail>(`/api/docs/${menu}/${doc}`) });
+  useQuery({
+    queryKey: ["doc", menu, doc],
+    queryFn: () => getJson<DocDetail>(`/api/docs/${menu}/${doc}`),
+    enabled: !!menu && !!doc,
+  });
+
+export interface UploadFile { file: File; path: string }
+export interface UploadRequest {
+  menu: string; doc?: string; title?: string; slug?: string; version?: string; note?: string; entry?: string;
+  files: UploadFile[];
+}
+export interface UploadResult { menu: string; doc: string; version: string; category: string; created: boolean }
+
+async function send<T>(res: Response): Promise<T> {
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(body.error ?? `${res.status} 오류`);
+  return body as T;
+}
+
+export async function uploadFiles(req: UploadRequest): Promise<UploadResult> {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(req)) if (k !== "files" && v) form.append(k, String(v));
+  form.append("paths", JSON.stringify(req.files.map((f) => f.path)));
+  for (const f of req.files) form.append("files", f.file, f.file.name);
+  return send(await fetch("/api/upload", { method: "POST", body: form }));
+}
+
+export async function createMenu(category: string, name: string, slug?: string): Promise<{ slug: string }> {
+  return send(await fetch("/api/menus", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ category, name, slug }),
+  }));
+}
+
+export function nextVersion(versions: string[]): string {
+  const nums = versions.map((v) => /^v(\d+)\.(\d+)$/.exec(v)).filter((m) => m !== null).map((m) => [Number(m[1]), Number(m[2])]);
+  if (nums.length === 0) return "v0.1";
+  nums.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const [major, minor] = nums[nums.length - 1];
+  return `v${major}.${minor + 1}`;
+}
+
+/** 파일 내용이 바뀌면 URL도 바뀌게 해서 브라우저 캐시와 iframe을 새로 고친다. */
+export const fileSrc = (f: VersionFile) => `${f.url}?h=${f.sha256.slice(0, 12)}`;
+
+/** 변환 결과 URL. 원본 내용이 바뀌면 h 값이 바뀌어 새로 변환된다. */
+export const convertSrc = (f: VersionFile, to: "pdf" | "svg") =>
+  `/api/convert/${to}/${f.path.replace(/^docs\//, "")}?h=${f.sha256.slice(0, 12)}`;
