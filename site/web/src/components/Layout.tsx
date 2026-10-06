@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useParams } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
 import { useTree } from "../lib/api.ts";
 import { useLiveUpdates } from "../lib/live.ts";
 import { UploadProvider, useOpenUpload } from "./upload/UploadContext.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { SearchBox } from "./SearchBox.tsx";
+import { SidebarResizer, useSidebarWidth } from "./SidebarResizer.tsx";
 
 export function Layout() {
   return (
@@ -21,6 +22,7 @@ function Shell() {
   const { category } = useParams();
   const { data: tree, error } = useTree();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sidebar = useSidebarWidth();
   const location = useLocation();
 
   // 문서를 고르면 좁은 화면의 서랍을 닫는다
@@ -38,7 +40,11 @@ function Shell() {
         >
           ☰
         </button>
-        <span className="mr-4 hidden font-mono text-xs tracking-widest text-muted uppercase sm:inline">Workflow</span>
+        {/* 사이트 로고. 누르면 메인(/)으로 간다. 좁은 화면에서는 심볼만 */}
+        <Link to="/" className="mr-4 flex shrink-0 items-center rounded-md py-2" aria-label="Workflow 메인으로">
+          <img src="/logo.svg" alt="Workflow" className="hidden h-7 w-auto sm:block" />
+          <img src="/favicon.svg" alt="Workflow" className="h-7 w-7 sm:hidden" />
+        </Link>
         <nav className="flex min-w-0 gap-1 overflow-hidden" aria-label="대분류">
           {tree?.categories.map((c) => (
             <NavLink
@@ -63,20 +69,29 @@ function Shell() {
         </button>
       </header>
 
-      <div className="relative grid min-h-0 md:grid-cols-[272px_minmax(0,1fr)]">
+      {/* 넓은 화면: 사이드바 너비는 --sidebar-w(끌어서 조절). 좁은 화면: 고정 폭 서랍 */}
+      <div className="relative grid min-h-0 md:grid-cols-[var(--sidebar-w)_minmax(0,1fr)]" style={sidebar.style}>
         <aside
-          className={`absolute inset-y-0 left-0 z-20 w-[272px] overflow-y-auto border-r border-line bg-surface md:static md:block ${
-            drawerOpen ? "block shadow-xl" : "hidden"
+          className={`absolute inset-y-0 left-0 z-20 w-[272px] flex-col border-r border-line bg-surface md:static md:flex md:w-auto ${
+            drawerOpen ? "flex shadow-xl" : "hidden"
           }`}
         >
-          {current && <Sidebar category={current} />}
-          {tree && tree.warnings.length > 0 && (
-            <details className="m-3 rounded-md bg-high-soft p-2 text-xs text-high">
-              <summary className="cursor-pointer">색인 경고 {tree.warnings.length}건</summary>
-              <ul className="mt-1 list-disc pl-4">{tree.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-            </details>
+          {/* 접힌 상태는 넓은 화면에만 적용한다. 좁은 화면의 서랍은 항상 전체 목록을 보여준다 */}
+          <div className={sidebar.collapsed ? "contents md:hidden" : "contents"}>
+            {current && <Sidebar category={current} warnings={tree?.warnings ?? []} onCollapse={() => sidebar.setCollapsed(true)} />}
+          </div>
+          {sidebar.collapsed && (
+            <button
+              className="hidden h-full w-full justify-center pt-3 text-sm text-muted hover:bg-sunken hover:text-fg md:flex"
+              onClick={() => sidebar.setCollapsed(false)}
+              aria-label="사이드바 펼치기"
+              title="사이드바 펼치기"
+            >
+              »
+            </button>
           )}
         </aside>
+        {!sidebar.collapsed && <SidebarResizer width={sidebar.width} setWidth={sidebar.setWidth} />}
         {drawerOpen && <div className="absolute inset-0 z-10 bg-black/30 md:hidden" onClick={() => setDrawerOpen(false)} />}
 
         <main className="min-h-0 min-w-0">

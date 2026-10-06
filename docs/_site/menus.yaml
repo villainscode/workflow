@@ -12,4 +12,6 @@ categories:
     menus: []
   - key: image
     name: Image
-    menus: []
+    menus:
+      - slug: git
+        name: Git관련이미지

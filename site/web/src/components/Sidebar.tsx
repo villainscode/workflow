@@ -100,23 +100,35 @@ function MenuItem({ category, menu, depth, siblings, index, managing, setOpen, p
   );
 }
 
-export function Sidebar({ category }: { category: Category }) {
+export function Sidebar({ category, warnings, onCollapse }: { category: Category; warnings: string[]; onCollapse: () => void }) {
   const [managing, setManaging] = useState(false);
   const [open, setOpen] = useState<Open>(null);
   const { data: trash } = useTrash();
   const close = () => setOpen(null);
 
   return (
-    <nav className="grid gap-2 p-3" aria-label={`${category.name} 메뉴`}>
+    <>
+    {/* 목록만 스크롤하고, 아래 footer(휴지통)는 항상 같은 자리에 둔다 */}
+    <nav className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto p-3" aria-label={`${category.name} 메뉴`}>
       <div className="flex items-center justify-between px-2">
         <p className="font-mono text-[11px] tracking-widest text-muted uppercase">{category.name}</p>
-        <button
-          className={`rounded-md px-2 py-0.5 text-xs ${managing ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken"}`}
-          onClick={() => setManaging((v) => !v)}
-          aria-pressed={managing}
-        >
-          {managing ? "관리 끝내기" : "관리"}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className={`rounded-md px-2 py-0.5 text-xs ${managing ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken"}`}
+            onClick={() => setManaging((v) => !v)}
+            aria-pressed={managing}
+          >
+            {managing ? "관리 끝내기" : "관리"}
+          </button>
+          <button
+            className="hidden rounded-md px-1.5 py-0.5 text-sm text-muted hover:bg-sunken hover:text-fg md:inline"
+            onClick={onCollapse}
+            aria-label="사이드바 접기"
+            title="사이드바 접기"
+          >
+            «
+          </button>
+        </div>
       </div>
 
       {category.menus.length === 0 ? (
@@ -132,27 +144,43 @@ export function Sidebar({ category }: { category: Category }) {
         </ul>
       )}
 
-      <div className="mt-2 grid gap-1 border-t border-line pt-2 text-sm">
-        {(managing || category.menus.length === 0) && (
+      {(managing || category.menus.length === 0) && (
+        <div className="mt-2 grid gap-1 border-t border-line pt-2 text-sm">
           <button className="rounded-md px-2 py-1 text-left text-muted hover:bg-sunken hover:text-fg" onClick={() => setOpen({ kind: "add" })}>
             ＋ 메뉴 추가
           </button>
-        )}
-        {managing && (
-          <button className="rounded-md px-2 py-1 text-left text-muted hover:bg-sunken hover:text-fg" onClick={() => setOpen({ kind: "categories" })}>
-            대분류 관리
-          </button>
-        )}
-        <button className="rounded-md px-2 py-1 text-left text-muted hover:bg-sunken hover:text-fg" onClick={() => setOpen({ kind: "trash" })}>
-          휴지통 {trash?.length ? <span className="font-mono text-xs">({trash.length})</span> : null}
-        </button>
-      </div>
+          {managing && (
+            <button className="rounded-md px-2 py-1 text-left text-muted hover:bg-sunken hover:text-fg" onClick={() => setOpen({ kind: "categories" })}>
+              대분류 관리
+            </button>
+          )}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <details className="mx-2 rounded-md bg-high-soft p-2 text-xs text-high">
+          <summary className="cursor-pointer">색인 경고 {warnings.length}건</summary>
+          <ul className="mt-1 list-disc pl-4">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+        </details>
+      )}
+    </nav>
+
+    <footer className="shrink-0 border-t border-line p-2">
+      <button
+        className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm text-muted hover:bg-sunken hover:text-fg"
+        onClick={() => setOpen({ kind: "trash" })}
+      >
+        <span aria-hidden>🗑</span>
+        <span className="flex-1">휴지통</span>
+        {trash?.length ? <span className="rounded-full bg-sunken px-2 font-mono text-xs">{trash.length}</span> : null}
+      </button>
+    </footer>
 
       {open?.kind === "add" && <AddMenuDialog category={category.key} parent={open.parent} onClose={close} />}
       {open?.kind === "rename" && <RenameMenuDialog menu={open.menu} onClose={close} />}
       {open?.kind === "move" && <MoveMenuDialog menu={open.menu} onClose={close} />}
       {open?.kind === "categories" && <CategoryDialog onClose={close} />}
       {open?.kind === "trash" && <TrashDialog onClose={close} />}
-    </nav>
+    </>
   );
 }

@@ -70,7 +70,7 @@ Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더�
 
 ```bash
 cd site
-npm run dev        # API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173)을 함께 실행
+npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(predev)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173) 실행
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 ```
@@ -78,6 +78,9 @@ npm run build      # 타입 검사 후 site/dist로 빌드
 - **server/**: `scan.ts`가 `docs/_site/menus.yaml`과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
+- **사이드바** (`components/SidebarResizer.tsx`): 너비는 CSS 변수 `--sidebar-w`로 정한다(200~560px, 기본 272). 손잡이는 `setPointerCapture`로 끌기를 받는다. 덮개 방식으로 바꾸면 iframe 위에서 이벤트를 뺏기거나 더블클릭이 깨진다. 접으면 20px 띠가 된다. 너비와 접힘 상태는 localStorage(`workflow:sidebar-*`)에 둔다. 휴지통은 사이드바 하단 footer에 고정이다.
+- **정적 파일**: 로고(`logo.svg`)와 파비콘(`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`)은 `web/public/`에 있다. 헤더 로고를 누르면 `/`로 간다.
+- **react-grab** (개발 모드 전용, devDependency): `web/src/main.tsx`에서 `import.meta.env.DEV`일 때만 불러온다. 화면 요소를 가리키고 ⌘C를 누르면 그 요소의 컴포넌트와 소스 위치가 복사되어, 코딩 에이전트에 붙여 넣고 수정을 요청할 수 있다. 운영 빌드에는 포함되지 않는다.
 - **HTML 뷰어**: iframe에 `allow-same-origin` 없이 sandbox를 건다. 문서 안의 스크립트는 동작하지만 사이트 쪽에는 접근하지 못한다. 문서 안의 링크를 누르면 iframe 안에서 이동한다.
 - **업로드** (`server/store.ts`): 파일 → `meta.yaml`(주석·순서 유지) → 색인 순서로 쓴다.
   - 버전은 문서마다 다음 번호(`v0.1` → `v0.2`)를 자동으로 정하고, 직접 지정할 수도 있다.

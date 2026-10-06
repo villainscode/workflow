@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 184 28" width="184" height="28" role="img" aria-label="Workflow">
+  <style>
+    .word { fill: #1A1F29; font: 600 19px "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 2.6px; }
+    @media (prefers-color-scheme: dark) { .word { fill: #E3E7EE; } }
+  </style>
+  <g transform="scale(0.875)">
+    <rect width="32" height="32" rx="7" fill="#1F5FBF"/>
+    <g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+      <path d="M10 7v18"/>
+      <path d="M10 11c0 4 12 2 12 7v1"/>
+    </g>
+    <g fill="#1F5FBF" stroke="#fff" stroke-width="2.4">
+      <circle cx="10" cy="7.5" r="2.6"/>
+      <circle cx="10" cy="24.5" r="2.6"/>
+      <circle cx="22" cy="21" r="2.6"/>
+    </g>
+  </g>
+  <text class="word" x="38" y="20.5">WORKFLOW</text>
+</svg>

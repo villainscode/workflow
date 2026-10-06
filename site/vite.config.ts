@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    strictPort: true, // 다른 포트로 바꿔 뜨지 않는다. 포트는 predev(scripts/free-ports.mjs)가 비운다
     proxy: { "/api": api, "/files": api },
   },
   build: { outDir: "../dist", emptyOutDir: true },
