@@ -1,0 +1,16 @@
+title: OCR 리뷰 방식 비교 (API 키 vs Max 구독)
+category: sdlc
+menu: code-review-automation
+kind: html
+type: decision
+sdlc: develop
+status: draft
+current: v0.1
+versions:
+  - version: v0.1
+    entry: review-modes.html
+    note: 기존 ocr-review-modes.html을 옮김(내용 변경 없음).
+    source: upload
+    created: 2026-10-06
+notion_url:
+gdrive_url:

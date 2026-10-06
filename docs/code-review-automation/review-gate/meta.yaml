@@ -1,0 +1,18 @@
+title: OCR 리뷰 게이트 운영 가이드
+category: sdlc
+menu: code-review-automation
+kind: html
+type: process
+sdlc: develop
+status: draft
+current: v0.1
+versions:
+  - version: v0.1
+    entry: review-gate.html
+    note: >-
+      기존 ocr-team-review-guide.html을 옮김(내용 변경 없음). 남은 일: 워크플로 트리거를
+      sprint-gitflow/process v0.1의 pull_request 방식에 맞추기, /ocr-triage 판정 수집과 골든셋 문서 추가.
+    source: upload
+    created: 2026-10-06
+notion_url:
+gdrive_url:

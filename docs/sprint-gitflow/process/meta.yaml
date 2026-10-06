@@ -1,0 +1,19 @@
+title: Git-flow 스프린트 개발 프로세스
+category: sdlc
+menu: sprint-gitflow
+kind: html
+type: process
+sdlc: develop
+status: draft
+current: v0.1
+versions:
+  - version: v0.1
+    entry: process.html
+    note: >-
+      2주 스프린트(D1–D14) 기준으로 다시 작성. D7 첫 코드 리뷰(PR → develop), D10 기능 동결과 release 생성,
+      D14 리뷰(PR release → main)·배포·데모. 로컬 리뷰(매일)와 CI 리뷰 에이전트(D7·D14) 두 층으로 정리하고
+      CI 트리거를 pull_request로 변경. hotfix, 고객사 라이선스·패키지, 리뷰 원장·골든셋 내용은 제외.
+    source: upload
+    created: 2026-10-06
+notion_url:
+gdrive_url:

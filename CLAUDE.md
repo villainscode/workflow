@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 이 리포지토리
 
-SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루션을 만들기 위한 **설계 단계 문서(드래프트)**를 관리하는 워크 리포지토리다. 대상은 요구사항, 시퀀스 다이어그램, ERD, 시스템 아키텍처, 개발 도구, 코드 리뷰, 빌드·배포, 운영이고, 의사 결정 기록도 여기에 남긴다. 애플리케이션 코드는 없다. 문서 안의 YAML·셸·워크플로 코드는 대상 팀 저장소에 적용할 예시이고, 이 리포에서 실행하는 코드가 아니다.
+SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루션을 만들기 위한 **설계 단계 문서(드래프트)**를 관리하는 워크 리포지토리다. 대상은 요구사항, 시퀀스 다이어그램, ERD, 시스템 아키텍처, 개발 도구, 코드 리뷰, 빌드·배포, 운영이고, 의사 결정 기록도 여기에 남긴다. 문서 안의 YAML·셸·워크플로 코드는 대상 팀 저장소에 적용할 예시이고, 이 리포에서 실행하는 코드가 아니다.
+
+리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트를 `site/`에 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`에 있다. 사이트 작업을 할 때는 먼저 그 문서의 현재 단계와 결정 사항(D-n)을 확인하고, 미결정 항목은 진행하기 전에 묻는다.
 
 - 응답과 문서는 한국어로 쓴다.
 - 결과물은 코드보다 설명, 프로세스, 그림, 문서 위주로 만든다.
@@ -12,56 +14,73 @@ SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루�
 
 ## 문서 구조와 버전 관리
 
-문서는 **업무명 → 버전** 단위로 만들고 관리한다.
+문서는 **메뉴 → 문서 → 버전** 단위로 관리한다. 버전은 문서마다 따로 쌓인다.
 
 ```
 docs/
-  <업무 slug>/              # 영문 kebab-case. 예: code-review-automation
-    CHANGELOG.md            # 버전마다 바뀐 점과 결정 사항을 한 줄씩
-    v0.1/
-      meta.yaml             # 업무명, 버전, 상태, 문서 목록, 외부 등록 링크
-      architecture.html     # 설계 문서 1건 = 파일 1개 (기본 형식 HTML)
-      sequence-login.html
-      erd.html
-      diagrams/             # 편집 가능한 원본: .drawio, .mmd
-      exports/              # 파생 산출물: .svg .png .pdf .pptx .xlsx
-    v0.2/
+  _site/menus.yaml          # 대분류(SDLC · Agent · Image)와 메뉴 트리. 사이트의 메뉴 원본
+  <메뉴 slug>/              # 영문 kebab-case. 예: code-review-automation
+    <문서 slug>/            # 예: review-gate
+      meta.yaml             # 제목, 분류, 상태, 버전 목록, 외부 등록 링크 (문서 정보의 원본)
+      v0.1/
+        review-gate.html    # 대표 파일(entry). 기본 형식은 HTML
+        diagrams/           # 편집 가능한 원본: .drawio, .mmd (필요할 때)
+        exports/            # 파생 산출물: .svg .png .pdf .pptx .xlsx (필요할 때)
+      v0.2/
 ```
 
-- **버전 규칙**: `v0.x`는 드래프트, `v1.0` 이상은 확정이다. 내용을 바꿀 때는 이전 버전 폴더를 복사해 새 버전을 만들고 그 안에서 고친다. **Notion에 등록했거나 커밋된 버전 폴더는 수정하지 않는다.** 오타 같은 사소한 수정만 예외로 하고, 고친 내용은 CHANGELOG에 남긴다.
-- **업무 slug**: 폴더 이름은 영문 kebab-case로 짓고, 한글 업무명은 `meta.yaml`의 `task`에 적는다.
+- **원본은 파일이다.** `menus.yaml`과 문서별 `meta.yaml`, 버전 폴더의 파일이 원본이고 git으로 추적한다. 사이트의 SQLite(`site/data/`)는 이 파일들을 스캔해 다시 만드는 색인이라 git에 넣지 않는다. 문서를 추가하거나 옮길 때는 yaml을 함께 고친다.
+- **버전 규칙**: `v0.x`는 드래프트, `v1.0` 이상은 확정이다. 내용을 바꿀 때는 그 문서의 이전 버전 폴더를 복사해 새 버전을 만들고, `meta.yaml`의 `versions`에 메모(`note`)와 함께 추가하고 `current`를 바꾼다. **Notion에 등록했거나 커밋된 버전 폴더는 수정하지 않는다.** 오타 같은 사소한 수정과 구조 이전만 예외로 한다.
+- **slug**: 메뉴 slug는 리포 전체에서 하나만 존재한다. 메뉴의 대분류 소속과 상하 관계는 `menus.yaml`에서 정하므로 폴더 경로에 넣지 않는다.
 - **원본과 파생**: 다이어그램의 원본은 `diagrams/`의 `.drawio`·`.mmd` 파일이다. `exports/`와 HTML에 넣은 SVG는 원본에서 다시 만들 수 있는 파생물이므로, 원본을 고친 뒤 다시 export한다.
-- **상태**: `meta.yaml`의 문서별 `status`는 `draft`, `review`, `approved` 중 하나다.
 
 ```yaml
-# docs/<slug>/<version>/meta.yaml
-task: 코드 리뷰 자동화
-slug: code-review-automation
-version: v0.1
-updated: 2026-10-06
-documents:
-  - file: architecture.html
-    title: 리뷰 자동화 시스템 아키텍처
-    type: architecture        # requirements | sequence | erd | architecture | process | build-deploy | decision
-    sdlc: design              # plan | design | develop | test | build-deploy | operate
-    status: draft
-    sources: [diagrams/architecture.drawio]
-    exports: [exports/architecture.pdf]
-    notion_url:               # 등록 후 채운다
-    gdrive_url:
+# docs/<메뉴>/<문서>/meta.yaml
+title: OCR 리뷰 게이트 운영 가이드
+category: sdlc            # menus.yaml의 대분류 key
+menu: code-review-automation
+kind: html                # html | image | pdf | pptx | docx | xlsx | markdown | code | drawio
+type: process             # requirements | sequence | erd | architecture | process | build-deploy | decision
+sdlc: develop             # plan | design | develop | test | build-deploy | operate
+status: draft             # draft | review | approved
+current: v0.1
+versions:
+  - version: v0.1
+    entry: review-gate.html
+    note: 변경 메모
+    source: upload        # upload | edit | scan
+    created: 2026-10-06
+notion_url:               # 등록 후 채운다
+gdrive_url:
 ```
 
-### 현재 업무와 문서
+### 현재 메뉴와 문서
 
-| 업무 (slug) | 최신 버전 | 문서 | 다루는 영역 |
-|---|---|---|---|
-| 스프린트 Git-flow 프로세스 (`sprint-gitflow`) | v0.1 | `process.html` | 버전 관리·CI, 2주 스프린트 |
-| 코드 리뷰 자동화 (`code-review-automation`) | v0.1 | `review-gate.html` | 코드 리뷰 게이트 설치·Slack·Ruleset |
-| | | `review-modes.html` | CI 리뷰 실행 방식 (API 키 vs Max 구독) |
+| 대분류 | 메뉴 | 문서 | 최신 | 다루는 영역 |
+|---|---|---|---|---|
+| SDLC | `sprint-gitflow` | `process` | v0.1 | 버전 관리·CI, 2주 스프린트 |
+| SDLC | `code-review-automation` | `review-gate` | v0.1 | 코드 리뷰 게이트 설치·Slack·Ruleset |
+| SDLC | `code-review-automation` | `review-modes` | v0.1 | CI 리뷰 실행 방식 (API 키 vs Max 구독) |
 
-문서끼리는 상대 경로로 연결한다. 예: `process.html`에서 `../../code-review-automation/v0.1/review-gate.html`. 새 버전을 만들면 다른 업무 문서에서 이 문서를 가리키는 링크를 새 버전으로 바꿀지 판단한다.
+Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더까지 포함한 상대 경로로 연결한다. 예: `process.html`에서 `../../../code-review-automation/review-gate/v0.1/review-gate.html`. 새 버전을 만들면 다른 문서에서 이 문서를 가리키는 링크를 새 버전으로 바꿀지 판단한다.
 
 아직 문서가 없는 영역: 개발 도구 가이드, 빌드·배포, 이밸 게이트·골든셋(아래 이전 설계 참고), 시퀀스·ERD·아키텍처.
+
+## 업무 문서 사이트 (`site/`)
+
+```bash
+cd site
+npm run dev        # API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173)을 함께 실행
+npm run typecheck  # tsc (server + web)
+npm run build      # 타입 검사 후 site/dist로 빌드
+```
+
+- **server/**: `scan.ts`가 `docs/_site/menus.yaml`과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
+- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/reindex`. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
+- **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
+- **HTML 뷰어**: iframe에 `allow-same-origin` 없이 sandbox를 건다. 문서 안의 스크립트는 동작하지만 사이트 쪽에는 접근하지 못한다. 문서 안의 링크를 누르면 iframe 안에서 이동한다.
+- 1단계에는 파일 감시가 없다. 사이트 밖에서 `docs/`를 고쳤다면 `POST /api/reindex`를 호출하거나 서버를 다시 시작한다.
+- 화면 확인: headless Chrome `--screenshot`은 iframe 내용을 그리기 전에 찍혀 빈 화면이 나올 수 있다. 사이트 화면은 Mermaid CLI와 함께 전역 설치된 puppeteer(`$(npm root -g)/@mermaid-js/mermaid-cli/node_modules/puppeteer`)로 `networkidle0`까지 기다린 뒤 찍는다.
 
 ## 산출물 형식과 도구
 
@@ -77,7 +96,7 @@ documents:
 ## Google Drive
 
 - 루트 폴더: 내 드라이브의 `tommoro-workspace` (folder id `1-v4RZ0GcJtHTgI8GxyO4ne0rlavTQBgz`, 계정 villainscode@gmail.com)
-- 리포 구조를 그대로 따라 `tommoro-workspace/<업무 slug>/<버전>/` 아래에 문서를 둔다. 하위 폴더는 처음 내보낼 때 만든다.
+- 리포 구조를 그대로 따라 `tommoro-workspace/<메뉴 slug>/<문서 slug>/<버전>/` 아래에 문서를 둔다. 하위 폴더는 처음 내보낼 때 만든다.
 - 업로드한 파일 URL은 `meta.yaml`의 `gdrive_url`과 Notion의 `Google Drive` 속성에 적는다. 업로드는 Notion 등록과 마찬가지로 문서마다 확인을 받은 뒤 한다.
 
 ## Notion 등록
@@ -89,8 +108,9 @@ documents:
 - **설계 문서 1건 = 데이터베이스 페이지 1개**로 등록한다. 업무 하나나 버전 하나를 페이지 하나로 묶지 않는다.
 - 속성은 `meta.yaml`에서 채운다.
   - 문서명 ← `title`
-  - 업무명 ← `task`. select 옵션이라 새 업무면 옵션이 추가된다
-  - 업무 slug, 버전
+  - 업무명 ← `menus.yaml`의 메뉴 이름. select 옵션이라 새 메뉴면 옵션이 추가된다
+  - 업무 slug ← `menu`
+  - 버전 ← 등록하는 버전 (`current`)
   - 문서 유형 ← `type`
   - SDLC 단계 ← `sdlc`
   - 상태 ← `status`
@@ -116,7 +136,7 @@ documents:
 
 ### 알려진 불일치
 
-- `code-review-automation/v0.1/review-gate.html`의 워크플로는 `push`로 트리거된다(`feature/code-review` 게이트 브랜치와 `develop` 사후 리뷰). `sprint-gitflow/v0.1/process.html`은 `pull_request`(base가 `develop`·`main`)로 트리거되는 것으로 정했다. code-review-automation 다음 버전에서 이 차이를 맞춘다.
+- `code-review-automation/review-gate/v0.1/review-gate.html`의 워크플로는 `push`로 트리거된다(`feature/code-review` 게이트 브랜치와 `develop` 사후 리뷰). `sprint-gitflow/process/v0.1/process.html`은 `pull_request`(base가 `develop`·`main`)로 트리거되는 것으로 정했다. code-review-automation 다음 버전에서 이 차이를 맞춘다.
 - `sprint-gitflow` 문서 D7 단계는 `/ocr-triage <id> <판정>` 명령을 쓰는데, 이 명령을 설치하는 방법을 설명한 문서가 아직 없다.
 
 ### 이밸 게이트·골든셋 이전 설계 (gitflow 문서 v1에 있던 내용)
@@ -144,7 +164,7 @@ documents:
 
 ```bash
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-DOC="docs/<slug>/<version>/<문서>.html"
+DOC="docs/<메뉴>/<문서>/<버전>/<파일>.html"
 "$CHROME" --headless=new --hide-scrollbars --window-size=1280,4000 --screenshot=/tmp/desk.png "file://$PWD/$DOC"
 "$CHROME" --headless=new --hide-scrollbars --window-size=500,7000 --screenshot=/tmp/narrow.png "file://$PWD/$DOC"
 "$CHROME" --headless=new --no-pdf-header-footer --print-to-pdf="${DOC%/*}/exports/<문서>.pdf" "file://$PWD/$DOC"

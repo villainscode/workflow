@@ -1,0 +1,15 @@
+# 업무 문서 사이트의 대분류와 메뉴 트리. 메뉴 slug는 docs/ 바로 아래 폴더 이름과 같다.
+categories:
+  - key: sdlc
+    name: SDLC
+    menus:
+      - slug: sprint-gitflow
+        name: 스프린트 Git-flow 프로세스
+      - slug: code-review-automation
+        name: 코드 리뷰 자동화
+  - key: agent
+    name: Agent
+    menus: []
+  - key: image
+    name: Image
+    menus: []

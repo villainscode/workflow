@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/* docs/ HTML 문서와 같은 색 토큰. 다크 모드도 같은 방식으로 정의한다. */
+:root {
+  --bg: #F4F5F7; --surface: #FFFFFF; --sunken: #EBEDF1; --fg: #1A1F29; --muted: #586172; --line: #D8DCE3;
+  --accent: #1F5FBF; --accent-soft: #E2EBF9;
+  --high: #C95308; --high-soft: #FDEDE1; --med: #946C00; --med-soft: #FAF2D9; --ok: #1C7543; --ok-soft: #E1F2E8;
+  --code-bg: #161B24;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+    --accent: #80A8F0; --accent-soft: #1C2940;
+    --high: #F29C5E; --high-soft: #3A2719; --med: #E0BA4F; --med-soft: #342C15; --ok: #5DC28C; --ok-soft: #163225;
+    --code-bg: #0A0D12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+  --accent: #80A8F0; --accent-soft: #1C2940;
+  --high: #F29C5E; --high-soft: #3A2719; --med: #E0BA4F; --med-soft: #342C15; --ok: #5DC28C; --ok-soft: #163225;
+  --code-bg: #0A0D12;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-high: var(--high);
+  --color-high-soft: var(--high-soft);
+  --color-med: var(--med);
+  --color-med-soft: var(--med-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --font-sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+/* Shiki 이중 테마: 다크 모드에서는 dark 색을 쓴다 */
+.shiki, .shiki span { background-color: transparent !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .shiki, :root:not([data-theme="light"]) .shiki span { color: var(--shiki-dark) !important; }
+}
+:root[data-theme="dark"] .shiki, :root[data-theme="dark"] .shiki span { color: var(--shiki-dark) !important; }
+/* 코드는 가로 스크롤 대신 줄바꿈 */
+.shiki { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; }
