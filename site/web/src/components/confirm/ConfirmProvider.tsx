@@ -50,8 +50,10 @@ function ConfirmDialog({ options, onAnswer }: { options: ConfirmOptions; onAnswe
 
   useEffect(() => {
     ref.current?.showModal();
+    // 포커스는 잠깐 뒤에 준다. 이 창을 연 Enter 키 입력이 곧바로 새 포커스 버튼으로 이어져 확인 없이 실행되는 것을 막는다.
     // 위험한 작업은 실수로 Enter를 눌러도 실행되지 않도록 "취소"에 포커스를 둔다
-    (options.tone === "danger" ? cancelRef : okRef).current?.focus();
+    const t = setTimeout(() => (options.tone === "danger" ? cancelRef : okRef).current?.focus(), 60);
+    return () => clearTimeout(t);
   }, [options.tone]);
 
   return (

@@ -1,17 +1,11 @@
-# 업무 문서 사이트의 대분류와 메뉴 트리. 메뉴 slug는 docs/ 바로 아래 폴더 이름과 같다.
-categories:
-  - key: sdlc
-    name: SDLC
-    menus:
-      - slug: sprint-gitflow
-        name: 스프린트 Git-flow 프로세스
-      - slug: code-review-automation
-        name: 코드 리뷰 자동화
-  - key: agent
-    name: Agent
-    menus: []
-  - key: image
-    name: Image
-    menus:
-      - slug: git
-        name: Git관련이미지
+# 대분류 key별 좌측 메뉴 트리. 메뉴 slug는 docs/ 바로 아래 폴더 이름과 같다. 대분류 자체는 categories.yaml에 있다.
+menus:
+  sdlc:
+    - slug: sprint-gitflow
+      name: 스프린트 Git-flow 프로세스
+    - slug: code-review-automation
+      name: 코드 리뷰 자동화
+  agent: []
+  image:
+    - slug: git
+      name: Git관련이미지

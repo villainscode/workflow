@@ -6,7 +6,7 @@ import { EditorView } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { useQueryClient } from "@tanstack/react-query";
-import { nextVersion, saveMarkdown, useText, type VersionFile } from "../lib/api.ts";
+import { nextVersion, saveMarkdown, useText, versionLabel, type VersionFile } from "../lib/api.ts";
 import { useConfirm } from "../components/confirm/ConfirmProvider.tsx";
 import { clearDraft, loadDraft, saveDraft } from "../lib/draft.ts";
 import { useDark } from "../lib/useDark.ts";
@@ -41,7 +41,7 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(() =>
     lastSaved && lastSaved.id === draftId && Date.now() - lastSaved.at < 10_000
-      ? { kind: "ok", text: `${ctx.version}으로 저장했습니다` }
+      ? { kind: "ok", text: `${versionLabel(ctx.version)} 버전으로 저장했습니다` }
       : null);
 
   const dirty = text !== original;
@@ -69,7 +69,7 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
     const ok = await confirm({
       title: "저장할까요?", confirmText: "저장",
       message: "기존 버전은 그대로 두고 새 버전으로 저장합니다.",
-      details: [`${ctx.version} → ${nextVersion([ctx.version])}`, ...(note.trim() ? [`메모: ${note.trim()}`] : [])],
+      details: [`${versionLabel(ctx.version)} → ${nextVersion([ctx.version])}`, ...(note.trim() ? [`메모: ${note.trim()}`] : [])],
     });
     if (!ok) return;
     setSaving(true);
@@ -78,7 +78,7 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
       const r = await saveMarkdown(ctx.menu, ctx.doc, { baseVersion: ctx.version, content: text, note });
       clearDraft(draftId);
       lastSaved = { id: `${ctx.menu}/${ctx.doc}@${r.version}`, at: Date.now() };
-      setMessage({ kind: "ok", text: `${r.version}으로 저장했습니다` });
+      setMessage({ kind: "ok", text: `${versionLabel(r.version)} 버전으로 저장했습니다` });
       await qc.invalidateQueries({ queryKey: ["doc", ctx.menu, ctx.doc] });
       await qc.invalidateQueries({ queryKey: ["tree"] });
     } catch (e) {

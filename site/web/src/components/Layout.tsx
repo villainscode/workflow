@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
+import { Link, Outlet, useLocation, useParams } from "react-router";
 import { Menu, PanelLeftOpen, Upload } from "lucide-react";
 import { IconButton } from "./IconButton.tsx";
 import { useTree } from "../lib/api.ts";
@@ -8,6 +8,7 @@ import { UploadProvider, useOpenUpload } from "./upload/UploadContext.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { SearchBox } from "./SearchBox.tsx";
+import { TopMenuBar } from "./header/TopMenuBar.tsx";
 import { SidebarResizer, useSidebarWidth } from "./SidebarResizer.tsx";
 
 export function Layout() {
@@ -41,21 +42,7 @@ function Shell() {
           <img src="/logo.svg" alt="Workflow" className="hidden h-7 w-auto sm:block" />
           <img src="/favicon.svg" alt="Workflow" className="h-7 w-7 sm:hidden" />
         </Link>
-        <nav className="flex min-w-0 gap-1 overflow-hidden" aria-label="대분류">
-          {tree?.categories.map((c) => (
-            <NavLink
-              key={c.key}
-              to={`/${c.key}`}
-              className={({ isActive }) =>
-                `border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap ${
-                  isActive ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg"
-                }`
-              }
-            >
-              {c.name}
-            </NavLink>
-          ))}
-        </nav>
+        <TopMenuBar categories={tree?.categories ?? []} />
         <SearchBox />
         <IconButton icon={Upload} label="업로드" variant="primary" size={22} className="ml-auto p-2 sm:ml-2" onClick={() => openUpload({ category })} />
       </header>

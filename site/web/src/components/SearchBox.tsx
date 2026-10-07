@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { useSearch, type SearchHit } from "../lib/manage.ts";
+import { versionLabel } from "../lib/api.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
 
 /** 검색어를 굵게 표시한다 */
@@ -84,7 +85,7 @@ export function SearchBox() {
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
                     <span className="min-w-0 flex-1 truncate"><Highlight text={h.title} q={q} /></span>
-                    <StatusBadge status={h.status} small />
+                    <StatusBadge status={h.status} label={versionLabel(h.currentVersion)} small />
                   </span>
                   <span className="font-mono text-[11px] text-muted">
                     {h.category} › {h.menuName} · {h.kind}{h.matches ? ` · 본문 ${h.matches}곳` : ""}

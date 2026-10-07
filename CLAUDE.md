@@ -18,34 +18,36 @@ SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루�
 
 ```
 docs/
-  _site/menus.yaml          # 대분류(SDLC · Agent · Image)와 메뉴 트리. 사이트의 메뉴 원본
+  _site/categories.yaml     # 상단 메뉴(대분류: SDLC · Agent · Image)와 순서. 원본
+  _site/menus.yaml          # 대분류 key별 좌측 메뉴 트리. 원본
   <메뉴 slug>/              # 영문 kebab-case. 예: code-review-automation
     <문서 slug>/            # 예: review-gate
       meta.yaml             # 제목, 분류, 상태, 버전 목록, 외부 등록 링크 (문서 정보의 원본)
-      v0.1/
+      v0.0/                 # 최초 작성·업로드본. 화면에는 draft로 표시
         review-gate.html    # 대표 파일(entry). 기본 형식은 HTML
         diagrams/           # 편집 가능한 원본: .drawio, .mmd (필요할 때)
         exports/            # 파생 산출물: .svg .png .pdf .pptx .xlsx (필요할 때)
-      v0.2/
+      v0.1/                 # 첫 수정. 이후 수정마다 v0.2, v0.3 …
+      v1.0/                 # 정식 확정
 ```
 
-- **원본은 파일이다.** `menus.yaml`과 문서별 `meta.yaml`, 버전 폴더의 파일이 원본이고 git으로 추적한다. 사이트의 SQLite(`site/data/`)는 이 파일들을 스캔해 다시 만드는 색인이라 git에 넣지 않는다. 문서를 추가하거나 옮길 때는 yaml을 함께 고친다.
-- **버전 규칙**: `v0.x`는 드래프트, `v1.0` 이상은 확정이다. 내용을 바꿀 때는 그 문서의 이전 버전 폴더를 복사해 새 버전을 만들고, `meta.yaml`의 `versions`에 메모(`note`)와 함께 추가하고 `current`를 바꾼다. **Notion에 등록했거나 커밋된 버전 폴더는 수정하지 않는다.** 오타 같은 사소한 수정과 구조 이전만 예외로 한다.
-- **slug**: 메뉴 slug는 리포 전체에서 하나만 존재한다. 메뉴의 대분류 소속과 상하 관계는 `menus.yaml`에서 정하므로 폴더 경로에 넣지 않는다.
+- **원본은 파일이다.** `categories.yaml`, `menus.yaml`, 문서별 `meta.yaml`, 버전 폴더의 파일이 원본이고 git으로 추적한다. 사이트의 SQLite(`site/data/`)는 이 파일들을 스캔해 다시 만드는 색인이라 git에 넣지 않는다. 문서를 추가하거나 옮길 때는 yaml을 함께 고친다.
+- **버전 규칙**: 최초 작성·업로드는 `v0.0`이고 화면에는 **draft**로 표시한다(`versionLabel()`). 수정할 때마다 `v0.1`, `v0.2` …로 올라가고, 정식 확정하면 `v1.0`(이후 `v2.0`)이 된다. `v0.x`는 드래프트, `v1.0` 이상은 확정이다. 내용을 바꿀 때는 그 문서의 이전 버전 폴더를 복사해 새 버전을 만들고, `meta.yaml`의 `versions`에 메모(`note`)와 함께 추가하고 `current`를 바꾼다. **Notion에 등록했거나 커밋된 버전 폴더는 수정하지 않는다.** 오타 같은 사소한 수정과 구조 이전만 예외로 한다.
+- **slug**: 메뉴 slug는 리포 전체에서 하나만 존재한다. 메뉴의 대분류 소속과 상하 관계는 `menus.yaml`(`menus: { <대분류 key>: [트리] }`)에서 정하므로 폴더 경로에 넣지 않는다.
 - **원본과 파생**: 다이어그램의 원본은 `diagrams/`의 `.drawio`·`.mmd` 파일이다. `exports/`와 HTML에 넣은 SVG는 원본에서 다시 만들 수 있는 파생물이므로, 원본을 고친 뒤 다시 export한다.
 
 ```yaml
 # docs/<메뉴>/<문서>/meta.yaml
 title: OCR 리뷰 게이트 운영 가이드
-category: sdlc            # menus.yaml의 대분류 key
+category: sdlc            # categories.yaml의 대분류 key
 menu: code-review-automation
 kind: html                # html | image | pdf | pptx | docx | xlsx | markdown | code | drawio
 type: process             # requirements | sequence | erd | architecture | process | build-deploy | decision
 sdlc: develop             # plan | design | develop | test | build-deploy | operate
 status: draft             # draft | review | approved
-current: v0.1
+current: v0.0
 versions:
-  - version: v0.1
+  - version: v0.0
     entry: review-gate.html
     note: 변경 메모
     source: upload        # upload | edit | scan | release
@@ -58,11 +60,11 @@ gdrive_url:
 
 | 대분류 | 메뉴 | 문서 | 최신 | 다루는 영역 |
 |---|---|---|---|---|
-| SDLC | `sprint-gitflow` | `process` | v0.1 | 버전 관리·CI, 2주 스프린트 |
-| SDLC | `code-review-automation` | `review-gate` | v0.1 | 코드 리뷰 게이트 설치·Slack·Ruleset |
-| SDLC | `code-review-automation` | `review-modes` | v0.1 | CI 리뷰 실행 방식 (API 키 vs Max 구독) |
+| SDLC | `sprint-gitflow` | `process` | draft | 버전 관리·CI, 2주 스프린트 |
+| SDLC | `code-review-automation` | `review-gate` | draft | 코드 리뷰 게이트 설치·Slack·Ruleset |
+| SDLC | `code-review-automation` | `review-modes` | v1.0 | CI 리뷰 실행 방식 (API 키 vs Max 구독) |
 
-Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더까지 포함한 상대 경로로 연결한다. 예: `process.html`에서 `../../../code-review-automation/review-gate/v0.1/review-gate.html`. 새 버전을 만들면 다른 문서에서 이 문서를 가리키는 링크를 새 버전으로 바꿀지 판단한다.
+Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더까지 포함한 상대 경로로 연결한다. 예: `process.html`에서 `../../../code-review-automation/review-gate/v0.0/review-gate.html`. 새 버전을 만들면 다른 문서에서 이 문서를 가리키는 링크를 새 버전으로 바꿀지 판단한다.
 
 아직 문서가 없는 영역: 개발 도구 가이드, 빌드·배포, 이밸 게이트·골든셋(아래 이전 설계 참고), 시퀀스·ERD·아키텍처.
 
@@ -75,14 +77,14 @@ npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 ```
 
-- **server/**: `scan.ts`가 `docs/_site/menus.yaml`과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
+- **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **확인 창** (`components/confirm/ConfirmProvider.tsx`, `useConfirm()`): 저장·수정·삭제·다운로드·업로드·이동·복원·휴지통 이동은 공통 확인 창을 거쳐 실행한다. 브라우저 `confirm()`은 쓰지 않는다.
   - 관리 작업은 `useAction().run(작업, 확인옵션)`으로 넘기면 확인 후 실행된다. 무엇이 바뀌는지는 `details`에 적는다.
-  - tone은 일반(`default`, 파랑), 이동(`warning`, 주황), 삭제·휴지통(`danger`, 빨강 `--crit`)이다. danger는 기본 포커스가 "취소"다.
+  - tone은 일반(`default`, 파랑), 이동(`warning`, 주황), 삭제·휴지통(`danger`, 빨강 `--crit`)이다. danger는 기본 포커스가 "취소"다. 포커스는 창이 열리고 60ms 뒤에 준다. 창을 연 Enter 키 입력이 새로 포커스된 버튼으로 이어져 확인 없이 실행되는 것을 막기 위해서다. Enter로 확인 창을 여는 입력칸은 Enter의 기본 동작도 막는다.
   - 순서 변경(↑↓)과 보기 전환은 확인하지 않는다.
-- **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다.
+- **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다. 정식 문서에 업로드나 편집으로 새 버전이 생기면(v1.0 → v1.1) 상태는 approved 그대로 둔다(D-15). 업로드·저장 코드는 status를 건드리지 않는다.
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
 - **아이콘**: 사이트의 기능 버튼은 Lucide(`lucide-react`) 아이콘으로 만들고 `components/IconButton.tsx`를 쓴다. 아이콘만 있는 버튼은 `label`이 aria-label과 title(마우스를 올렸을 때 설명)이 된다. 대화상자의 확인·취소처럼 실수하면 안 되는 버튼과 휴지통의 복원·영구 삭제는 아이콘과 글자를 함께 둔다(`text` prop). 유니코드 기호(✕ ☰ ▾ 등)를 아이콘으로 쓰지 않는다.
 - **사이드바** (`components/SidebarResizer.tsx`): 너비는 CSS 변수 `--sidebar-w`로 정한다(200~560px, 기본 272). 손잡이는 `setPointerCapture`로 끌기를 받는다. 덮개 방식으로 바꾸면 iframe 위에서 이벤트를 뺏기거나 더블클릭이 깨진다. 접으면 20px 띠가 된다. 너비와 접힘 상태는 localStorage(`workflow:sidebar-*`)에 둔다. 휴지통은 사이드바 하단 footer에 고정이다.
@@ -90,7 +92,7 @@ npm run build      # 타입 검사 후 site/dist로 빌드
 - **react-grab** (개발 모드 전용, devDependency): `web/src/main.tsx`에서 `import.meta.env.DEV`일 때만 불러온다. 화면 요소를 가리키고 ⌘C를 누르면 그 요소의 컴포넌트와 소스 위치가 복사되어, 코딩 에이전트에 붙여 넣고 수정을 요청할 수 있다. 운영 빌드에는 포함되지 않는다.
 - **HTML 뷰어**: iframe에 `allow-same-origin` 없이 sandbox를 건다. 문서 안의 스크립트는 동작하지만 사이트 쪽에는 접근하지 못한다. 문서 안의 링크를 누르면 iframe 안에서 이동한다.
 - **업로드** (`server/store.ts`): 파일 → `meta.yaml`(주석·순서 유지) → 색인 순서로 쓴다.
-  - 버전은 문서마다 다음 번호(`v0.1` → `v0.2`)를 자동으로 정하고, 직접 지정할 수도 있다.
+  - 버전은 문서마다 다음 번호(새 문서 `v0.0` → 수정 `v0.1` → `v0.2`)를 자동으로 정하고, 직접 지정할 수도 있다.
   - 직전 버전과 파일 구성·내용(sha256)이 같으면 409로 거부한다.
   - zip 하나는 풀어서 쓰고, 폴더째 올리면 공통 최상위 폴더 이름을 뗀다.
   - 대표 파일은 `index.html` → 첫 HTML → 가장 얕은 첫 파일 순서로 고른다.
@@ -112,11 +114,16 @@ npm run build      # 타입 검사 후 site/dist로 빌드
   - 이전 버전은 읽기 전용이다.
   - 새 Markdown 문서는 업로드 대화상자의 "새 Markdown 문서" 탭에서 `# 제목` 한 줄짜리 `.md`를 업로드하는 방식으로 만든다.
 - **버전 비교**: 텍스트 형식(md, html, yaml 등)이고 버전이 2개 이상이면 문서 상단에 "비교" 선택이 생긴다(`?cmp=<버전>`). `viewers/DiffViewer.tsx`가 jsdiff로 줄 단위 비교를 보여준다.
+- **상단 메뉴(대분류)** (D-17, D-18): 원본은 `categories.yaml`이고 색인 테이블은 좌측 `menu`와 분리된 `top_menu`다. 관리는 헤더(`components/header/TopMenuBar.tsx`)에서 한다.
+  - ＋로 추가(이름·key), 선택된 탭의 ⋯로 이름 변경(탭 자리 입력, 더블클릭으로도)·왼쪽/오른쪽 이동·삭제를 한다. 탭에 마우스를 올리면 나오는 핸들(⋮⋮)을 잡아 끌면 순서가 바뀐다. 커서가 놓을 탭의 왼쪽·오른쪽 절반 중 어디에 있느냐에 따라 그쪽에 표시선이 나오고, 순서가 바뀌지 않는 자리에는 표시선을 내지 않는다.
+  - 삭제는 하위 메뉴가 없을 때만 된다. key는 URL과 meta.yaml에 쓰이므로 바꾸지 않는다.
+  - ⋯ 메뉴와 ＋ 팝오버는 탭 줄이 가로로 넘쳐도 잘리지 않도록 화면 기준(fixed)으로 띄운다.
+  - `categories.yaml`에 없는 key의 트리가 `menus.yaml`에 있으면 저장할 때 지우지 않고 남기고, 색인 경고로 알린다.
 - **관리** (`server/manage.ts`): 메뉴를 옮기거나 하위로 넣어도 `menus.yaml`만 바뀌고 폴더(`docs/<메뉴 slug>/`)는 그대로다.
   - 다른 대분류로 옮기면 그 메뉴 문서들의 `meta.yaml` category를 맞춘다.
   - 문서를 다른 메뉴로 옮기면 문서 폴더를 새 메뉴 폴더로 옮긴다.
   - 메뉴·대분류는 비어 있을 때만 지운다.
-  - `menus.yaml` 맨 위 `#` 주석은 yaml 라이브러리가 첫 키에 붙여 버리므로, 원문에서 떼어 두었다가 저장할 때 다시 붙인다.
+  - `categories.yaml`·`menus.yaml` 맨 위 `#` 주석은 yaml 라이브러리가 첫 키에 붙여 버리므로, 원문에서 떼어 두었다가 저장할 때 다시 붙인다. 내용이 같으면 파일을 다시 쓰지 않는다.
 - **휴지통**: 문서 폴더를 `docs/_trash/<로컬 시각 yyyyMMddHHmmss>--<메뉴>--<문서>/`로 옮긴다. 스캔은 `_`로 시작하는 폴더를 건너뛴다. 복원할 때 원래 메뉴가 없으면 메뉴를 고르게 한다.
 - **검색**: 색인할 때 각 문서 최신 버전의 대표 파일 본문을 FTS5 trigram 테이블 `search`에 넣는다. HTML은 script·style·svg를 빼고 글자만 넣는다. 질의는 trigram 색인 위의 `LIKE '%q%'`라서 한국어 두 글자 단어와 조사가 붙은 말도 찾는다. 제목에 맞은 문서를 먼저 보여준다.
 - **조회 재시도**: 404(옮겨지거나 지워진 문서)는 재시도하지 않는다. 관리 작업 뒤 목록 새로고침은 기다리지 않는다. 기다리면 옛 주소의 404 재시도 때문에 화면 이동이 늦어진다.
@@ -181,7 +188,7 @@ npm run build      # 타입 검사 후 site/dist로 빌드
 
 ### 알려진 불일치
 
-- `code-review-automation/review-gate/v0.1/review-gate.html`의 워크플로는 `push`로 트리거된다(`feature/code-review` 게이트 브랜치와 `develop` 사후 리뷰). `sprint-gitflow/process/v0.1/process.html`은 `pull_request`(base가 `develop`·`main`)로 트리거되는 것으로 정했다. code-review-automation 다음 버전에서 이 차이를 맞춘다.
+- `code-review-automation/review-gate/v0.0/review-gate.html`의 워크플로는 `push`로 트리거된다(`feature/code-review` 게이트 브랜치와 `develop` 사후 리뷰). `sprint-gitflow/process/v0.0/process.html`은 `pull_request`(base가 `develop`·`main`)로 트리거되는 것으로 정했다. code-review-automation 다음 버전에서 이 차이를 맞춘다.
 - `sprint-gitflow` 문서 D7 단계는 `/ocr-triage <id> <판정>` 명령을 쓰는데, 이 명령을 설치하는 방법을 설명한 문서가 아직 없다.
 
 ### 이밸 게이트·골든셋 이전 설계 (gitflow 문서 v1에 있던 내용)

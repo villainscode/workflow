@@ -4,7 +4,7 @@ import { PresentationContent } from "../viewers/Presentation.tsx";
 import { IconButton } from "./IconButton.tsx";
 import { useParams, useSearchParams } from "react-router";
 import { DocSettingsDialog } from "./manage/DocSettingsDialog.tsx";
-import { fileSrc, useDoc } from "../lib/api.ts";
+import { fileSrc, useDoc, versionLabel } from "../lib/api.ts";
 import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { useConfirm } from "./confirm/ConfirmProvider.tsx";
 import { EmptyState } from "./EmptyState.tsx";
@@ -60,7 +60,7 @@ export function DocView() {
         >
           {data.versions.map((v) => (
             <option key={v.version} value={v.version}>
-              {v.version}{v.version === data.currentVersion ? " (최신)" : ""}
+              {versionLabel(v.version)}{v.version === data.currentVersion ? " (최신)" : ""}
             </option>
           ))}
         </select>
@@ -73,7 +73,7 @@ export function DocView() {
           >
             <option value="">비교 안 함</option>
             {data.versions.filter((v) => v.version !== version.version).map((v) => (
-              <option key={v.version} value={v.version}>{v.version}과 비교</option>
+              <option key={v.version} value={v.version}>비교: {versionLabel(v.version)}</option>
             ))}
           </select>
         )}
@@ -84,7 +84,7 @@ export function DocView() {
               const name = entry.path.split("/").pop()!;
               const ok = await confirm({
                 title: "다운로드할까요?", confirmText: "다운로드",
-                details: [`파일: ${name}`, `버전: ${version.version}`, `크기: ${(entry.size / 1024).toFixed(1)} KB`],
+                details: [`파일: ${name}`, `버전: ${versionLabel(version.version)}`, `크기: ${(entry.size / 1024).toFixed(1)} KB`],
               });
               if (!ok) return;
               const a = document.createElement("a");
@@ -111,7 +111,7 @@ export function DocView() {
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
         {version.note && (
           <details className="basis-full text-xs text-muted">
-            <summary className="cursor-pointer">{version.version} 변경 메모{version.createdAt ? ` · ${version.createdAt}` : ""}</summary>
+            <summary className="cursor-pointer">{versionLabel(version.version)} 변경 메모{version.createdAt ? ` · ${version.createdAt}` : ""}</summary>
             <p className="mt-1 max-w-3xl leading-relaxed">{version.note}</p>
           </details>
         )}
@@ -127,7 +127,7 @@ export function DocView() {
         ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
         ) : cmpVersion && cmpEntry && comparable ? (
-          <DiffViewer from={cmpEntry} to={entry} fromLabel={cmpVersion.version} toLabel={version.version} />
+          <DiffViewer from={cmpEntry} to={entry} fromLabel={versionLabel(cmpVersion.version)} toLabel={versionLabel(version.version)} />
         ) : (
           <Viewer
             key={fileSrc(entry)}

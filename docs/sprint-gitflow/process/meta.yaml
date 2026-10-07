@@ -5,9 +5,9 @@ kind: html
 type: process
 sdlc: develop
 status: draft
-current: v0.1
+current: v0.0
 versions:
-  - version: v0.1
+  - version: v0.0
     entry: process.html
     note: >-
       2주 스프린트(D1–D14) 기준으로 다시 작성. D7 첫 코드 리뷰(PR → develop), D10 기능 동결과 release 생성,

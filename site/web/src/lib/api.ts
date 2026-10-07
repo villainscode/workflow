@@ -60,9 +60,13 @@ export async function createMenu(category: string, name: string, slug?: string):
   }));
 }
 
+/** 화면에 보일 버전 이름. 첫 버전(v0.0)은 "draft"로 보여준다 */
+export const versionLabel = (v: string) => (v === "v0.0" ? "draft" : v);
+
+/** 다음 버전 번호(서버와 같은 규칙). 처음 만들 때 v0.0, 그 뒤 수정마다 v0.1, v0.2 … */
 export function nextVersion(versions: string[]): string {
   const nums = versions.map((v) => /^v(\d+)\.(\d+)$/.exec(v)).filter((m) => m !== null).map((m) => [Number(m[1]), Number(m[2])]);
-  if (nums.length === 0) return "v0.1";
+  if (nums.length === 0) return "v0.0";
   nums.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const [major, minor] = nums[nums.length - 1];
   return `v${major}.${minor + 1}`;

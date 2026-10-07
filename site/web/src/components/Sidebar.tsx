@@ -1,23 +1,22 @@
 import { useState } from "react";
 import {
-  ArrowDown, ArrowUp, ChevronDown, ChevronRight, FolderInput, FolderPlus, LayoutGrid, PanelLeftClose, Pencil, Plus,
+  ArrowDown, ArrowUp, ChevronDown, ChevronRight, FolderInput, FolderPlus, PanelLeftClose, Pencil, Plus,
   Settings2, Trash2,
 } from "lucide-react";
 import { IconButton } from "./IconButton.tsx";
 import { NavLink } from "react-router";
-import type { Category, MenuNode } from "../lib/api.ts";
+import { versionLabel, type Category, type MenuNode } from "../lib/api.ts";
 import { filesFromDrop } from "../lib/files.ts";
 import { manage, useTrash } from "../lib/manage.ts";
 import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { StatusBadge } from "./StatusBadge.tsx";
 import { useAction } from "./manage/useAction.ts";
 import { AddMenuDialog, MoveMenuDialog, RenameMenuDialog } from "./manage/MenuDialogs.tsx";
-import { CategoryDialog } from "./manage/CategoryDialog.tsx";
 import { TrashDialog } from "./manage/TrashDialog.tsx";
 
 type Open =
   | { kind: "add"; parent?: MenuNode } | { kind: "rename"; menu: MenuNode } | { kind: "move"; menu: MenuNode }
-  | { kind: "categories" } | { kind: "trash" } | null;
+  | { kind: "trash" } | null;
 
 interface ItemProps {
   category: Category; menu: MenuNode; depth: number; siblings: MenuNode[]; index: number;
@@ -88,7 +87,7 @@ function MenuItem({ category, menu, depth, siblings, index, managing, setOpen, p
                 style={{ paddingLeft: 30 + depth * 14 }}
               >
                 <span className="min-w-0 flex-1 leading-snug">{d.title}</span>
-                <StatusBadge status={d.status} small />
+                <StatusBadge status={d.status} label={versionLabel(d.currentVersion)} small />
               </NavLink>
             </li>
           ))}
@@ -139,11 +138,6 @@ export function Sidebar({ category, warnings, onCollapse }: { category: Category
           <button className="flex items-center gap-2 rounded-md px-2 py-1 text-left text-muted hover:bg-sunken hover:text-fg" onClick={() => setOpen({ kind: "add" })}>
             <FolderPlus size={19} aria-hidden /> 메뉴 추가
           </button>
-          {managing && (
-            <button className="flex items-center gap-2 rounded-md px-2 py-1 text-left text-muted hover:bg-sunken hover:text-fg" onClick={() => setOpen({ kind: "categories" })}>
-              <LayoutGrid size={19} aria-hidden /> 대분류 관리
-            </button>
-          )}
         </div>
       )}
 
@@ -169,7 +163,6 @@ export function Sidebar({ category, warnings, onCollapse }: { category: Category
       {open?.kind === "add" && <AddMenuDialog category={category.key} parent={open.parent} onClose={close} />}
       {open?.kind === "rename" && <RenameMenuDialog menu={open.menu} onClose={close} />}
       {open?.kind === "move" && <MoveMenuDialog menu={open.menu} onClose={close} />}
-      {open?.kind === "categories" && <CategoryDialog onClose={close} />}
       {open?.kind === "trash" && <TrashDialog onClose={close} />}
     </>
   );

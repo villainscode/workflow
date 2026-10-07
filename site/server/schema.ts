@@ -2,7 +2,8 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 // 색인 테이블. 원본은 docs/의 yaml과 파일이고, 서버가 시작할 때마다 다시 만든다.
 
-export const categories = sqliteTable("category", {
+// 상단 메뉴(대분류). 원본은 docs/_site/categories.yaml. 좌측 메뉴(menu)와 별도 테이블이다
+export const topMenus = sqliteTable("top_menu", {
   key: text("key").primaryKey(),
   name: text("name").notNull(),
   sort: integer("sort").notNull(),
@@ -57,8 +58,9 @@ DROP TABLE IF EXISTS document_version;
 DROP TABLE IF EXISTS document;
 DROP TABLE IF EXISTS menu;
 DROP TABLE IF EXISTS category;
-CREATE TABLE category (key TEXT PRIMARY KEY, name TEXT NOT NULL, sort INTEGER NOT NULL);
-CREATE TABLE menu (slug TEXT PRIMARY KEY, category_key TEXT NOT NULL REFERENCES category(key),
+DROP TABLE IF EXISTS top_menu;
+CREATE TABLE top_menu (key TEXT PRIMARY KEY, name TEXT NOT NULL, sort INTEGER NOT NULL);
+CREATE TABLE menu (slug TEXT PRIMARY KEY, category_key TEXT NOT NULL REFERENCES top_menu(key),
   parent_slug TEXT REFERENCES menu(slug), name TEXT NOT NULL, sort INTEGER NOT NULL);
 CREATE TABLE document (id INTEGER PRIMARY KEY AUTOINCREMENT, menu_slug TEXT NOT NULL REFERENCES menu(slug),
   slug TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, type TEXT, sdlc TEXT, status TEXT NOT NULL,

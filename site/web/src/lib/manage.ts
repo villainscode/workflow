@@ -42,7 +42,7 @@ export const useTrash = () =>
   useQuery({ queryKey: ["trash"], queryFn: async () => (await fetch("/api/trash")).json() as Promise<TrashItem[]> });
 
 export interface SearchHit {
-  slug: string; menuSlug: string; title: string; kind: string; status: string; category: string; menuName: string;
+  slug: string; menuSlug: string; title: string; kind: string; status: string; currentVersion: string; category: string; menuName: string;
   inTitle: boolean; matches: number; snippet: string;
 }
 export const useSearch = (q: string, category?: string) =>

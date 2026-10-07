@@ -5,9 +5,9 @@ kind: html
 type: process
 sdlc: develop
 status: draft
-current: v0.1
+current: v0.0
 versions:
-  - version: v0.1
+  - version: v0.0
     entry: review-gate.html
     note: >-
       기존 ocr-team-review-guide.html을 옮김(내용 변경 없음). 남은 일: 워크플로 트리거를

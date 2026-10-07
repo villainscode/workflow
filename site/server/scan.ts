@@ -4,10 +4,9 @@ import { join, relative, extname } from "node:path";
 import { parse } from "yaml";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { sql } from "drizzle-orm";
-import { categories, menus, documents, documentVersions, versionFiles } from "./schema.ts";
+import { topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
+import { loadSite, type MenuNode } from "./sitefiles.ts";
 
-interface MenuNode { slug: string; name: string; menus?: MenuNode[] }
-interface MenusFile { categories: { key: string; name: string; menus?: MenuNode[] }[] }
 interface MetaFile {
   title: string; category: string; menu: string; kind: string; type?: string; sdlc?: string;
   status?: string; current: string; notion_url?: string | null; gdrive_url?: string | null;
@@ -55,12 +54,13 @@ const asDate = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10)
 /** docs/를 읽어 색인 테이블을 채운다. 문제가 있어도 멈추지 않고 경고로 모은다. */
 export function scanDocs(db: BetterSQLite3Database, docsRoot: string, repoRoot: string): string[] {
   const warnings: string[] = [];
-  const menusFile = parse(readFileSync(join(docsRoot, "_site/menus.yaml"), "utf8")) as MenusFile;
+  const site = loadSite(docsRoot);
+  site.orphanTrees.forEach((k) => warnings.push(`menus.yaml: categories.yaml에 없는 대분류 key의 메뉴 트리 '${k}'`));
   const known = new Set<string>();
 
   db.transaction((tx) => {
-    menusFile.categories.forEach((c, ci) => {
-      tx.insert(categories).values({ key: c.key, name: c.name, sort: ci }).run();
+    site.categories.forEach((c, ci) => {
+      tx.insert(topMenus).values({ key: c.key, name: c.name, sort: ci }).run();
       const addMenus = (list: MenuNode[] | undefined, parent: string | null) =>
         (list ?? []).forEach((m, mi) => {
           if (known.has(m.slug)) return warnings.push(`menus.yaml: 메뉴 slug 중복 ${m.slug}`);

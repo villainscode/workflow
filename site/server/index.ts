@@ -8,7 +8,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
-import { DDL, categories, menus, documents, documentVersions, versionFiles } from "./schema.ts";
+import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
 import { StoreError, release, saveEdit, upload, type IncomingFile } from "./store.ts";
 import {
@@ -57,7 +57,7 @@ app.setErrorHandler((err: FastifyError | StoreError, _req, reply) => {
 });
 
 app.get("/api/tree", async () => {
-  const cats = db.select().from(categories).orderBy(asc(categories.sort)).all();
+  const cats = db.select().from(topMenus).orderBy(asc(topMenus.sort)).all();
   const menuRows = db.select().from(menus).orderBy(asc(menus.sort)).all();
   const docRows = db
     .select({
@@ -166,7 +166,7 @@ app.get<{ Querystring: { q?: string; category?: string; kind?: string } }>("/api
   if (!q) return [];
   const like = `%${q.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
   const rows = sqlite.prepare(`
-    SELECT d.slug, d.menu_slug AS menuSlug, d.title, d.kind, d.status, m.category_key AS category, m.name AS menuName,
+    SELECT d.slug, d.menu_slug AS menuSlug, d.title, d.kind, d.status, d.current_version AS currentVersion, m.category_key AS category, m.name AS menuName,
            s.body, (s.title LIKE @like ESCAPE '\\') AS inTitle
     FROM search s JOIN document d ON d.id = s.document_id JOIN menu m ON m.slug = d.menu_slug
     WHERE (s.title LIKE @like ESCAPE '\\' OR s.body LIKE @like ESCAPE '\\' OR m.name LIKE @like ESCAPE '\\')
@@ -174,7 +174,7 @@ app.get<{ Querystring: { q?: string; category?: string; kind?: string } }>("/api
       AND (@kind IS NULL OR d.kind = @kind)
     ORDER BY inTitle DESC, d.title
     LIMIT 50`).all({ like, category: req.query.category || null, kind: req.query.kind || null }) as
-    { slug: string; menuSlug: string; title: string; kind: string; status: string; category: string; menuName: string; body: string; inTitle: number }[];
+    { slug: string; menuSlug: string; title: string; kind: string; status: string; currentVersion: string; category: string; menuName: string; body: string; inTitle: number }[];
 
   const lower = q.toLowerCase();
   return rows.map(({ body, inTitle, ...r }) => {

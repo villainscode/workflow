@@ -5,7 +5,7 @@ import { useConfirm } from "../confirm/ConfirmProvider.tsx";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  createMenu, nextVersion, uploadFiles, useDoc, useTree, type MenuNode, type UploadFile,
+  createMenu, nextVersion, versionLabel, uploadFiles, useDoc, useTree, type MenuNode, type UploadFile,
 } from "../../lib/api.ts";
 import { commonRoot, filesFromDrop, filesFromInput, formatSize, guessEntry, slugify } from "../../lib/files.ts";
 import type { UploadPreset } from "./UploadContext.tsx";
@@ -61,7 +61,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
 
   const menuDocs = menuOptions.find((x) => x.menu.slug === menu)?.menu.documents ?? [];
   const existingDoc = useDoc(menu, doc);
-  const suggested = mode === "existing" && existingDoc.data ? nextVersion(existingDoc.data.versions.map((v) => v.version)) : "v0.1";
+  const suggested = mode === "existing" && existingDoc.data ? nextVersion(existingDoc.data.versions.map((v) => v.version)) : "v0.0";
 
   const root = commonRoot(files);
   const relPaths = files.map((f) => f.path.slice(root.length));
@@ -83,7 +83,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
       title: isMd ? "새 Markdown 문서를 만들까요?" : mode === "existing" ? "새 버전을 올릴까요?" : "문서를 업로드할까요?",
       confirmText: isMd ? "만들기" : "업로드",
       details: [
-        `메뉴: ${menuName}`, `문서: ${docName}`, `버전: ${version || suggested}`,
+        `메뉴: ${menuName}`, `문서: ${docName}`, `버전: ${versionLabel(version || suggested)}`,
         ...(isMd ? [] : [`파일: ${files.length}개${files.length > 1 ? ` (대표 파일 ${entry || autoEntry})` : ` (${relPaths[0]})`}`]),
       ],
     });
@@ -203,12 +203,12 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           ) : (
             <label className={label}>문서
               <select className={field} value={doc} disabled={!!preset.doc} onChange={(e) => setDoc(e.target.value)}>
-                {menuDocs.map((d) => <option key={d.slug} value={d.slug}>{d.title} ({d.currentVersion})</option>)}
+                {menuDocs.map((d) => <option key={d.slug} value={d.slug}>{d.title} ({versionLabel(d.currentVersion)})</option>)}
               </select>
             </label>
           )}
           <label className={label}>버전
-            <input className={`${field} font-mono`} value={version} onChange={(e) => setVersion(e.target.value)} placeholder={suggested} />
+            <input className={`${field} font-mono`} value={version} onChange={(e) => setVersion(e.target.value)} placeholder={suggested === "v0.0" ? "v0.0 (draft)" : suggested} />
           </label>
           <label className={`${label} sm:col-span-2`}>변경 메모
             <input className={field} value={note} onChange={(e) => setNote(e.target.value)} placeholder="무엇을 왜 바꿨는지 한 줄로" />

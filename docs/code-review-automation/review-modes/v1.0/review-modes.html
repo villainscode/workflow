@@ -1,0 +1,1136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OCR 리뷰 방식 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: sticky table of contents on the left, one readable column of runbook steps on the right; stacks on phones. */
+:root {
+  --bg: #F4F5F7;
+  --surface: #FFFFFF;
+  --sunken: #EBEDF1;
+  --fg: #1A1F29;
+  --muted: #586172;
+  --line: #D8DCE3;
+  --accent: #1F5FBF;
+  --accent-soft: #E2EBF9;
+  --crit: #C42B2B;  --crit-soft: #FBE8E8;
+  --high: #C95308;  --high-soft: #FDEDE1;
+  --med:  #946C00;  --med-soft:  #FAF2D9;
+  --low:  #586172;  --low-soft:  #EBEDF1;
+  --ok:   #1C7543;  --ok-soft:   #E1F2E8;
+  --code-bg: #161B24;
+  --code-fg: #DCE3EE;
+  --code-dim: #8B96A8;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+    --accent: #80A8F0; --accent-soft: #1C2940;
+    --crit: #F07A7A; --crit-soft: #3A1D20; --high: #F29C5E; --high-soft: #3A2719;
+    --med: #E0BA4F; --med-soft: #342C15; --low: #9AA3B3; --low-soft: #222936;
+    --ok: #5DC28C; --ok-soft: #163225;
+    --code-bg: #0A0D12; --code-fg: #DCE3EE; --code-dim: #7D889A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F131A; --surface: #161B24; --sunken: #1D2330; --fg: #E3E7EE; --muted: #9AA3B3; --line: #2A3140;
+  --accent: #80A8F0; --accent-soft: #1C2940;
+  --crit: #F07A7A; --crit-soft: #3A1D20; --high: #F29C5E; --high-soft: #3A2719;
+  --med: #E0BA4F; --med-soft: #342C15; --low: #9AA3B3; --low-soft: #222936;
+  --ok: #5DC28C; --ok-soft: #163225;
+  --code-bg: #0A0D12; --code-fg: #DCE3EE; --code-dim: #7D889A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.75;
+  padding-inline: 20px;
+  padding-block: 0 80px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, pre, kbd { font-family: var(--font-mono); }
+:not(pre) > code {
+  font-size: 0.86em;
+  background: var(--sunken);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+h1, h2, h3 { text-wrap: balance; line-height: 1.35; margin: 0; }
+p { margin: 0; }
+
+.wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 56px;
+}
+
+/* ---------- header ---------- */
+.masthead {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding-block: 56px 40px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 40px;
+  display: grid;
+  gap: 14px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.masthead h1 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; letter-spacing: -0.01em; }
+.masthead .lede { max-width: 68ch; color: var(--muted); font-size: 16.5px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.meta-row span { display: inline-flex; gap: 6px; align-items: baseline; }
+.meta-row b { color: var(--fg); font-weight: 500; }
+
+/* ---------- toc ---------- */
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+.toc p { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a {
+  display: grid; grid-template-columns: 26px 1fr; padding: 5px 8px; border-radius: 6px;
+  color: var(--muted); text-decoration: none; line-height: 1.5;
+}
+.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; }
+.toc a:hover { background: var(--sunken); color: var(--fg); }
+
+/* ---------- content ---------- */
+main { min-width: 0; display: grid; gap: 72px; }
+section { display: grid; gap: 20px; min-width: 0; scroll-margin-top: 24px; }
+.sec-head { display: grid; gap: 6px; }
+.sec-head .num { font-family: var(--font-mono); font-size: 12px; color: var(--accent); letter-spacing: 0.06em; }
+section > .sec-head h2 { font-size: 25px; font-weight: 700; }
+.sec-head p { color: var(--muted); max-width: 70ch; }
+h3 { font-size: 17.5px; font-weight: 700; }
+.prose { display: grid; gap: 12px; max-width: 72ch; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+
+/* requirement summary */
+.reqs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.req { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; align-content: start; }
+.req .where { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.req h3 { font-size: 16px; }
+.req p { color: var(--muted); font-size: 14.5px; }
+
+/* flow */
+.flow { display: grid; gap: 0; }
+.stage { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; padding: 18px 0; border-top: 1px solid var(--line); }
+.stage:last-child { border-bottom: 1px solid var(--line); }
+.stage .loc { display: grid; gap: 4px; align-content: start; }
+.stage .loc span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; }
+.stage .loc b { font-size: 14px; }
+.stage .body { display: grid; gap: 6px; min-width: 0; }
+.stage .body p { color: var(--muted); font-size: 14.5px; }
+
+/* figures */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 10px; min-width: 0; }
+.figure .cap { font-size: 13px; color: var(--muted); }
+.scroll-x { overflow-x: auto; }
+svg text { font-family: var(--font-body); }
+.g-lane { stroke: var(--line); stroke-width: 2; fill: none; }
+.g-dev { stroke: var(--accent); stroke-width: 3; fill: none; }
+.g-feat { stroke: var(--muted); stroke-width: 2.5; fill: none; }
+.g-rev { stroke: var(--high); stroke-width: 2.5; fill: none; }
+.g-dot { fill: var(--surface); stroke-width: 2.5; }
+.g-label { fill: var(--fg); font-size: 13px; font-weight: 500; }
+.g-sub { fill: var(--muted); font-size: 11.5px; }
+.g-bad { fill: var(--crit); font-size: 12px; font-weight: 700; }
+.g-good { fill: var(--ok); font-size: 12px; font-weight: 700; }
+.g-info { fill: var(--accent); font-size: 12px; font-weight: 700; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 500; color: var(--muted); background: var(--sunken); letter-spacing: 0.02em; }
+td code { white-space: nowrap; }
+
+/* steps */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; counter-reset: step; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; }
+.steps > li::before {
+  content: counter(step);
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent);
+}
+.step-body { display: grid; gap: 10px; min-width: 0; }
+.step-body > p, .step-body > ul { max-width: 70ch; }
+.step-body ul { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; }
+.who { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-family: var(--font-mono); font-size: 11.5px; padding: 1px 8px; border-radius: 999px;
+  background: var(--sunken); color: var(--muted); border: 1px solid var(--line); white-space: nowrap;
+}
+.chip.local { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.chip.ci { color: var(--high); background: var(--high-soft); border-color: transparent; }
+.chip.slack { color: var(--med); background: var(--med-soft); border-color: transparent; }
+.chip.pr { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+
+/* code */
+.code { position: relative; background: var(--code-bg); color: var(--code-fg); border-radius: var(--radius); min-width: 0; }
+.code .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px 0 16px; }
+.code .fname { font-family: var(--font-mono); font-size: 12px; color: var(--code-dim); overflow-wrap: anywhere; }
+.code pre { margin: 0; padding: 10px 16px 16px; overflow-x: auto; font-size: 13px; line-height: 1.65; tab-size: 2; }
+.code pre.tall { max-height: 560px; overflow-y: auto; }
+.code .c { color: var(--code-dim); }
+.copy {
+  font-family: var(--font-body); font-size: 12px; color: var(--code-fg);
+  background: transparent; border: 1px solid #3A4352; border-radius: 6px; padding: 3px 10px; cursor: pointer; flex: none;
+}
+.copy:hover { background: #262E3B; }
+
+/* callouts */
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 14.5px; max-width: 76ch; }
+.note.warn { border-color: var(--high); background: var(--high-soft); }
+.note b { font-weight: 700; }
+
+/* mock: chat message */
+.mock { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; min-width: 0; }
+.mock-head { font-size: 12px; color: var(--muted); padding: 8px 14px; background: var(--sunken); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 14px; font-size: 14px; line-height: 1.6; }
+.avatar { width: 36px; height: 36px; border-radius: 8px; background: var(--code-bg); color: var(--code-fg); display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.msg .name { font-weight: 700; }
+.msg .name small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.msg .lines { display: grid; gap: 3px; min-width: 0; }
+.msg blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
+.msg pre { margin: 4px 0; padding: 8px 10px; background: var(--sunken); border-radius: 6px; font-size: 12.5px; overflow-x: auto; }
+.msg .issue { overflow-wrap: anywhere; }
+.sev { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.sev.critical { color: var(--crit); background: var(--crit-soft); }
+.sev.high { color: var(--high); background: var(--high-soft); }
+.sev.medium { color: var(--med); background: var(--med-soft); }
+.sev.low { color: var(--low); background: var(--low-soft); }
+
+/* mock: merge box */
+.merge { display: grid; gap: 0; }
+.merge-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.merge-row:last-child { border-bottom: 0; }
+.merge-row .ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.ic.bad { background: var(--crit-soft); color: var(--crit); }
+.ic.good { background: var(--ok-soft); color: var(--ok); }
+.merge-row small { color: var(--muted); display: block; }
+.btn-mock { display: inline-block; margin-top: 8px; font-size: 13px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); background: var(--sunken); }
+.btn-mock.go { color: #fff; background: var(--ok); border-color: transparent; }
+
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+/* verdict matrix */
+.v { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
+.v.pass { color: var(--ok); background: var(--ok-soft); }
+.v.block { color: var(--crit); background: var(--crit-soft); }
+.v.info { color: var(--muted); background: var(--sunken); }
+
+details { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+details summary { cursor: pointer; padding: 12px 16px; font-weight: 500; }
+details > div { padding: 0 16px 16px; display: grid; gap: 10px; }
+
+footer { max-width: 1160px; margin: 72px auto 0; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+
+@media (max-width: 960px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .toc { position: static; }
+  .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  body { font-size: 15px; padding-inline: 16px; }
+  .reqs, .pair { grid-template-columns: minmax(0, 1fr); }
+  .stage { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .toc ol { grid-template-columns: minmax(0, 1fr); }
+  .steps > li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .masthead { padding-block: 36px 28px; }
+}
+
+/* mode cards */
+.modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.mode { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.mode-a { border-top: 3px solid var(--accent); }
+.mode-b { border-top: 3px solid var(--high); }
+.mode-tag { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+.mode-a .mode-tag { color: var(--accent); }
+.mode-b .mode-tag { color: var(--high); }
+.mode h3 { font-size: 16.5px; }
+.pipe { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.pipe b { color: var(--fg); font-weight: 500; }
+.kv { margin: 0; display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 6px 10px; font-size: 13.5px; padding-top: 10px; border-top: 1px solid var(--line); }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.figure h3 { font-size: 16px; }
+.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 14.5px; }
+.cap { font-size: 13px; color: var(--muted); }
+/* result tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.t-label { font-size: 12px; color: var(--muted); }
+.t-val { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.t-sub { font-size: 12.5px; color: var(--muted); }
+@media (max-width: 860px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .modes, .tiles { grid-template-columns: minmax(0, 1fr); } }
+
+.roles { display: grid; gap: 12px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.roles h3 { font-size: 17px; }
+.roles .table-wrap { background: var(--bg); }
+.roles .plain { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 14.5px; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <span class="eyebrow">Team Runbook · 실측 가이드 · open-code-review v1.12</span>
+  <h1>API 키 방식과 Max 구독 방식 비교 실측</h1>
+  <p class="lede">같은 커밋을 두 방식으로 동시에 리뷰해 품질, 속도, 비용을 직접 재고 팀 운영 방식을 정하기 위한 문서입니다. 하나는 ocr가 Anthropic API를 직접 호출하는 방식이고, 다른 하나는 ocr가 리뷰 대상과 규칙만 정하고 리뷰는 Max 구독의 Claude Code(<code>claude -p</code>)가 하는 방식입니다. 게이트, Slack 알림, 판정 구조는 <b>OCR 리뷰 게이트 운영 가이드</b>를 그대로 씁니다.</p>
+  <div class="meta-row">
+    <span>대상 <b>팀 리드 · 저장소 관리자</b></span>
+    <span>실측 기간 <b>1~2주, PR 10~20건</b></span>
+    <span>비교 모델 <b>양쪽 모두 claude-sonnet-5-5</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="목차">
+    <p>목차</p>
+    <ol>
+      <li><a href="#modes">두 방식 한눈에</a></li>
+      <li><a href="#diff">운영 방식 차이</a></li>
+      <li><a href="#pros">각 방식의 장점</a></li>
+      <li><a href="#api-wins">API 키 방식의 핵심 이득</a></li>
+      <li><a href="#setup">실측 준비</a></li>
+      <li><a href="#measure">실측 진행과 판단</a></li>
+      <li><a href="#pretest">사전 테스트 결과</a></li>
+      <li><a href="#switch">운영 전환</a></li>
+      <li><a href="#caution">주의사항</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="modes">
+      <div class="sec-head">
+        <span class="num">01 · 두 방식 한눈에</span>
+        <h2>누가 LLM을 부르느냐의 차이</h2>
+        <p>모델은 같습니다. 달라지는 것은 리뷰를 진행하는 프로그램과 요금을 내는 방식입니다.</p>
+      </div>
+      <div class="modes">
+        <article class="mode mode-a">
+          <span class="mode-tag">A · API 키 방식</span>
+          <h3><code>ocr review</code> + Anthropic API</h3>
+          <ol class="pipe">
+            <li><b>ocr</b> 리뷰 대상 파일 선별</li>
+            <li><b>ocr</b> 관련 파일 묶기, 파일별 규칙 매칭</li>
+            <li><b>ocr</b> 묶음마다 서브에이전트를 띄워 병렬 리뷰 (리뷰 전용 프롬프트와 도구)</li>
+            <li><b>ocr</b> 코멘트 위치 보정, 자기검증 필터로 오탐 제거</li>
+            <li><b>ocr</b> 고정 형식 <code>result.json</code></li>
+          </ol>
+          <dl class="kv">
+            <dt>인증</dt><dd><code>OCR_API_KEY</code> (Claude Console)</dd>
+            <dt>요금</dt><dd>쓴 토큰만큼 과금. Sonnet 5.5 기준 리뷰 1회 약 $0.5~1.9 (추정)</dd>
+          </dl>
+        </article>
+        <article class="mode mode-b">
+          <span class="mode-tag">B · Max 구독 방식</span>
+          <h3><code>ocr delegate</code> + <code>claude -p</code></h3>
+          <ol class="pipe">
+            <li><b>ocr</b> 리뷰 대상 파일 선별 (<code>delegate preview</code>)</li>
+            <li><b>ocr</b> 파일별 규칙 매칭 (<code>delegate rule</code>)</li>
+            <li><b>Claude Code</b> diff를 읽고 리뷰, 필요하면 저장소 탐색</li>
+            <li><b>Claude Code</b> JSON 스키마에 맞춰 결과 출력</li>
+            <li><b>워크플로</b> 빠진 파일 검사 후 <code>result.json</code>으로 변환</li>
+          </ol>
+          <dl class="kv">
+            <dt>인증</dt><dd><code>CLAUDE_CODE_OAUTH_TOKEN</code> (<code>claude setup-token</code>)</dd>
+            <dt>요금</dt><dd>추가 과금 없음. Max 구독 사용 한도에서 차감</dd>
+          </dl>
+        </article>
+      </div>
+
+      <div class="roles" id="roles">
+        <h3>역할 분담: 리뷰는 찾고 알리기까지만</h3>
+        <p class="cap">리뷰는 코드를 고치지 않고, 결함을 찾아 리포트하는 데서 끝납니다. 머지를 실제로 막는 것은 GitHub이고, 결함을 처리하는 것은 사람입니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>역할</th><th>담당</th><th>하는 일</th><th>하지 않는 일</th></tr></thead>
+            <tbody>
+              <tr><td><b>리뷰</b></td><td>ocr (A) 또는 Claude Code (B)</td><td>코드를 읽고 결함을 찾아 리포트 (<code>result.json</code>)</td><td>코드 수정, 머지 결정</td></tr>
+              <tr><td><b>알림</b></td><td>워크플로 Slack 단계</td><td>critical·high가 있으면 채널에 리포트 요약 전송</td><td></td></tr>
+              <tr><td><b>머지 차단 신호</b></td><td>워크플로 Gate 단계</td><td>판정을 체크 상태(✓/✗)로 표시해 “머지하면 안 됨”을 알림</td><td>실제 차단</td></tr>
+              <tr><td><b>머지 차단 집행</b></td><td>GitHub Ruleset</td><td><code>ocr-review</code> 체크가 ✗이면 머지 버튼을 잠금</td><td></td></tr>
+              <tr><td><b>결함 처리</b></td><td>개발자</td><td>리포트를 보고 수정하거나 오탐으로 판단</td><td></td></tr>
+              <tr><td><b>예외 승인</b></td><td>팀 리드</td><td>오탐일 때 bypass 권한으로 머지</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul class="plain">
+          <li><b>알림만 할지, 차단까지 할지는 Ruleset이 정합니다.</b> <code>ocr-review</code>를 필수 체크로 두면 머지가 잠기고, 필수 체크에서 빼면 ✗ 표시와 Slack 알림만 남습니다. 리뷰 워크플로는 고치지 않아도 됩니다.</li>
+          <li><b>CI의 리뷰는 읽기 전용입니다.</b> ocr에는 파일을 쓰는 도구가 없고, Claude Code 방식은 <code>--allowedTools</code>로 읽기 도구만 허용합니다.</li>
+          <li><b>로컬 자동 수정 도구는 이 체계 밖입니다.</b> <code>/code-review --fix</code>, <code>/simplify</code>, ocr 플러그인의 Claude Code 명령은 코드를 고칩니다. 개발자가 자기 PC에서 고르는 도구이고, CI 리뷰와는 섞이지 않습니다.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="diff">
+      <div class="sec-head">
+        <span class="num">02 · 운영 방식 차이</span>
+        <h2>항목별 비교</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>항목</th><th>A · API 키</th><th>B · Max 구독</th></tr></thead>
+          <tbody>
+            <tr><td>LLM을 호출하는 주체</td><td>ocr</td><td>Claude Code</td></tr>
+            <tr><td>인증 수단</td><td>조직 API 키</td><td>토큰을 발급한 사람의 개인 구독</td></tr>
+            <tr><td>요금</td><td>사용량 과금</td><td>구독료에 포함, 사용 한도 차감</td></tr>
+            <tr><td>리뷰 대상 선별, 규칙 매칭</td><td><span class="v pass">ocr</span></td><td><span class="v pass">ocr</span></td></tr>
+            <tr><td>관련 파일 묶기, 병렬 서브에이전트</td><td><span class="v pass">있음</span></td><td><span class="v info">없음, 한 세션에서 순서대로</span></td></tr>
+            <tr><td>리뷰 전용 프롬프트와 도구</td><td><span class="v pass">ocr 튜닝값</span></td><td><span class="v info">Claude Code 기본 도구 + 이 문서의 프롬프트</span></td></tr>
+            <tr><td>코멘트 위치 보정, 자기검증 필터</td><td><span class="v pass">있음</span></td><td><span class="v block">없음</span></td></tr>
+            <tr><td>결과 형식</td><td>ocr 고정 JSON</td><td><code>--json-schema</code>로 강제 후 ocr 형식으로 변환</td></tr>
+            <tr><td>빠진 파일 검출</td><td>ocr 내부에서 보장</td><td>워크플로가 preview 목록과 비교해 <code>partial</code> 처리</td></tr>
+            <tr><td>참고하는 팀 규칙</td><td><code>.opencodereview/rule.json</code></td><td><code>rule.json</code> + 저장소의 <code>CLAUDE.md</code></td></tr>
+            <tr><td>세션 기록, 재개, 비교</td><td><code>ocr session</code>, <code>ocr viewer</code>, <code>--resume</code></td><td>실행 결과 아티팩트만 남음</td></tr>
+            <tr><td>실행당 토큰 상한</td><td><code>--max-tokens-budget</code></td><td>없음. job 제한 시간으로만 막음</td></tr>
+            <tr><td>쓸 수 있는 모델</td><td>Claude, GPT, Qwen, Bedrock, 사내 모델</td><td>Claude 모델</td></tr>
+            <tr><td>품질 근거</td><td>공식 벤치마크 있음</td><td>없음. 이번 실측으로 확인</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="pros">
+      <div class="sec-head">
+        <span class="num">03 · 각 방식의 장점</span>
+        <h2>어느 쪽이 무엇을 잘하나</h2>
+      </div>
+      <div class="pair">
+        <div class="figure">
+          <h3>B · Max 구독 방식의 장점</h3>
+          <ul class="plain">
+            <li><b>추가 비용이 없습니다.</b> 이미 내고 있는 Max 구독 안에서 처리됩니다.</li>
+            <li><b>준비가 간단합니다.</b> API 결제 등록 없이 <code>claude setup-token</code>으로 만든 토큰 하나면 됩니다.</li>
+            <li><b>저장소를 넓게 봅니다.</b> 필요하면 Grep과 Read로 호출부, 설정, 테스트를 찾아봅니다. 저장소의 <code>CLAUDE.md</code>도 반영됩니다.</li>
+            <li><b>작은 PR은 빠릅니다.</b> 사전 테스트에서 2개 파일, 35줄 변경을 18~24초에 끝냈습니다.</li>
+            <li><b>기준을 바로 고칠 수 있습니다.</b> 심각도 기준과 보고 범위를 프롬프트 몇 줄로 조정합니다.</li>
+          </ul>
+        </div>
+        <div class="figure">
+          <h3>A · API 키 방식의 장점</h3>
+          <ul class="plain">
+            <li><b>오탐이 적습니다.</b> 위치 보정과 자기검증 필터가 코드로 들어가 있습니다.</li>
+            <li><b>개인과 분리된 팀 자원입니다.</b> 누구의 구독에도 묶이지 않습니다.</li>
+            <li><b>비용을 통제하고 정확히 압니다.</b> 실행마다 토큰과 상한이 남습니다.</li>
+            <li><b>큰 PR에서 안정적입니다.</b> 묶음마다 독립 컨텍스트로 병렬 처리하고, 끊기면 이어서 합니다.</li>
+            <li><b>기록이 남습니다.</b> 세션 비교와 재생으로 판단 근거를 추적합니다.</li>
+          </ul>
+          <p class="cap">각 항목의 근거는 다음 절에 정리했습니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="api-wins">
+      <div class="sec-head">
+        <span class="num">04 · API 키 방식의 핵심 이득</span>
+        <h2>API 요금을 낼 때 얻는 것</h2>
+        <p>영향이 큰 순서입니다. 게이트가 머지를 막는 구조에서는 1번이 가장 중요합니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <h3>오탐이 적어서 게이트를 믿을 수 있다</h3>
+            <p>게이트는 리뷰가 critical·high라고 판정하면 그대로 머지를 막을 뿐, 그 판정이 맞는지는 가리지 못합니다. 그래서 오탐은 곧 멀쩡한 PR의 차단이 되고, 오탐이 잦으면 팀이 예외 승인을 습관처럼 쓰게 되어 게이트가 무력해집니다. 반대로 리뷰가 놓친 결함은 게이트도 그대로 통과시킵니다. ocr는 같은 모델이라도 리뷰 과정을 코드로 강제해서 지적 수를 줄이고 정확도를 높입니다.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>같은 모델 (Claude Opus 4.6)</th><th>ocr</th><th>Claude Code 범용 리뷰</th></tr></thead>
+                <tbody>
+                  <tr><td>정밀도 (지적 중 실제 결함 비율)</td><td><b>33.9%</b> (889건 중 301건)</td><td>7.2% (5,980건 중 435건)</td></tr>
+                  <tr><td>재현율 (실제 결함 중 찾은 비율)</td><td>20.0%</td><td><b>28.9%</b></td></tr>
+                  <tr><td>F1</td><td><b>25.1%</b></td><td>11.6%</td></tr>
+                  <tr><td>리뷰 1건당 토큰</td><td><b>385K</b></td><td>5,664K</td></tr>
+                  <tr><td>리뷰 1건당 시간</td><td><b>1분 23초</b></td><td>13분 6초</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="cap">출처: ocr 저장소의 AACR-Bench 결과 (오픈소스 50개 저장소, PR 200건, 정답 결함 1,505건). ocr 측이 직접 측정했고, 비교 대상은 당시 Claude Code의 범용 리뷰 구성입니다. B 방식은 ocr가 대상 선별과 규칙을 맡으므로 두 값 사이 어딘가일 것으로 보이지만, 공식 수치는 없습니다. 이번 실측의 목적이 바로 이 값을 재는 것입니다.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <h3>개인 구독과 분리된 팀 자원이다</h3>
+            <p>B 방식의 토큰은 <code>claude setup-token</code>을 실행한 사람의 구독에 묶입니다. Claude Code 문서도 여러 저장소에서 공유하는 시크릿에는 OAuth 토큰 대신 Console API 키를 쓰라고 안내합니다. API 키 방식은 담당자의 휴가, 퇴사, 사용 한도 소진과 상관없이 돌아가고, 팀원의 push가 늘어도 담당자의 Claude Code 작업량이 줄지 않습니다.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <h3>비용을 통제하고 정확히 안다</h3>
+            <p><code>--max-tokens-budget</code>으로 실행 1회의 상한을 걸 수 있고, 결과마다 입력, 출력, 캐시 토큰이 기록되어 월 비용을 정확히 계산할 수 있습니다. Sonnet 5.5로 하루 2회 리뷰하면 월 약 $30~115 (기준 $57)로 추정됩니다. 구독 방식은 추가 비용은 없지만 한도를 얼마나 쓰는지 미리 알기 어렵습니다.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <h3>큰 PR에서도 안정적이다</h3>
+            <p>ocr는 관련 파일을 묶음으로 나눠 묶음마다 독립된 컨텍스트로 리뷰하고, 기본 8개를 동시에 처리합니다. 변경이 많아져도 한 대화에 모든 diff가 쌓이지 않습니다. 중간에 끊기면 <code>--resume</code>으로 이어서 합니다. B 방식은 한 세션에서 파일을 순서대로 보기 때문에 PR이 클수록 시간과 컨텍스트 부담이 커집니다.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <h3>기록이 남고 모델을 고를 수 있다</h3>
+            <p><code>ocr session compare</code>로 이전 리뷰 대비 새로 생긴 이슈, 계속 남은 이슈, 해결된 이슈를 구분하고, <code>ocr viewer</code>로 모델이 어떤 파일을 읽고 왜 그렇게 판단했는지 다시 볼 수 있습니다. 필요하면 GPT, Qwen, Bedrock, 사내 모델로 바꿀 수 있습니다.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="setup">
+      <div class="sec-head">
+        <span class="num">05 · 실측 준비</span>
+        <h2>비교 워크플로 설치</h2>
+        <p>한 번의 push나 수동 실행으로 두 방식이 같은 커밋을 동시에 리뷰하고, 마지막 job이 결과를 나란히 비교합니다. 실측 기간에는 머지를 막지 않습니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip">A용</span></div>
+            <h3>API 키 등록</h3>
+            <p>Claude Console에서 API 키를 만들고 저장소 Secret <code>OCR_API_KEY</code>로 등록합니다. 실측 기간 비용을 묶어 두려면 Console에서 월 사용 한도를 낮게 걸어 두세요.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip">B용</span></div>
+            <h3>구독 토큰 발급</h3>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal (Max 구독자 본인 PC)</span><button class="copy" type="button" data-copy="code-token">복사</button></div>
+<pre id="code-token">claude setup-token</pre>
+            </div>
+            <p>출력된 토큰을 Secret <code>CLAUDE_CODE_OAUTH_TOKEN</code>으로 등록합니다. 이 토큰으로 실행되는 리뷰는 발급한 사람의 Max 사용 한도를 씁니다.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip">공통</span></div>
+            <h3>Variables 등록</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>이름</th><th>값</th><th>설명</th></tr></thead>
+                <tbody>
+                  <tr><td><code>OCR_MODEL</code></td><td><code>claude-sonnet-5-5</code></td><td>A 방식 모델</td></tr>
+                  <tr><td><code>CLAUDE_REVIEW_MODEL</code></td><td><code>claude-sonnet-5-5</code></td><td>B 방식 모델. 공정한 비교를 위해 A와 같게 둡니다.</td></tr>
+                  <tr><td><code>OCR_EFFORT</code></td><td><code>medium</code></td><td>A 방식 리뷰 라운드 수</td></tr>
+                  <tr><td><code>OCR_VERSION</code></td><td><code>1.12.12</code></td><td>양쪽 ocr 버전 고정</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip">저장소 파일</span></div>
+            <h3>비교 워크플로 커밋</h3>
+            <p><code>.github/workflows/ocr-compare.yml</code>로 저장해 develop에 넣습니다. job 세 개가 돌아갑니다.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>job</th><th>하는 일</th><th>결과물</th></tr></thead>
+                <tbody>
+                  <tr><td><code>review-api</code></td><td><code>ocr review</code>를 API 키로 실행</td><td><code>result.json</code>, 소요 시간</td></tr>
+                  <tr><td><code>review-max</code></td><td><code>ocr delegate</code> + <code>claude -p</code>를 구독으로 실행. 빠진 파일이 있으면 <code>partial</code></td><td>ocr 형식으로 변환한 <code>result.json</code>, 원본 출력</td></tr>
+                  <tr><td><code>compare</code></td><td>두 결과를 나란히 표로 정리하고 겹치는 지적을 찾음</td><td>Summary 표, <code>compare.json</code>, 라벨링용 <code>findings.csv</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="code">
+              <div class="bar"><span class="fname">.github/workflows/ocr-compare.yml</span><button class="copy" type="button" data-copy="code-compare">복사</button></div>
+<pre id="code-compare" class="tall">name: OCR Compare (API vs Max)
+
+# 같은 커밋을 두 방식으로 동시에 리뷰해 결과와 비용을 비교한다.
+# 실측 기간에는 머지를 막지 않는다 (리포트 전용).
+on:
+  push:
+    branches:
+      - feature/code-review
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "비교 기준 (예: origin/develop)"
+        default: "origin/develop"
+      to:
+        description: "리뷰 대상 커밋 (비우면 현재 커밋)"
+        default: ""
+
+concurrency:
+  group: ocr-compare-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BASE_BRANCH: develop
+  REVIEW_LANGUAGE: Korean
+
+jobs:
+  review-api:
+    name: review-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve review range
+        id: range
+        env:
+          IN_FROM: ${{ inputs.from }}
+          IN_TO: ${{ inputs.to }}
+        run: |
+          FROM="${IN_FROM:-origin/${BASE_BRANCH}}"
+          TO="${IN_TO:-$GITHUB_SHA}"
+          BASE_SHA=$(git merge-base "$FROM" "$TO")
+          { echo "## 이번 리뷰에 포함된 커밋"; git log -n 100 --no-merges --format='- %h %s' "${BASE_SHA}..${TO}"; } &gt; background.md
+          { echo "from=$FROM"; echo "to=$TO"; } &gt;&gt; "$GITHUB_OUTPUT"
+
+      - name: Install ocr
+        env:
+          OCR_VERSION: ${{ vars.OCR_VERSION || 'latest' }}
+        run: npm install -g "@alibaba-group/open-code-review@${OCR_VERSION}"
+
+      - name: Configure LLM
+        env:
+          OCR_MODEL: ${{ vars.OCR_MODEL || 'claude-sonnet-5-5' }}
+          OCR_API_KEY: ${{ secrets.OCR_API_KEY }}
+        run: |
+          ocr config set provider anthropic
+          ocr config set model "$OCR_MODEL"
+          ocr config set providers.anthropic.api_key "$OCR_API_KEY"
+          ocr config set language "$REVIEW_LANGUAGE"
+          ocr llm test
+
+      - name: Run ocr review
+        env:
+          FROM: ${{ steps.range.outputs.from }}
+          TO: ${{ steps.range.outputs.to }}
+          OCR_EFFORT: ${{ vars.OCR_EFFORT || 'medium' }}
+        run: |
+          set +e
+          START=$(date +%s)
+          ocr review --from "$FROM" --to "$TO" \
+            --format json --audience agent --output result.json \
+            --background-file background.md --effort "$OCR_EFFORT"
+          CODE=$?
+          echo "{\"exit_code\": $CODE, \"wall_seconds\": $(( $(date +%s) - START ))}" &gt; run-meta.json
+          [[ -s result.json ]] || echo '{"status":"error","comments":[]}' &gt; result.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-api
+          path: |
+            result.json
+            run-meta.json
+
+  review-max:
+    name: review-max
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve review range
+        id: range
+        env:
+          IN_FROM: ${{ inputs.from }}
+          IN_TO: ${{ inputs.to }}
+        run: |
+          FROM="${IN_FROM:-origin/${BASE_BRANCH}}"
+          TO="${IN_TO:-$GITHUB_SHA}"
+          BASE_SHA=$(git merge-base "$FROM" "$TO")
+          { echo "## 이번 리뷰에 포함된 커밋"; git log -n 100 --no-merges --format='- %h %s' "${BASE_SHA}..${TO}"; } &gt; background.md
+          { echo "from=$FROM"; echo "to=$TO"; } &gt;&gt; "$GITHUB_OUTPUT"
+
+      - name: Install ocr and Claude Code
+        env:
+          OCR_VERSION: ${{ vars.OCR_VERSION || 'latest' }}
+        run: npm install -g "@alibaba-group/open-code-review@${OCR_VERSION}" @anthropic-ai/claude-code
+
+      - name: Run delegated review (Claude Code, Max subscription)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_REVIEW_MODEL || 'claude-sonnet-5-5' }}
+          FROM: ${{ steps.range.outputs.from }}
+          TO: ${{ steps.range.outputs.to }}
+        run: |
+          set +e
+          START=$(date +%s)
+          # 리뷰 대상은 ocr가 정한다. Claude가 빠뜨린 파일은 아래 정규화 단계에서 잡아낸다.
+          ocr delegate preview --from "$FROM" --to "$TO" -f json --background-file background.md &gt; preview.json
+          if [[ "$(jq '.reviewable_count // 0' preview.json)" == "0" ]]; then
+            echo '{"status":"skipped","comments":[]}' &gt; result.json
+            echo "{\"exit_code\": 0, \"wall_seconds\": 0}" &gt; run-meta.json
+            exit 0
+          fi
+
+          cat &gt; schema.json &lt;&lt;'SCHEMA'
+          {"type":"object","additionalProperties":false,"required":["files_reviewed","comments"],"properties":{"files_reviewed":{"type":"array","items":{"type":"string"}},"comments":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["path","start_line","end_line","severity","category","content"],"properties":{"path":{"type":"string"},"start_line":{"type":"integer"},"end_line":{"type":"integer"},"severity":{"type":"string","enum":["critical","high","medium","low"]},"category":{"type":"string","enum":["bug","security","performance","maintainability","test","style","documentation","other"]},"content":{"type":"string"},"existing_code":{"type":"string"},"suggestion_code":{"type":"string"}}}}}}
+          SCHEMA
+
+          cat &gt; prompt.md &lt;&lt;PROMPT
+          You are a code reviewer working in Open Code Review (OCR) delegation mode.
+          Review the changes between ${FROM} and ${TO}. Do not modify any file.
+
+          1. Run \`ocr delegate preview --from ${FROM} --to ${TO} -f json --background-file background.md\`.
+             Review every path in reviewable_files and nothing else. Use merge_base from the output.
+          2. Run \`ocr delegate rule &lt;all reviewable paths&gt;\` and treat each rule group as the checklist for its files.
+          3. For each file, read its diff with \`git diff &lt;merge_base&gt;..${TO} -- &lt;path&gt;\`. Read surrounding code with Read, Grep and Glob when you need context.
+          4. Report only defects in the changed code that you are confident about. Precision matters more than recall:
+             a false alarm blocks a merge. Severity: critical = security vulnerability or data loss;
+             high = bug likely to cause an incident; medium = context-dependent concern; low = minor.
+          5. Line numbers must refer to the file at ${TO}. Write content in ${REVIEW_LANGUAGE}.
+             Put the offending code in existing_code and a fix in suggestion_code when you have one.
+          6. List every reviewed path in files_reviewed. Return an empty comments array when there is nothing to report.
+          PROMPT
+
+          claude -p --model "$CLAUDE_MODEL" \
+            --output-format json \
+            --json-schema "$(cat schema.json)" \
+            --allowedTools "Bash(ocr delegate:*)" "Bash(git diff:*)" "Bash(git show:*)" "Read" "Grep" "Glob" \
+            --permission-mode dontAsk \
+            &lt; prompt.md &gt; claude-out.json
+          CODE=$?
+          echo "{\"exit_code\": $CODE, \"wall_seconds\": $(( $(date +%s) - START ))}" &gt; run-meta.json
+
+          # Claude Code 결과를 ocr의 result.json 형식으로 맞춘다 (판정/Slack/게이트 단계를 그대로 재사용하기 위해)
+          if ! jq -e '.structured_output' claude-out.json &gt; /dev/null 2&gt;&amp;1; then
+            echo '{"status":"error","comments":[]}' &gt; result.json
+            exit 0
+          fi
+          jq -n --slurpfile o claude-out.json --slurpfile p preview.json '
+            ($o[0]) as $out
+            | ($out.structured_output) as $so
+            | ($p[0].reviewable_files | map(.path)) as $expected
+            | ($expected - ($so.files_reviewed // [])) as $missing
+            | ($out.usage // {}) as $u
+            | {
+                status: (if $out.is_error then "error"
+                         elif ($missing | length) &gt; 0 then "partial"
+                         else "success" end),
+                llm: {provider: "claude-code-subscription", model: (($out.modelUsage // {}) | keys | first // "")},
+                summary: {
+                  files_reviewed: ($so.files_reviewed | length),
+                  comments: ($so.comments | length),
+                  input_tokens: (($u.input_tokens // 0) + ($u.cache_read_input_tokens // 0) + ($u.cache_creation_input_tokens // 0)),
+                  output_tokens: ($u.output_tokens // 0),
+                  cache_read_tokens: ($u.cache_read_input_tokens // 0),
+                  cache_write_tokens: ($u.cache_creation_input_tokens // 0),
+                  num_turns: ($out.num_turns // 0),
+                  api_equivalent_cost_usd: ($out.total_cost_usd // 0)
+                },
+                missing_files: $missing,
+                comments: $so.comments
+              }' &gt; result.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-max
+          path: |
+            result.json
+            run-meta.json
+            claude-out.json
+            preview.json
+
+  compare:
+    name: compare
+    needs: [review-api, review-max]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: results
+
+      - name: Compare results
+        env:
+          # Sonnet 5.5 API 단가 (USD / 1M tokens). 모델을 바꾸면 함께 수정한다.
+          PRICE_IN: "2.00"
+          PRICE_OUT: "10.00"
+          PRICE_CACHE_READ: "0.20"
+          PRICE_CACHE_WRITE: "2.50"
+        run: |
+          for m in api max; do
+            [[ -s results/review-$m/result.json ]] || { mkdir -p results/review-$m; echo '{"status":"missing","comments":[]}' &gt; results/review-$m/result.json; }
+            [[ -s results/review-$m/run-meta.json ]] || echo '{"exit_code": -1, "wall_seconds": 0}' &gt; results/review-$m/run-meta.json
+          done
+
+          jq -n \
+            --slurpfile a results/review-api/result.json --slurpfile am results/review-api/run-meta.json \
+            --slurpfile x results/review-max/result.json --slurpfile xm results/review-max/run-meta.json \
+            --argjson pin "$PRICE_IN" --argjson pout "$PRICE_OUT" \
+            --argjson pcr "$PRICE_CACHE_READ" --argjson pcw "$PRICE_CACHE_WRITE" '
+            def cnt($s): [.comments[]? | select(.severity == $s)] | length;
+            def cost: (.summary // {}) as $s
+              | ((($s.input_tokens // 0) - ($s.cache_read_tokens // 0) - ($s.cache_write_tokens // 0)) * $pin
+                 + ($s.cache_read_tokens // 0) * $pcr + ($s.cache_write_tokens // 0) * $pcw
+                 + ($s.output_tokens // 0) * $pout) / 1000000;
+            # 같은 파일에서 시작 줄이 3줄 이내면 같은 지적으로 본다
+            def tag2($mode; $other): [ .comments[]? as $c | $c + {mode: $mode, matched: ([$other[] | select(.path == $c.path and ((.start_line - $c.start_line) | fabs) &lt;= 3)] | length &gt; 0)} ];
+            ($a[0]) as $api | ($x[0]) as $max
+            | {
+                api: {status: $api.status, wall_seconds: $am[0].wall_seconds, files: ($api.summary.files_reviewed // 0),
+                      critical: ($api | cnt("critical")), high: ($api | cnt("high")), medium: ($api | cnt("medium")), low: ($api | cnt("low")),
+                      input_tokens: ($api.summary.input_tokens // 0), output_tokens: ($api.summary.output_tokens // 0),
+                      cost_usd: ($api | cost), billed: "API 실제 과금"},
+                max: {status: $max.status, wall_seconds: $xm[0].wall_seconds, files: ($max.summary.files_reviewed // 0),
+                      critical: ($max | cnt("critical")), high: ($max | cnt("high")), medium: ($max | cnt("medium")), low: ($max | cnt("low")),
+                      input_tokens: ($max.summary.input_tokens // 0), output_tokens: ($max.summary.output_tokens // 0),
+                      cost_usd: ($max.summary.api_equivalent_cost_usd // 0), billed: "Max 구독 (API 환산값, 실제 과금 없음)",
+                      missing_files: ($max.missing_files // [])},
+                findings: (($api | tag2("api"; $max.comments // [])) + ($max | tag2("max"; $api.comments // [])))
+              }' &gt; compare.json
+
+          {
+            echo "## API vs Max 리뷰 비교"
+            echo
+            echo "| 항목 | API (ocr review) | Max (claude -p + delegate) |"
+            echo "|---|---:|---:|"
+            jq -r '
+              def row($k; $label): "| \($label) | \(.api[$k]) | \(.max[$k]) |";
+              row("status"; "상태"), row("wall_seconds"; "소요 시간(초)"), row("files"; "리뷰한 파일 수"),
+              row("critical"; "critical"), row("high"; "high"), row("medium"; "medium"), row("low"; "low"),
+              row("input_tokens"; "입력 토큰"), row("output_tokens"; "출력 토큰"),
+              "| 비용 (USD) | \(.api.cost_usd * 1000 | round / 1000) | \(.max.cost_usd * 1000 | round / 1000) (환산) |"' compare.json
+            echo
+            jq -r '"- 양쪽 모두 지적 (±3줄): \([.findings[] | select(.mode == "api" and .matched)] | length)건",
+                   "- API에서만: \([.findings[] | select(.mode == "api" and (.matched | not))] | length)건",
+                   "- Max에서만: \([.findings[] | select(.mode == "max" and (.matched | not))] | length)건",
+                   (if (.max.missing_files | length) &gt; 0 then "- ⚠️ Max가 빠뜨린 파일: \(.max.missing_files | join(", "))" else empty end)' compare.json
+          } &gt;&gt; "$GITHUB_STEP_SUMMARY"
+
+          # 사람이 정답/오탐을 표시할 라벨링 시트
+          jq -r '["mode","severity","category","path","start_line","matched_other","content","label(TP/FP)"],
+                 (.findings[] | [.mode, .severity, .category, .path, .start_line, .matched, (.content | gsub("\\s+"; " ")), ""])
+                 | @csv' compare.json &gt; findings.csv
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compare-${{ github.run_id }}
+          path: |
+            compare.json
+            findings.csv</pre>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <div class="who"><span class="chip ci">GitHub Actions</span></div>
+            <h3>실행</h3>
+            <ul>
+              <li><b>자동</b>: <code>feature/code-review</code>에 push하면 실행됩니다.</li>
+              <li><b>지난 PR 재현</b>: 이미 머지된 PR을 다시 리뷰시키면 결과를 실제 이력과 대조하기 쉽습니다. 머지 커밋을 기준으로 실행합니다.</li>
+            </ul>
+            <div class="code">
+              <div class="bar"><span class="fname">terminal</span><button class="copy" type="button" data-copy="code-replay">복사</button></div>
+<pre id="code-replay">MERGE=$(gh pr view 42 --json mergeCommit -q .mergeCommit.oid)
+gh workflow run ocr-compare.yml -f from="${MERGE}^1" -f to="$MERGE"</pre>
+            </div>
+            <p class="cap">머지 커밋의 첫 번째 부모와 비교하므로 squash 머지와 일반 머지 모두 그 PR의 변경만 리뷰합니다.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="measure">
+      <div class="sec-head">
+        <span class="num">06 · 실측 진행과 판단</span>
+        <h2>무엇을 재고 어떻게 정할까</h2>
+      </div>
+
+      <div class="prose">
+        <h3>진행 순서</h3>
+        <ol>
+          <li><b>표본 고르기</b>: 지난 PR 10~20건을 고릅니다. 작은 것, 중간, 큰 것을 섞고, 머지 후 버그가 발견된 PR을 몇 건 넣으면 정답 확인이 쉽습니다.</li>
+          <li><b>실행</b>: PR마다 위의 재현 명령으로 비교 워크플로를 돌립니다.</li>
+          <li><b>라벨링</b>: compare 아티팩트의 <code>findings.csv</code>를 스프레드시트로 열고, 리뷰어 1~2명이 <code>label</code> 열에 TP(실제 결함) 또는 FP(오탐)를 적습니다. <code>mode</code> 열을 가리고 행 순서를 섞으면 방식에 대한 선입견을 줄일 수 있습니다.</li>
+          <li><b>흔들림 확인</b>: 3~5건은 같은 커밋으로 2~3번 다시 실행해 결과가 얼마나 달라지는지 봅니다.</li>
+          <li><b>한도 확인</b>: 실측 전후로 토큰 발급자의 Claude 사용량 화면을 확인해 B 방식이 한도를 얼마나 쓰는지 기록합니다.</li>
+        </ol>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>지표</th><th>계산</th><th>왜 중요한가</th></tr></thead>
+          <tbody>
+            <tr><td><b>critical·high 오탐 수</b></td><td>severity가 critical·high인데 FP로 표시된 건수</td><td>게이트가 잘못 머지를 막은 횟수. 가장 중요합니다.</td></tr>
+            <tr><td>정밀도</td><td>TP ÷ 전체 지적</td><td>리뷰 결과를 믿을 수 있는 정도</td></tr>
+            <tr><td>단독 발견 TP</td><td>상대 방식이 놓친 TP 건수</td><td>각 방식이 놓치는 결함</td></tr>
+            <tr><td>빠진 파일</td><td>B의 <code>missing_files</code>, status <code>partial</code> 횟수</td><td>리뷰를 다 하지 않은 실행</td></tr>
+            <tr><td>소요 시간</td><td>Summary 표의 초 단위 값</td><td>push 후 결과까지 기다리는 시간</td></tr>
+            <tr><td>비용</td><td>A는 실제 과금, B는 API 환산값과 한도 소모량</td><td>월 운영 비용 판단</td></tr>
+            <tr><td>재실행 일치도</td><td>같은 커밋 재실행 시 겹치는 지적 비율</td><td>게이트 결과가 운에 좌우되는 정도</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">compare job의 “양쪽 모두 지적”은 같은 파일에서 시작 줄이 3줄 이내면 같은 지적으로 세는 근사치입니다. 서로 다른 문제를 같은 지적으로 셀 수 있으니, 최종 판단은 라벨링 결과로 하세요.</p>
+
+      <div class="prose">
+        <h3>판단 기준 (권장)</h3>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>실측 결과</th><th>권장 운영</th></tr></thead>
+          <tbody>
+            <tr><td>B의 critical·high 오탐이 A와 비슷하고, 빠진 파일이 없고, 한도에 여유가 있다</td><td><b>B로 게이트 운영</b>. 추가 비용 없이 운영합니다.</td></tr>
+            <tr><td>B의 critical·high 오탐이 눈에 띄게 많다 (예: PR 10건당 잘못된 차단 2건 이상)</td><td><b>A로 게이트 운영</b>. B는 로컬 사전 리뷰에만 씁니다.</td></tr>
+            <tr><td>품질은 비슷한데 B가 한도를 빠듯하게 쓴다</td><td>A로 게이트 운영하거나, 게이트 대상 push 빈도를 줄입니다.</td></tr>
+            <tr><td>B가 큰 PR에서 자주 <code>partial</code>이나 시간 초과가 난다</td><td>A로 게이트 운영합니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="pretest">
+      <div class="sec-head">
+        <span class="num">07 · 사전 테스트 결과</span>
+        <h2>문서 작성 중 직접 돌려 본 결과</h2>
+        <p>B 방식의 리뷰 단계를 데모 저장소에서 실제로 실행했습니다 (ocr v1.12.12, Claude Code 2.1.288, claude-sonnet-5-5, Max 구독). A 방식은 API 키가 없어 실행하지 못했으므로 팀 실측으로 채워야 합니다.</p>
+      </div>
+      <div class="prose">
+        <p>데모 변경은 “로그인 5회 실패 시 계정 잠금” 기능으로, 파일 2개에 35줄이 추가되었습니다. 여기에 결함 4가지를 일부러 넣었습니다.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>심어 둔 결함</th><th>1차 실행</th><th>2차 실행</th></tr></thead>
+          <tbody>
+            <tr><td>이메일을 f-string으로 SQL에 넣음 (SQL 인젝션)</td><td><span class="sev critical">critical</span> 발견</td><td><span class="sev critical">critical</span> 발견</td></tr>
+            <tr><td>실패 응답 문구로 계정 존재 여부 노출</td><td><span class="sev medium">medium</span> 발견</td><td><span class="sev medium">medium</span> 발견</td></tr>
+            <tr><td><code>conn.commit()</code> 누락으로 실패 횟수가 저장되지 않음</td><td><span class="v block">놓침</span></td><td><span class="v block">놓침</span></td></tr>
+            <tr><td>실패 횟수 읽고 쓰기가 원자적이지 않음 (동시 요청 시 잠금 우회)</td><td><span class="v block">놓침</span></td><td><span class="v block">놓침</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>심지 않았지만 찾은 것</th><th>1차 실행</th><th>2차 실행</th></tr></thead>
+          <tbody>
+            <tr><td>평문 비밀번호를 <code>pw_hash</code> 컬럼과 직접 비교 (타당한 지적)</td><td><span class="sev high">high</span></td><td><span class="sev high">high</span></td></tr>
+            <tr><td>잠금이 풀려도 실패 횟수가 초기화되지 않음 (타당한 지적)</td><td><span class="sev high">high</span></td><td><span class="v info">없음</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tiles">
+        <div class="tile"><span class="t-label">소요 시간</span><span class="t-val">24초 / 18초</span><span class="t-sub">1차 / 2차, 설치 시간 제외</span></div>
+        <div class="tile"><span class="t-label">지적 수</span><span class="t-val">4건 / 3건</span><span class="t-sub">같은 커밋인데 결과가 달라짐</span></div>
+        <div class="tile"><span class="t-label">사용 토큰</span><span class="t-val">약 90K</span><span class="t-sub">입력 대부분이 캐시, 출력 1.7~2.2K</span></div>
+        <div class="tile"><span class="t-label">API 환산 비용</span><span class="t-val">$0.165 / $0.106</span><span class="t-sub">구독이라 실제 과금은 없음</span></div>
+      </div>
+      <div class="prose">
+        <h3>여기서 알 수 있는 것</h3>
+        <ul>
+          <li>B 방식은 워크플로에 넣은 그대로 동작했습니다. 두 파일을 모두 리뷰했고, 권한 거부는 0건, 결과는 스키마대로 나왔습니다.</li>
+          <li>같은 커밋에서 실행마다 결과가 달랐습니다. 게이트에 쓸 방식은 재실행 일치도를 꼭 확인해야 합니다.</li>
+          <li>저장되지 않는 쓰기, 경쟁 조건 같은 “코드 흐름을 따라가야 보이는” 결함은 두 번 모두 놓쳤습니다. A 방식이 이 둘을 찾는지가 실측에서 볼 첫 번째 포인트입니다.</li>
+          <li>작은 PR 하나의 한도 소모는 작았습니다. 큰 PR에서의 시간과 한도 소모는 실측으로 확인해야 합니다.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="switch">
+      <div class="sec-head">
+        <span class="num">08 · 운영 전환</span>
+        <h2>결정한 방식으로 게이트 바꾸기</h2>
+      </div>
+      <div class="prose">
+        <ul>
+          <li><b>A로 정했다면</b>: 첫 번째 가이드의 <code>ocr-review.yml</code>을 그대로 씁니다.</li>
+          <li><b>B로 정했다면</b>: <code>ocr-review.yml</code>의 리뷰 단계만 아래로 바꿉니다. B의 결과를 ocr와 같은 형식으로 변환하므로 판정, 리포트, Slack, 게이트 단계는 수정하지 않아도 됩니다. 빠진 파일이 있으면 <code>partial</code>이 되어 게이트가 막습니다.</li>
+          <li><b>실측이 끝나면</b>: <code>ocr-compare.yml</code>의 push 트리거를 지우고 <code>workflow_dispatch</code>만 남겨 두면, 분기마다 품질을 다시 점검하는 데 쓸 수 있습니다.</li>
+        </ul>
+      </div>
+      <div class="code">
+        <div class="bar"><span class="fname">ocr-review.yml 교체용 단계 (B 방식)</span><button class="copy" type="button" data-copy="code-maxgate">복사</button></div>
+<pre id="code-maxgate" class="tall"># ocr-review.yml(첫 번째 가이드의 게이트 워크플로)을 Max 구독 방식으로 바꾸는 방법
+# 1. 'Install ocr' 단계를 아래 'Install ocr and Claude Code'로 바꾼다.
+# 2. 'Configure LLM' 단계를 지운다 (API 키 불필요).
+# 3. 'Run OCR review' 단계를 아래 같은 이름의 단계로 바꾼다 ('Resolve review range' 뒤 위치 유지).
+# 4. 워크플로 최상단 env에 REVIEW_LANGUAGE: Korean 을 추가한다.
+# Evaluate, Write report, Notify Slack, Gate 단계는 그대로 쓴다.
+
+      - name: Install ocr and Claude Code
+        env:
+          OCR_VERSION: ${{ vars.OCR_VERSION || 'latest' }}
+        run: npm install -g "@alibaba-group/open-code-review@${OCR_VERSION}" @anthropic-ai/claude-code
+
+      - name: Run OCR review
+        id: review
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_REVIEW_MODEL || 'claude-sonnet-5-5' }}
+          FROM: ${{ steps.range.outputs.from }}
+          TO: ${{ github.sha }}
+        run: |
+          set +e
+          # 판정은 result.json의 status로 하므로 종료 코드는 항상 0으로 넘긴다
+          echo "exit_code=0" &gt;&gt; "$GITHUB_OUTPUT"
+          START=$(date +%s)
+          # 리뷰 대상은 ocr가 정한다. Claude가 빠뜨린 파일은 아래 정규화 단계에서 잡아낸다.
+          ocr delegate preview --from "$FROM" --to "$TO" -f json --background-file background.md &gt; preview.json
+          if [[ "$(jq '.reviewable_count // 0' preview.json)" == "0" ]]; then
+            echo '{"status":"skipped","comments":[]}' &gt; result.json
+            echo "{\"exit_code\": 0, \"wall_seconds\": 0}" &gt; run-meta.json
+            exit 0
+          fi
+
+          cat &gt; schema.json &lt;&lt;'SCHEMA'
+          {"type":"object","additionalProperties":false,"required":["files_reviewed","comments"],"properties":{"files_reviewed":{"type":"array","items":{"type":"string"}},"comments":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["path","start_line","end_line","severity","category","content"],"properties":{"path":{"type":"string"},"start_line":{"type":"integer"},"end_line":{"type":"integer"},"severity":{"type":"string","enum":["critical","high","medium","low"]},"category":{"type":"string","enum":["bug","security","performance","maintainability","test","style","documentation","other"]},"content":{"type":"string"},"existing_code":{"type":"string"},"suggestion_code":{"type":"string"}}}}}}
+          SCHEMA
+
+          cat &gt; prompt.md &lt;&lt;PROMPT
+          You are a code reviewer working in Open Code Review (OCR) delegation mode.
+          Review the changes between ${FROM} and ${TO}. Do not modify any file.
+
+          1. Run \`ocr delegate preview --from ${FROM} --to ${TO} -f json --background-file background.md\`.
+             Review every path in reviewable_files and nothing else. Use merge_base from the output.
+          2. Run \`ocr delegate rule &lt;all reviewable paths&gt;\` and treat each rule group as the checklist for its files.
+          3. For each file, read its diff with \`git diff &lt;merge_base&gt;..${TO} -- &lt;path&gt;\`. Read surrounding code with Read, Grep and Glob when you need context.
+          4. Report only defects in the changed code that you are confident about. Precision matters more than recall:
+             a false alarm blocks a merge. Severity: critical = security vulnerability or data loss;
+             high = bug likely to cause an incident; medium = context-dependent concern; low = minor.
+          5. Line numbers must refer to the file at ${TO}. Write content in ${REVIEW_LANGUAGE}.
+             Put the offending code in existing_code and a fix in suggestion_code when you have one.
+          6. List every reviewed path in files_reviewed. Return an empty comments array when there is nothing to report.
+          PROMPT
+
+          claude -p --model "$CLAUDE_MODEL" \
+            --output-format json \
+            --json-schema "$(cat schema.json)" \
+            --allowedTools "Bash(ocr delegate:*)" "Bash(git diff:*)" "Bash(git show:*)" "Read" "Grep" "Glob" \
+            --permission-mode dontAsk \
+            &lt; prompt.md &gt; claude-out.json
+          CODE=$?
+          echo "{\"exit_code\": $CODE, \"wall_seconds\": $(( $(date +%s) - START ))}" &gt; run-meta.json
+
+          # Claude Code 결과를 ocr의 result.json 형식으로 맞춘다 (판정/Slack/게이트 단계를 그대로 재사용하기 위해)
+          if ! jq -e '.structured_output' claude-out.json &gt; /dev/null 2&gt;&amp;1; then
+            echo '{"status":"error","comments":[]}' &gt; result.json
+            exit 0
+          fi
+          jq -n --slurpfile o claude-out.json --slurpfile p preview.json '
+            ($o[0]) as $out
+            | ($out.structured_output) as $so
+            | ($p[0].reviewable_files | map(.path)) as $expected
+            | ($expected - ($so.files_reviewed // [])) as $missing
+            | ($out.usage // {}) as $u
+            | {
+                status: (if $out.is_error then "error"
+                         elif ($missing | length) &gt; 0 then "partial"
+                         else "success" end),
+                llm: {provider: "claude-code-subscription", model: (($out.modelUsage // {}) | keys | first // "")},
+                summary: {
+                  files_reviewed: ($so.files_reviewed | length),
+                  comments: ($so.comments | length),
+                  input_tokens: (($u.input_tokens // 0) + ($u.cache_read_input_tokens // 0) + ($u.cache_creation_input_tokens // 0)),
+                  output_tokens: ($u.output_tokens // 0),
+                  cache_read_tokens: ($u.cache_read_input_tokens // 0),
+                  cache_write_tokens: ($u.cache_creation_input_tokens // 0),
+                  num_turns: ($out.num_turns // 0),
+                  api_equivalent_cost_usd: ($out.total_cost_usd // 0)
+                },
+                missing_files: $missing,
+                comments: $so.comments
+              }' &gt; result.json</pre>
+      </div>
+    </section>
+
+    <section id="caution">
+      <div class="sec-head">
+        <span class="num">09 · 주의사항</span>
+        <h2>B 방식을 운영할 때 확인할 것</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>항목</th><th>내용</th><th>대응</th></tr></thead>
+          <tbody>
+            <tr><td>토큰 소유</td><td>토큰이 발급자 개인 구독에 묶입니다.</td><td>담당자가 바뀌거나 퇴사하면 즉시 재발급하고 교체합니다.</td></tr>
+            <tr><td>사용 한도</td><td>CI 실행이 대화형 사용과 같은 한도를 쓰는지 공식 문서에서 확인하지 못했습니다.</td><td>실측 기간에 사용량 화면으로 확인합니다.</td></tr>
+            <tr><td>이용 조건</td><td>개인 구독을 팀 공용 CI에 쓰는 것에 대한 명확한 안내를 찾지 못했습니다.</td><td>회사 정책과 Anthropic 약관을 확인하고, 필요하면 Team·Enterprise 플랜이나 API 키를 검토합니다.</td></tr>
+            <tr><td>읽기 전용 보장</td><td>Claude Code는 파일을 고칠 수 있는 도구입니다.</td><td><code>--allowedTools</code>로 ocr delegate, git diff/show, Read, Grep, Glob만 허용하고 <code>--permission-mode dontAsk</code>로 나머지를 거부합니다.</td></tr>
+            <tr><td>버전 변화</td><td>Claude Code가 업데이트되면 출력 형식이나 동작이 바뀔 수 있습니다.</td><td><code>@anthropic-ai/claude-code@버전</code>으로 고정합니다 (사전 테스트 2.1.288).</td></tr>
+            <tr><td>CLAUDE.md 영향</td><td>B는 저장소의 <code>CLAUDE.md</code>를 읽어 리뷰에 반영합니다.</td><td>리뷰 기준과 충돌하는 지시가 없는지 확인합니다.</td></tr>
+            <tr><td>비용 단가</td><td>compare job의 비용 계산은 Sonnet 5.5 단가 기준입니다.</td><td>모델을 바꾸면 <code>PRICE_*</code> 값을 함께 고칩니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>검증 범위: B 방식 리뷰 단계는 데모 저장소에서 ocr v1.12.12와 Claude Code 2.1.288로 실제 실행했습니다. 결과 변환과 비교 단계는 정상, 빠진 파일, 출력 오류, 실행 실패 네 가지 경우와 예시 A 결과로 확인했습니다. A 방식 실행과 GitHub Actions 위의 실행은 해 보지 않았으므로, 첫 실측 때 job 로그를 함께 확인하세요.</p>
+  <p>참고: Claude Code 문서 (GitHub Actions, headless 모드), open-code-review 저장소의 README와 AACR-Bench 결과, Delegation 모드 문서</p>
+</footer>
+
+<script>
+document.querySelectorAll("[data-copy]").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var pre = document.getElementById(btn.getAttribute("data-copy"));
+    if (!pre) return;
+    var text = pre.innerText;
+    var reset = function () { setTimeout(function () { btn.textContent = "복사"; }, 1600); };
+    var selectFallback = function () {
+      var range = document.createRange();
+      range.selectNodeContents(pre);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      btn.textContent = "선택됨 · ⌘C";
+      reset();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { btn.textContent = "복사됨"; reset(); }, selectFallback);
+    } else {
+      selectFallback();
+    }
+  });
+});
+</script>
+</body>
+</html>

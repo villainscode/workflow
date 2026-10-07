@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, normalize, relative, isAbsolute } from "node:path";
 import { unzipSync } from "fflate";
+import { loadSite, type MenuNode } from "./sitefiles.ts";
 import { Document, parseDocument, YAMLSeq } from "yaml";
 
 /** docs/에 파일과 yaml을 쓰는 작업. 원본(파일)을 먼저 쓰고, 색인은 호출한 쪽에서 다시 만든다. */
@@ -34,9 +35,10 @@ const KIND: Record<string, string> = {
 export const slugify = (s: string) =>
   s.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "doc";
 
+/** 다음 버전 번호. 처음 만들 때는 v0.0(화면에서는 draft), 그 뒤 수정마다 v0.1, v0.2 … */
 export function nextVersion(versions: string[]): string {
   const nums = versions.map((v) => VERSION_RE.exec(v)).filter(Boolean).map((m) => [Number(m![1]), Number(m![2])]);
-  if (nums.length === 0) return "v0.1";
+  if (nums.length === 0) return "v0.0";
   nums.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const [major, minor] = nums[nums.length - 1];
   return `v${major}.${minor + 1}`;
@@ -88,12 +90,10 @@ function listFiles(dir: string): string[] {
   });
 }
 
+/** 메뉴가 속한 대분류 key */
 function findMenuCategory(docsRoot: string, menu: string): string | null {
-  const doc = parseDocument(readFileSync(join(docsRoot, "_site/menus.yaml"), "utf8"));
-  const cats = doc.toJS().categories as { key: string; menus?: { slug: string; menus?: unknown[] }[] }[];
-  const has = (list: { slug: string; menus?: unknown[] }[] | undefined): boolean =>
-    (list ?? []).some((m) => m.slug === menu || has(m.menus as { slug: string; menus?: unknown[] }[] | undefined));
-  return cats.find((c) => has(c.menus))?.key ?? null;
+  const has = (list: MenuNode[] | undefined): boolean => (list ?? []).some((m) => m.slug === menu || has(m.menus));
+  return loadSite(docsRoot).categories.find((c) => has(c.menus))?.key ?? null;
 }
 
 export function upload(docsRoot: string, input: UploadInput) {
@@ -218,7 +218,7 @@ export function release(docsRoot: string, menu: string, doc: string) {
   cpSync(join(docDir, js.current), join(docDir, version), { recursive: true });
 
   (meta.get("versions") as YAMLSeq).add(meta.createNode({
-    version, entry: base.entry, note: `${js.current}을(를) 정식 버전으로 확정`, source: "release",
+    version, entry: base.entry, note: `${js.current === "v0.0" ? "draft" : js.current} 버전을 정식 버전으로 확정`, source: "release",
     created: new Date().toISOString().slice(0, 10),
   }));
   meta.set("current", version);

@@ -1,0 +1,8 @@
+# 상단 메뉴(대분류). 순서대로 헤더에 나온다. key는 URL과 문서 meta.yaml의 category에 쓰이므로 바꾸지 않는다.
+categories:
+  - key: sdlc
+    name: SDLC
+  - key: agent
+    name: Agent
+  - key: image
+    name: Image
