@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.1)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.1 (2026-10-08). 자동 케이스 98개(공통 케이스를 샘플마다 돌려 실제 테스트는 134건: `npm test` 121건 + `npm run test:ui` 13건), 수동 확인 18개. 2026-10-08 기준 모두 통과(LibreOffice 해당 없음 1건 건너뜀).
+> 상태: v0.3 (2026-10-08). 자동 케이스 121개(공통 케이스를 샘플마다 돌려 실제 테스트는 169건: `npm test` 148건 + `npm run test:ui` 21건), 수동 확인 21개. 2026-10-08 기준 모두 통과(LibreOffice 해당 없음 3건 건너뜀). SVG 텍스트 편집 케이스 추가.
 
 ---
 
@@ -27,7 +27,7 @@ npm run check:textedit   # 실제 docs/의 HTML 문서 전체로 어댑터 왕�
 | `site/test/unit.test.ts` | 버전 번호·slug 규칙, 메뉴 원본 yaml 읽기·쓰기, 색인 경고 | 함수 직접 호출 |
 | `site/test/textedit.test.ts` | 2.0 텍스트 편집 어댑터(HTML·DOCX·PPTX·XLSX) | 샘플 파일(`site/scripts/fixtures/`) |
 | `site/test/api.test.ts` | 사이트 REST API 전체 | 임시 docs로 서버를 띄우고 응답과 원본 파일(meta.yaml·버전 폴더)을 함께 확인 |
-| `site/test/mcp.test.ts` | 3.1 workflow-docs MCP 도구 10개 | MCP SDK 클라이언트로 stdio 연결(Claude Code와 같은 방식) |
+| `site/test/mcp.test.ts` | 3.x workflow-docs MCP 도구 11개 | MCP SDK 클라이언트로 stdio 연결(Claude Code와 같은 방식) |
 | `site/test/ui.test.ts` | 화면 주요 흐름 | Puppeteer로 실제 브라우저 조작 |
 | `site/test/helpers.ts` | 임시 작업 폴더, 서버 띄우기, 업로드·호출 도구 | |
 
@@ -66,7 +66,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 
 ### 2.3 텍스트 편집 어댑터 (`textedit.test.ts`)
 
-공통 케이스(TC-TE-01~06)는 HTML 1개, DOCX 2개, PPTX 2개, XLSX 2개 샘플마다 각각 실행한다.
+공통 케이스(TC-TE-01~06)는 HTML 1개, DOCX 2개, PPTX 2개, XLSX 2개, SVG 2개(draw.io 내보내기·일반) 샘플마다 각각 실행한다.
 
 | ID | 확인 내용 | 근거 |
 |---|---|---|
@@ -76,6 +76,13 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-TE-04 | 원래 글자 해시가 다르거나 없는 조각이면 409 | 2.0 §3.2 |
 | TC-TE-05 | 줄바꿈이 허용되지 않은 조각에 줄바꿈을 넣으면 400 | D-22 |
 | TC-TE-06 | 고친 DOCX·PPTX·XLSX를 LibreOffice가 연다(PDF 변환 성공) | 2.0 §5 위험 |
+| TC-TE-SVG-01 | draw.io SVG는 HTML 글자(foreignObject)만 조각이 되고 예비 글자(`<text>`)와 "Text is not SVG" 안내는 제외, 묶음 이름은 칸 id | 2.0 확장(SVG) |
+| TC-TE-SVG-02 | HTML 글자를 고치면 예비 글자도 원래 줄 수(`<tspan>` 수)를 지켜 원래 줄 길이 비율대로 나눠 바뀐다 | 2.0 확장(SVG) |
+| TC-TE-SVG-03 | 특수 문자와 U+00A0을 XML 방식으로 쓴다(`&nbsp;` 없음) | 2.0 확장(SVG) |
+| TC-TE-SVG-04 | 줄이 원래보다 눈에 띄게 길어지면 경고, 비슷하면 경고 없음 | 2.0 확장(SVG) |
+| TC-TE-SVG-05 | 일반 SVG: `<text>`·`<tspan>` 글자가 조각, title·desc·style 제외, 길어지면 경고 | 2.0 확장(SVG) |
+| TC-TE-SVG-06 | 편집 사본: HTML 글자는 `<span data-seg>`, SVG 글자는 `<tspan data-seg>`, XML로 유효 | 2.0 확장(SVG) |
+| TC-TE-SVG-07 | 줄 나누기 규칙: 줄 수 고정, 폭 비율, 공백에서 끊으면 공백 버림 | 2.0 확장(SVG) |
 | TC-TE-07 | md·pdf는 어댑터가 없고, 확장자 대소문자는 무시한다 | 2.0 §1 |
 | TC-TE-HTML-01 | head·script 글자는 조각이 아니다. 태그로 나뉜 글자는 각각 조각이 되고 부모 태그가 묶음 이름이다 | 2.0 §2.1 |
 | TC-TE-HTML-02 | 앞뒤 공백(들여쓰기)은 편집 구간 밖에 남고 `&nbsp;`·`&amp;`가 지켜진다 | 2.0 §2.1 |
@@ -113,6 +120,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-TEAPI-06 | 이전 버전 기준·해시 불일치·바뀐 것 없음 409, 줄바꿈 금지 400 | 2.0 §3.2 |
 | TC-TEAPI-07 | 이전 버전 조각도 `?v=`로 읽고, 없는 버전은 404 | 2.0 §3.4 |
 | TC-TEAPI-08 | XLSX 셀 저장 | 2.6 |
+| TC-TEAPI-09 | SVG: 조각 목록 format svg, 편집 사본 `image/svg+xml`, 저장 결과에 경고 목록 | 2.0 확장(SVG) |
 | TC-REL-01 | 정식 확정: v0.x → v1.0, approved, `source: release`, 현재 폴더를 복사하고 이전 폴더는 그대로 | 1.x 정식 확정 |
 | TC-REL-02 | 이미 approved면 409 | |
 | TC-REL-03 | 정식 문서에 새 버전(v1.1)이 생겨도 상태는 approved 그대로 | D-15 |
@@ -123,6 +131,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-MNG-04 | 메뉴 삭제: 문서·하위 메뉴가 있으면 409, 비어 있으면 삭제 | D-13 |
 | TC-MNG-05 | 대분류 추가·이름 변경·순서, 메뉴가 있으면 삭제 409, 주석 유지 | D-17, D-18 |
 | TC-MNG-06 | 문서 제목·상태 변경(주석 유지), 잘못된 상태·빈 제목 400 | 2.3 |
+| TC-MNG-08 | 출처(`origin_url`) 고치기·지우기, http(s)가 아니면 400 | 3.0 7.1 |
 | TC-MNG-07 | 문서를 다른 메뉴로 옮기면 폴더가 옮겨지고, 같은 slug가 있으면 `-2` | D-13 |
 | TC-TR-01 | 휴지통: 목록에서 사라지고 `_trash/<시각>--<메뉴>--<문서>`에 남는다 | D-12 |
 | TC-TR-02 | 원래 메뉴가 없으면 409, 메뉴를 고르면 그 메뉴로 복원(category 맞춤) | D-12 |
@@ -132,6 +141,8 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-SRCH-03 | HTML의 script·style 글자는 검색되지 않고, 메뉴 이름으로도 찾는다 | D-14 |
 | TC-LIVE-01 | 변경하면 SSE로 `changed` 이벤트를 보낸다 | 2.5 |
 | TC-LIVE-02 | 사이트 밖에서 docs를 고쳐도 감시가 다시 색인한다 | 2.5 |
+| TC-LIVE-04 | 변경 알림에 대분류·메뉴·문서·제목·버전·바뀐 조각(`segs`)을 담고, `X-Workflow-Agent: claude-code` 헤더가 있으면 `by: claude-code` | 3.0 7.3 |
+| TC-LIVE-05 | `POST /api/focus`: 열린 화면에 `focus` 이벤트, 받은 화면 수 반환, 없는 문서·`..`·잘못된 seg 거부 | 3.0 7.3 |
 | TC-LIVE-03 | `/api/reindex`가 경고 목록을 돌려준다 | 3.1 |
 | TC-CONV-01 | 지원하지 않는 대상·없는 파일·docs 밖 경로·변환 대상이 아닌 형식 거부 | D-4 |
 | TC-CONV-02 | DOCX → PDF 변환, 같은 내용은 캐시에서 바로 | D-4 |
@@ -141,7 +152,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 
 | ID | 확인 내용 | 근거 |
 |---|---|---|
-| TC-MCP-01 | 도구 10개이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
+| TC-MCP-01 | 도구 11개(`focus_in_site` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
 | TC-MCP-02 | 사이트 서버가 꺼져 있으면 `npm run dev` 실행 안내 | 3.0 §4 |
 | TC-MCP-03 | `list_documents`: 트리·주소·draft 표시·대분류 필터 | 3.0 §4.2 |
 | TC-MCP-04 | `find_documents`: 본문 검색 결과와 "없음" 안내 | 3.0 §4.2 |
@@ -157,6 +168,10 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-MCP-14 | `edit_text`: `all: true`, 바뀐 것 없음, 없는 조각·빠진 값·없는 글자·빈 변경 | 3.0 §4.2 |
 | TC-MCP-15 | 이전 버전 주소로는 고칠 수 없고, 조회 결과에 이전 버전임을 표시 | 3.0 §4.2 |
 | TC-MCP-16 | `save_markdown`: 새 버전, HTML 문서는 서버가 거부 | 3.0 §4.2 |
+| TC-MCP-18 | `get_text`: seg 목록 형식(`0,2-3`)을 해석해 그 조각만 ▶로 표시 | 3.0 7.2 |
+| TC-MCP-19 | 쓰기 도구의 변경 알림에 `by: claude-code`와 바뀐 조각이 담긴다 | 3.0 7.3, D-29 |
+| TC-MCP-20 | `focus_in_site`: 열린 화면이 없으면 주소 안내, 있으면 "열린 사이트 화면 n개" + `focus` 이벤트(버전·seg 포함) | 3.0 7.3 |
+| TC-MCP-21 | SVG 문서도 `get_text`·`edit_text`로 고치고, 넘칠 수 있으면 "주의:"를 함께 알린다 | 2.0 확장(SVG) |
 | TC-MCP-17 | `release_document`: v1.0 approved, 메모 앞 "Claude Code:", 두 번째는 거부 | 3.0 §4.2 |
 
 ### 2.6 화면 (`ui.test.ts`)
@@ -175,6 +190,14 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-UI-10 | 사이드바 접기 상태를 다시 열어도 기억한다 | CLAUDE.md 사이드바 |
 | TC-UI-11 | 1280px·500px에서 사이트 화면에 가로 넘침이 없다 | HTML 작성 규칙 |
 | TC-UI-12 | 없는 문서·없는 대분류는 안내 화면 | 조회 재시도 |
+| TC-UI-14 | 아이콘에 마우스를 올리면 공통 툴팁(기본 title 아님)이 화면 안에 뜨고, 옆 아이콘으로 옮기면 바로 바뀐다. 대화상자 위에서도 보이고, 누르거나 Esc면 닫힌다. 키보드 포커스(Tab)에도 뜬다 | CLAUDE.md 아이콘 |
+| TC-UI-15 | 외부 문서(출처 있음)는 출처 막대와 함께 스크립트를 끈 채 열리고(`allow-scripts` 없음), 켜기는 버전별로 기억되며 새 버전은 다시 꺼진다. 출처 없는 문서는 막대 없음 | D-25, D-27 |
+| TC-UI-16 | HTML 참조 복사: 참조 보기는 스크립트 없음, 글자를 누르면 `…?v=&seg=<id>`, Alt+클릭은 문단 범위 `seg=1-3`을 클립보드로 | 3.0 7.2 |
+| TC-UI-17 | 주소의 `?seg=1,4`면 참조 보기로 그 조각을 강조하고, "원래 보기로"를 누르면 seg 없이 일반 보기 | D-28 |
+| TC-UI-18 | DOCX 참조 목록: `?seg=` 줄 강조, 참조 복사 모드에서 줄을 누르면 그 조각 주소 복사 | 3.0 7.2 |
+| TC-UI-19 | Claude(헤더)가 보고 있는 문서를 고치면 알림 + 바뀐 조각 강조, 다른 문서면 이동하지 않고 알림의 "열기"로 이동 | D-29 |
+| TC-UI-20 | focus 요청이 오면 열린 화면이 그 문서·버전·조각으로 이동해 강조하고 알림 | 3.0 7.3 |
+| TC-UI-21 | draw.io SVG 텍스트 편집: 그림(SVG 문서) 위에서 고치고, 짧으면 경고 없음, 상자를 넘치면 경고 막대·확인 창 ⚠·저장 후 주의 | 2.0 확장(SVG) |
 | TC-UI-13 | 같은 탭에서 전체 페이지 이동을 10번 해도 멈추지 않고, 뒤로 가기로 돌아온 페이지도 실시간 반영된다 | 2.5 (아래 5절 버그의 회귀 검사) |
 
 ---
@@ -202,13 +225,15 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-M-15 | 휴지통 영구 삭제 확인 창에서 Enter를 누른다 | 기본 포커스가 "취소"라 삭제되지 않는다(danger) | CLAUDE.md 확인 창 |
 | TC-M-16 | 개발 모드에서 화면 요소를 가리키고 ⌘C (react-grab) | 컴포넌트·소스 위치가 복사된다. `npm run build` 결과물에는 없다 | CLAUDE.md react-grab |
 | TC-M-17 | Claude Code에서 `/mcp` 확인 후 "○○ 문서의 ‘…’를 ‘…’로 바꿔 줘" | workflow-docs 도구가 호출되고 새 버전이 사이트에 바로 보인다 | 3.1 완료 기준 |
+| TC-M-19 | 사이드바 관리 모드의 아이콘, 헤더 대분류 핸들, 사이드바 너비 손잡이, 프레젠테이션 전체 화면 안에서 아이콘에 마우스를 올린다 | 툴팁이 잘리지 않고 화면 안에 뜬다(손잡이·펼치기 버튼은 오른쪽). 다크 모드에서도 읽힌다 | CLAUDE.md 아이콘 |
+| TC-M-20 | Claude Code에서 사이트 "참조 복사"로 Alt+클릭한 주소를 붙여 넣고 "이 문단을 ○○로 바꿔 줘" | 그 문단 조각만 바뀌고, 열린 화면에 알림과 강조가 나온다 | 3.0 7.4 |
+| TC-M-21 | 외부 문서에서 "스크립트 켜기" 후 접기·탭 같은 동작을 눌러 본다 | 켜기 전에는 멈춰 있고, 켜면 동작한다 | D-25 |
 | TC-M-18 | Claude Code에서 claude.ai 아티팩트 주소를 주고 "온보딩 메뉴에 등록해" | Artifact 도구로 읽어 `upload_document`로 등록, 출처가 남는다 | 3.0 §4.3 |
 
 ---
 
 ## 4. 아직 테스트가 없는 범위
 
-- 3.2 요소 참조 복사(`?seg=` 강조), 3.3 외부 HTML 스크립트 끔 보기(D-25), 3.4 `focus_in_site`는 아직 구현 전이라 케이스가 없다. 구현하면서 TC-MCP·TC-UI에 추가한다.
 - 업로드 대화상자·메뉴 관리 대화상자의 화면 조작은 API 케이스로 서버 동작만 확인한다(화면은 수동 TC-M-02·04·05).
 
 ---

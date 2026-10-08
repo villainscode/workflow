@@ -7,6 +7,7 @@ import { ConfirmProvider } from "./components/confirm/ConfirmProvider.tsx";
 import { Layout } from "./components/Layout.tsx";
 import { DocView } from "./components/DocView.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
+import { TooltipLayer } from "./components/Tooltip.tsx";
 import "./styles.css";
 
 // 개발 모드에서만: 화면 요소를 가리키고 ⌘C로 복사하면 컴포넌트·파일 위치를 코딩 에이전트에 붙여 넣을 수 있다 (react-grab.com)
@@ -35,6 +36,7 @@ createRoot(document.getElementById("root")!).render(
       <ConfirmProvider>
         <RouterProvider router={router} />
       </ConfirmProvider>
+      <TooltipLayer />
     </QueryClientProvider>
   </StrictMode>,
 );

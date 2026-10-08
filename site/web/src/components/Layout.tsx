@@ -4,6 +4,7 @@ import { Menu, PanelLeftOpen, Upload } from "lucide-react";
 import { IconButton } from "./IconButton.tsx";
 import { useTree } from "../lib/api.ts";
 import { useLiveUpdates } from "../lib/live.ts";
+import { useClaudeNotice } from "./LiveNotice.tsx";
 import { UploadProvider, useOpenUpload } from "./upload/UploadContext.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { EmptyState } from "./EmptyState.tsx";
@@ -20,7 +21,8 @@ export function Layout() {
 }
 
 function Shell() {
-  useLiveUpdates();
+  const claude = useClaudeNotice();
+  useLiveUpdates(claude.onEvent);
   const openUpload = useOpenUpload();
   const { category } = useParams();
   const { data: tree, error } = useTree();
@@ -63,7 +65,8 @@ function Shell() {
               className="hidden h-full w-full justify-center pt-3 text-muted hover:bg-sunken hover:text-fg md:flex"
               onClick={() => sidebar.setCollapsed(false)}
               aria-label="사이드바 펼치기"
-              title="사이드바 펼치기"
+              data-tip="사이드바 펼치기"
+              data-tip-side="right"
             >
               <PanelLeftOpen size={18} aria-hidden />
             </button>
@@ -82,6 +85,7 @@ function Shell() {
           )}
         </main>
       </div>
+      {claude.view}
     </div>
   );
 }

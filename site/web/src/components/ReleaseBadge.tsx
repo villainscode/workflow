@@ -17,14 +17,14 @@ function nextMajor(versions: string[]): string {
 export function ReleaseBadge({ doc }: { doc: DocDetail }) {
   const [, setParams] = useSearchParams();
   const { run, busy } = useAction();
-  if (doc.status === "approved") return <span title="정식 버전"><StatusBadge status={doc.status} /></span>;
+  if (doc.status === "approved") return <StatusBadge status={doc.status} />;
 
   const next = nextMajor(doc.versions.map((v) => v.version));
   return (
     <button
       type="button"
       className="rounded-full ring-accent transition hover:ring-2 disabled:opacity-50"
-      title={`정식 버전(${next})으로 변경`}
+      data-tip={`${doc.status} · 누르면 정식 버전(${next})으로 변경`}
       aria-label={`${doc.status} 상태. 정식 버전 ${next}으로 변경`}
       disabled={busy}
       onClick={async () => {
@@ -37,7 +37,7 @@ export function ReleaseBadge({ doc }: { doc: DocDetail }) {
         if (ok) setParams({}); // 최신(새 정식) 버전을 보도록 버전 선택을 비운다
       }}
     >
-      <StatusBadge status={doc.status} />
+      <StatusBadge status={doc.status} noTip />
     </button>
   );
 }

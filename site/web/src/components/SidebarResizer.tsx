@@ -58,7 +58,8 @@ export function SidebarResizer({ width, setWidth }: { width: number; setWidth: (
       aria-valuemin={MIN}
       aria-valuemax={MAX}
       tabIndex={0}
-      title="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+      data-tip="끌어서 너비 조절 · 더블클릭하면 기본 너비"
+      data-tip-side="right"
       className={`absolute inset-y-0 z-20 hidden w-2 -translate-x-1/2 cursor-col-resize touch-none select-none md:block
         after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:transition-colors
         hover:after:bg-accent focus-visible:outline-none focus-visible:after:bg-accent ${drag ? "after:bg-accent" : ""}`}

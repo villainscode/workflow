@@ -13,16 +13,16 @@ import { EditBar, useTextSession, type TextSession } from "./textedit/session.ts
 type Format = "docx" | "pptx" | "xlsx";
 
 /** 조각 group("document · 표 1 2행 1열 · 문단 5")을 영역(앞부분)과 문단 번호로 나눈다 */
-function splitGroup(group: string) {
+export function splitGroup(group: string) {
   const i = group.lastIndexOf(" · 문단 ");
   return i < 0 ? { area: group, para: group } : { area: group.slice(0, i), para: group };
 }
 
 /** 영역 "슬라이드 2 · 도형 1"·"document · 표 1 1행 2열"의 앞부분(제목)과 나머지(줄 앞 표시) */
-const head = (area: string) => area.split(" · ")[0];
-const tail = (area: string) => (area.includes(" · ") ? area.slice(area.indexOf(" · ") + 3) : undefined);
+export const head = (area: string) => area.split(" · ")[0];
+export const tail = (area: string) => (area.includes(" · ") ? area.slice(area.indexOf(" · ") + 3) : undefined);
 
-const AREA_NAME = (area: string) =>
+export const AREA_NAME = (area: string) =>
   area.replace(/^document/, "본문").replace(/^header(\d*)/, "머리글 $1").replace(/^footer(\d*)/, "바닥글 $1").trim();
 
 /** 한 조각: 그 자리에서 고치는 칸. 글자는 처음 한 번만 넣고 이후로는 브라우저가 관리한다(커서가 튀지 않게) */

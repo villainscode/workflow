@@ -26,8 +26,8 @@ export interface Change { id: number; hash: string; text: string }
 
 export interface Adapter {
   extract(data: Uint8Array): Segment[];
-  /** 바뀐 조각만 반영한 새 파일. 실제로 바뀐 글자가 없으면 원본을 그대로 돌려준다 */
-  apply(data: Uint8Array, changes: Change[]): { data: Uint8Array; changed: number };
+  /** 바뀐 조각만 반영한 새 파일. 실제로 바뀐 글자가 없으면 원본을 그대로 돌려준다. warnings는 저장은 하되 알릴 것(SVG 글자 넘침 등) */
+  apply(data: Uint8Array, changes: Change[]): { data: Uint8Array; changed: number; warnings?: string[] };
 }
 
 export const textHash = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);

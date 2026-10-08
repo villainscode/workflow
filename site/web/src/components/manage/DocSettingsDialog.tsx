@@ -15,6 +15,8 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
   const [title, setTitle] = useState(doc.title);
   const [status, setStatus] = useState(doc.status);
   const [menu, setMenu] = useState(doc.menuSlug);
+  const [origin, setOrigin] = useState(doc.originUrl ?? "");
+  const originChanged = origin.trim() !== (doc.originUrl ?? "");
   const { run, busy, error } = useAction();
 
   async function save(e: React.FormEvent) {
@@ -22,11 +24,14 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
     const changes = [
       ...(title !== doc.title ? [`제목: ${doc.title} → ${title.trim()}`] : []),
       ...(status !== doc.status ? [`상태: ${doc.status} → ${status}`] : []),
+      ...(originChanged ? [`출처: ${doc.originUrl || "없음"} → ${origin.trim() || "없음"}`] : []),
       ...(menu !== doc.menuSlug ? [`메뉴: ${flat.find((f) => f.menu.slug === doc.menuSlug)?.menu.name} → ${flat.find((f) => f.menu.slug === menu)?.menu.name}`] : []),
     ];
     if (changes.length === 0) return onClose();
     const ok = await run(async () => {
-      if (title !== doc.title || status !== doc.status) await manage.updateDoc(doc.menuSlug, doc.slug, { title, status });
+      if (title !== doc.title || status !== doc.status || originChanged) {
+        await manage.updateDoc(doc.menuSlug, doc.slug, { title, status, ...(originChanged ? { origin: origin.trim() } : {}) });
+      }
       return menu !== doc.menuSlug ? manage.moveDoc(doc.menuSlug, doc.slug, menu) : { menu: doc.menuSlug, doc: doc.slug, category: "" };
     }, {
       title: "문서 정보를 저장할까요?", confirmText: "저장", details: changes,
@@ -57,6 +62,9 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
             <option value="review">review · 검토 중</option>
             <option value="approved">approved · 확정</option>
           </select>
+        </label>
+        <label className={ui.label}>출처 (외부에서 가져온 문서. 있으면 HTML 스크립트를 처음에 끈 채로 보여 줍니다)
+          <input className={ui.field} value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="https://… (없으면 비움)" inputMode="url" />
         </label>
         <label className={ui.label}>메뉴 (바꾸면 문서 폴더가 그 메뉴 폴더로 옮겨집니다)
           <select className={ui.field} value={menu} onChange={(e) => setMenu(e.target.value)}>

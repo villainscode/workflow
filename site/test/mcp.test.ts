@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { parse } from "yaml";
-import { freePort, makeWorkspace, readText, SITE, startServer, TSX, upload, type TestServer } from "./helpers.ts";
+import { freePort, makeWorkspace, openEvents, readText, SITE, startServer, TSX, upload, type TestServer } from "./helpers.ts";
 
 const WEB = "http://localhost:5173";
 const ws = makeWorkspace();
@@ -51,9 +51,9 @@ before(async () => {
 after(async () => { await client?.close(); await srv?.stop(); ws.cleanup(); });
 
 describe("도구 구성", () => {
-  test("TC-MCP-01 도구 10개, 삭제·휴지통 도구는 없다(D-24)", async () => {
+  test("TC-MCP-01 도구 11개(3.4 focus_in_site 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(names, ["create_menu", "edit_text", "find_documents", "get_document", "get_text", "list_documents",
+    assert.deepEqual(names, ["create_menu", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents",
       "release_document", "save_markdown", "upload_document", "upload_version"]);
     assert.ok(!names.some((n) => /delete|trash|purge|remove/.test(n)));
   });
@@ -159,6 +159,13 @@ describe("텍스트 조회·편집", () => {
     assert.match(await ok("get_text", { ref: `${WEB}/${REF}?seg=1-2`, context: 0 }), /조각 2\/4개/);
   });
 
+  test("TC-MCP-18 get_text: seg 목록 형식(3,10-12)도 해석한다(3.2)", async () => {
+    const t = await ok("get_text", { ref: `${WEB}/${REF}?v=v0.0&seg=0,2-3`, context: 0 });
+    assert.match(t, /조각 3\/4개/);
+    assert.match(t, /▶ \[0\][\s\S]*▶ \[2\][\s\S]*▶ \[3\]/);
+    assert.doesNotMatch(t, /\[1\]/);
+  });
+
   test("TC-MCP-13 edit_text: 여러 곳이면 거부, 조각 id·찾아 바꾸기로 저장", async () => {
     await fail("edit_text", { ref: REF, changes: [{ find: "확장팩", replace: "확장 팩" }] }, /조각 2곳에 있습니다: \[2\] p, \[3\] p/);
     const t = await ok("edit_text", { ref: REF, changes: [{ segment: 1, text: "런처가 곧 런타임이다." }, { find: "개발 환경", replace: "개발 환경 안내" }], note: "문장 다듬기" });
@@ -192,12 +199,45 @@ describe("텍스트 조회·편집", () => {
   });
 });
 
+describe("SVG", () => {
+  test("TC-MCP-21 SVG 문서도 get_text·edit_text로 고치고, 넘칠 수 있으면 주의를 함께 알린다", async () => {
+    assert.match(await ok("upload_document", { menu: "tools", title: "ERD 그림", slug: "erd", files: [join(SITE, "scripts/fixtures/sample-drawio.svg")] }), /draft로 등록/);
+    assert.match(await ok("get_document", { ref: "agent/tools/erd" }), /텍스트 편집: 가능/);
+    assert.match(await ok("get_text", { ref: "agent/tools/erd", query: "tokens 모듈" }), /\[0\] s-0-0-tokens: tokens 모듈/);
+    const t = await ok("edit_text", { ref: "agent/tools/erd", changes: [{ find: "iframe 로그인의", replace: "아주 긴 설명 ".repeat(12) + "iframe 로그인의" }] });
+    assert.match(t, /v0\.1로 저장했습니다/);
+    assert.match(t, /주의: \[\d+\].*넘칠 수 있습니다/);
+  });
+});
+
+describe("실시간 표시(3.4)", () => {
+  test("TC-MCP-19 쓰기 도구의 변경 알림에는 by: claude-code와 바뀐 조각이 담긴다", async () => {
+    const sse = await openEvents(srv.url);
+    await ok("edit_text", { ref: "agent/onboarding/platform-env", changes: [{ segment: 3, text: "확장 팩 목록 (알림 시험)" }] });
+    const e = await sse.next((x) => x.reason === "text-edit");
+    assert.equal(e.by, "claude-code");
+    assert.deepEqual(e.segs, [3]);
+    assert.equal(e.title, "플랫폼팀 개발 환경");
+    sse.close();
+  });
+
+  test("TC-MCP-20 focus_in_site: 열린 화면이 있으면 옮기고, 없으면 주소를 안내한다", async () => {
+    assert.match(await ok("focus_in_site", { ref: `${WEB}/agent/onboarding/platform-env?seg=2-3` }), /열린 사이트 화면이 없습니다[\s\S]*seg=2-3/);
+    const sse = await openEvents(srv.url);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.match(await ok("focus_in_site", { ref: `${WEB}/agent/onboarding/platform-env?v=v0.1&seg=1` }), /열린 사이트 화면 1개를 옮겼습니다/);
+    const e = await sse.next((x) => x.type === "focus");
+    assert.deepEqual([e.category, e.menu, e.doc, e.version, e.seg, e.by], ["agent", "onboarding", "platform-env", "v0.1", "1", "claude-code"]);
+    sse.close();
+  });
+});
+
 describe("정식 확정", () => {
   test("TC-MCP-17 release_document: v1.0 approved, 메모에 Claude Code:, 두 번째는 거부", async () => {
-    assert.match(await ok("release_document", { ref: "agent/onboarding/platform-env" }), /v0\.2 → v1\.0\(approved\)로 확정했습니다/);
+    assert.match(await ok("release_document", { ref: "agent/onboarding/platform-env" }), /v0\.3 → v1\.0\(approved\)로 확정했습니다/);
     const m = meta("onboarding", "platform-env");
     assert.equal(m.status, "approved");
-    assert.equal(m.versions.at(-1).note, "Claude Code: 정식 버전으로 확정 (v0.2 → v1.0)");
+    assert.equal(m.versions.at(-1).note, "Claude Code: 정식 버전으로 확정 (v0.3 → v1.0)");
     await fail("release_document", { ref: "agent/onboarding/platform-env" }, /이미 정식 버전입니다/);
   });
 });

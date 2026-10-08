@@ -15,7 +15,8 @@ import { MarkdownPreview } from "./MarkdownPreview.tsx";
 
 type Mode = "edit" | "split" | "preview";
 
-export interface DocContext { menu: string; doc: string; version: string; isCurrent: boolean }
+/** scripts: HTML 문서의 스크립트 실행 여부. 외부에서 가져온 문서는 처음에 끈다(3.3, D-25) */
+export interface DocContext { menu: string; doc: string; version: string; isCurrent: boolean; scripts?: boolean }
 
 // 저장하면 최신 버전이 바뀌어 편집기가 새로 그려진다. 저장 결과 안내를 새 편집기에서 이어 보여주기 위해 잠시 기억한다.
 let lastSaved: { id: string; at: number } | null = null;

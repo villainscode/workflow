@@ -5,6 +5,7 @@ import { unzipSync } from "fflate";
 import { loadSite, type MenuNode } from "./sitefiles.ts";
 import { adapterFor, EditError, type Change } from "./textedit/index.ts";
 import { wrapForEdit } from "./textedit/html.ts";
+import { wrapSvgForEdit } from "./textedit/svg.ts";
 import { Document, parseDocument, YAMLSeq } from "yaml";
 
 /** docs/에 파일과 yaml을 쓰는 작업. 원본(파일)을 먼저 쓰고, 색인은 호출한 쪽에서 다시 만든다. */
@@ -246,19 +247,21 @@ function versionEntry(docsRoot: string, menu: string, doc: string, version?: str
   return { docDir, current: meta.current, version: v, entry: found.entry, path: join(docDir, v, found.entry) };
 }
 
-/** HTML 편집 화면용 사본(조각마다 data-seg로 감싼 HTML) */
-export function htmlEditView(docsRoot: string, menu: string, doc: string, version?: string) {
+/** HTML·SVG 편집 화면용 사본(조각마다 data-seg로 감싼 문서). SVG는 XML 그대로 돌려준다 */
+export function htmlEditView(docsRoot: string, menu: string, doc: string, version?: string): { type: "html" | "svg"; body: string } {
   const v = versionEntry(docsRoot, menu, doc, version);
-  if (adapterFor(v.entry)?.format !== "html") throw new StoreError(400, "HTML 문서만 그 자리 편집을 지원합니다");
+  const format = adapterFor(v.entry)?.format;
+  if (format === "svg") return { type: "svg", body: wrapSvgForEdit(readFileSync(v.path)) };
+  if (format !== "html") throw new StoreError(400, "HTML·SVG 문서만 그 자리 편집을 지원합니다");
   const dir = v.entry.includes("/") ? v.entry.slice(0, v.entry.lastIndexOf("/") + 1) : "";
-  return wrapForEdit(readFileSync(v.path), `/files/${menu}/${doc}/${v.version}/${dir}`);
+  return { type: "html", body: wrapForEdit(readFileSync(v.path), `/files/${menu}/${doc}/${v.version}/${dir}`) };
 }
 
 /** 대표 파일의 텍스트 조각 목록. 지원하지 않는 형식이면 400 */
 export function readSegments(docsRoot: string, menu: string, doc: string, version?: string) {
   const v = versionEntry(docsRoot, menu, doc, version);
   const a = adapterFor(v.entry);
-  if (!a) throw new StoreError(400, `${extname(v.entry)} 파일은 텍스트 편집을 지원하지 않습니다 (HTML·DOCX·PPTX)`);
+  if (!a) throw new StoreError(400, `${extname(v.entry)} 파일은 텍스트 편집을 지원하지 않습니다 (HTML·SVG·DOCX·PPTX·XLSX)`);
   return { format: a.format, version: v.version, entry: v.entry, segments: a.adapter.extract(readFileSync(v.path)) };
 }
 
@@ -287,7 +290,7 @@ export function saveTextEdit(docsRoot: string, menu: string, doc: string,
   }
   const a = adapterFor(v.entry);
   if (!a) throw new StoreError(400, `${extname(v.entry)} 파일은 텍스트 편집을 지원하지 않습니다`);
-  let result: { data: Uint8Array; changed: number };
+  let result: { data: Uint8Array; changed: number; warnings?: string[] };
   try {
     result = a.adapter.apply(readFileSync(v.path), input.changes ?? []);
   } catch (e) {
@@ -300,5 +303,5 @@ export function saveTextEdit(docsRoot: string, menu: string, doc: string,
   const files: IncomingFile[] = listFiles(baseDir).map((p) => ({
     path: p, data: p === v.entry ? result.data : readFileSync(join(baseDir, p)),
   }));
-  return { ...upload(docsRoot, { menu, doc, entry: v.entry, note: input.note, source: "text-edit", files }), changed: result.changed };
+  return { ...upload(docsRoot, { menu, doc, entry: v.entry, note: input.note, source: "text-edit", files }), changed: result.changed, warnings: result.warnings ?? [] };
 }

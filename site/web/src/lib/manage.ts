@@ -24,7 +24,7 @@ export const manage = {
   updateCategory: (key: string, change: { name?: string; index?: number }) => call("PATCH", `/api/categories/${key}`, change),
   deleteCategory: (key: string) => call("DELETE", `/api/categories/${key}`),
 
-  updateDoc: (menu: string, doc: string, change: { title?: string; status?: string }) =>
+  updateDoc: (menu: string, doc: string, change: { title?: string; status?: string; origin?: string }) =>
     call("PATCH", `/api/docs/${menu}/${doc}`, change),
   moveDoc: (menu: string, doc: string, to: string) =>
     call<{ menu: string; doc: string; category: string }>("POST", `/api/docs/${menu}/${doc}/move`, { menu: to }),

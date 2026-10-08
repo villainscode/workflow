@@ -35,9 +35,11 @@ export interface TextSession {
   cancel: () => Promise<void>;
 }
 
-export function useTextSession({ menu, doc, version, onExit, write }: {
+export function useTextSession({ menu, doc, version, onExit, write, warnings = [] }: {
   menu: string; doc: string; version: string;
-  onExit: (savedVersion?: string) => void;
+  onExit: (savedVersion?: string, warnings?: string[]) => void;
+  /** 저장 확인 창에 함께 보여 줄 경고(SVG 글자가 상자를 넘침 등) */
+  warnings?: string[];
   /** 화면의 조각 글자를 바꾼다(바뀜 표시 포함) */
   write: (id: number, text: string, changed: boolean) => void;
 }): TextSession {
@@ -87,11 +89,14 @@ export function useTextSession({ menu, doc, version, onExit, write }: {
   async function save() {
     const ok = await confirm({
       title: `변경 ${changes.size}건을 저장할까요?`, confirmText: "저장",
-      message: "기존 버전은 그대로 두고 새 버전으로 저장합니다. 태그·서식은 바뀌지 않습니다.",
+      tone: warnings.length ? "warning" : "default",
+      message: warnings.length ? `기존 버전은 그대로 두고 새 버전으로 저장합니다. 글자가 상자를 넘치는 곳이 ${warnings.length}곳 있습니다.`
+        : "기존 버전은 그대로 두고 새 버전으로 저장합니다. 태그·서식은 바뀌지 않습니다.",
       details: [
         ...changeList.slice(0, 6).map(({ seg, text }) => `「${short(seg.text)}」 → 「${short(text)}」`),
         ...(changeList.length > 6 ? [`외 ${changeList.length - 6}건`] : []),
         ...(note.trim() ? [`메모: ${note.trim()}`] : []),
+        ...warnings.map((w) => `⚠ ${w}`),
       ],
     });
     if (!ok) return;
@@ -105,7 +110,7 @@ export function useTextSession({ menu, doc, version, onExit, write }: {
       clearTextDraft(draftId);
       await qc.invalidateQueries({ queryKey: ["doc", menu, doc] });
       void qc.invalidateQueries({ queryKey: ["tree"] });
-      onExit(r.version);
+      onExit(r.version, r.warnings);
     } catch (e) {
       setMessage((e as Error).message);
     } finally {

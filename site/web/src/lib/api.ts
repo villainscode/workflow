@@ -11,7 +11,7 @@ export interface VersionFile { id: number; path: string; mime: string; size: num
 export interface DocVersion { id: number; version: string; note: string | null; source: string | null; createdAt: string | null; files: VersionFile[] }
 export interface DocDetail {
   id: number; menuSlug: string; slug: string; title: string; kind: string; type: string | null; sdlc: string | null;
-  status: string; currentVersion: string; notionUrl: string | null; gdriveUrl: string | null; versions: DocVersion[];
+  status: string; currentVersion: string; notionUrl: string | null; gdriveUrl: string | null; originUrl: string | null; versions: DocVersion[];
 }
 
 export class HttpError extends Error {

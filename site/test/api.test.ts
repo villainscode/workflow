@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { zipSync, strToU8 } from "fflate";
 import { parse } from "yaml";
-import { addFixtureDoc, call, makeWorkspace, readText, startServer, upload, waitFor, type TestServer } from "./helpers.ts";
+import { addFixtureDoc, call, makeWorkspace, openEvents, readText, startServer, upload, waitFor, type TestServer } from "./helpers.ts";
 
 const ws = makeWorkspace();
 addFixtureDoc(ws.docs, "process", "sheet", "sample.xlsx", "xlsx");
@@ -238,6 +238,27 @@ describe("텍스트 편집 API(2.0)", () => {
   });
 });
 
+describe("SVG 텍스트 편집", () => {
+  test("TC-TEAPI-09 SVG: 조각 목록(format svg), 편집 사본은 image/svg+xml, 저장 결과에 경고 목록", async () => {
+    const svg = readFileSync(join(import.meta.dirname, "../scripts/fixtures/sample-plain.svg"));
+    const up = await upload(U, { menu: "notes", title: "SVG 그림", slug: "pic" }, [["pic.svg", svg]]);
+    assert.equal(up.status, 200);
+    assert.equal(meta("notes", "pic").kind, "image");
+    const seg = await call(U, "GET", "/api/docs/notes/pic/segments");
+    assert.equal(seg.body.format, "svg");
+    assert.deepEqual(seg.body.segments.map((s: any) => s.text), ["빌드 & 배포", "첫 줄", "둘째 줄 R&D", "게이트 판정"]);
+    const view = await fetch(`${U}/api/docs/notes/pic/edit-view`);
+    assert.match(view.headers.get("content-type")!, /^image\/svg\+xml/);
+    assert.match(await view.text(), /<tspan data-seg="0">빌드 &amp; 배포<\/tspan>/);
+    const s3 = seg.body.segments[3];
+    const r = await call(U, "POST", "/api/docs/notes/pic/text-edit", { baseVersion: "v0.0", changes: [{ id: s3.id, hash: s3.hash, text: "게이트 판정 결과가 아주 길어진 글자" }] });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.version, "v0.1");
+    assert.equal(r.body.warnings.length, 1);
+    assert.match(readText(join(ws.docs, "notes/pic/v0.1/pic.svg")), />게이트 판정 결과가 아주 길어진 글자<\/text>/);
+  });
+});
+
 describe("정식 버전 확정", () => {
   test("TC-REL-01 draft → v1.0 approved: 현재 폴더를 복사하고 이전 폴더는 그대로", async () => {
     const r = await call(U, "POST", "/api/docs/process/guide/release", { note: "확정 메모" });
@@ -325,6 +346,16 @@ describe("관리: 메뉴·대분류·문서", () => {
     assert.match(readText(join(ws.docs, "notes/minutes/meta.yaml")), /^# 문서 주석\n/, "주석 유지");
     assert.equal((await call(U, "PATCH", "/api/docs/notes/minutes", { status: "done" })).status, 400);
     assert.equal((await call(U, "PATCH", "/api/docs/notes/minutes", { title: " " })).status, 400);
+  });
+
+  test("TC-MNG-08 출처(origin_url) 고치기·지우기, http(s)가 아니면 400", async () => {
+    assert.equal((await call(U, "PATCH", "/api/docs/process/word", { origin: "https://claude.ai/artifact/xyz" })).status, 200);
+    assert.equal(meta("process", "word").origin_url, "https://claude.ai/artifact/xyz");
+    assert.equal((await doc("process", "word")).originUrl, "https://claude.ai/artifact/xyz");
+    assert.equal((await call(U, "PATCH", "/api/docs/process/word", { origin: "javascript:alert(1)" })).status, 400);
+    assert.equal((await call(U, "PATCH", "/api/docs/process/word", { origin: "" })).status, 200);
+    assert.equal(meta("process", "word").origin_url, undefined);
+    assert.equal((await doc("process", "word")).originUrl, null);
   });
 
   test("TC-MNG-07 문서를 다른 메뉴로 옮기면 폴더가 옮겨지고, 같은 slug가 있으면 -2", async () => {
@@ -416,6 +447,37 @@ describe("실시간 반영", () => {
     const text = await Promise.race([got, new Promise<string>((_, no) => setTimeout(() => no(new Error("SSE 시간 초과")), 5000))]);
     ctrl.abort();
     assert.match(text, /data: \{"type":"changed","reason":"manual"\}/);
+  });
+
+  test("TC-LIVE-04 변경 알림에 문서·버전·바뀐 조각을 담고, X-Workflow-Agent 헤더가 있으면 by: claude-code(3.4)", async () => {
+    const sse = await openEvents(U);
+    const segs = (await call(U, "GET", "/api/docs/process/word/segments")).body.segments;
+    const res = await fetch(`${U}/api/docs/process/word/text-edit`, {
+      method: "POST", headers: { "content-type": "application/json", "x-workflow-agent": "claude-code" },
+      body: JSON.stringify({ baseVersion: (await doc("process", "word")).currentVersion, changes: [{ id: segs[1].id, hash: segs[1].hash, text: "Claude 수정" }] }),
+    });
+    assert.equal(res.status, 200);
+    const e = await sse.next((x) => x.reason === "text-edit");
+    assert.deepEqual({ ...e, version: undefined }, { type: "changed", reason: "text-edit", by: "claude-code", category: "sdlc", menu: "process", doc: "word", title: "word 샘플", version: undefined, segs: [segs[1].id] });
+    assert.match(e.version, /^v0\.\d+$/);
+    await upload(U, { menu: "notes", title: "사람이 올림", slug: "by-human" }, [["h.html", "<p>h</p>"]]);
+    const e2 = await sse.next((x) => x.doc === "by-human");
+    assert.equal(e2.by, undefined, "헤더가 없으면 by 없음");
+    assert.equal(e2.version, "v0.0");
+    sse.close();
+  });
+
+  test("TC-LIVE-05 /api/focus: 열린 화면에 focus 이벤트를 보내고 받은 화면 수를 돌려준다, 잘못된 값은 거부(3.4)", async () => {
+    const sse = await openEvents(U);
+    const r = await call(U, "POST", "/api/focus", { menu: "process", doc: "guide", version: "v0.0", seg: "1,3-4" });
+    assert.equal(r.status, 200);
+    assert.ok(r.body.clients >= 1);
+    const e = await sse.next((x) => x.type === "focus");
+    assert.equal(e.category, "sdlc"); assert.equal(e.doc, "guide"); assert.equal(e.version, "v0.0"); assert.equal(e.seg, "1,3-4");
+    assert.equal((await call(U, "POST", "/api/focus", { menu: "process", doc: "none" })).status, 404);
+    assert.equal((await call(U, "POST", "/api/focus", { menu: "..", doc: "process" })).status, 404);
+    assert.equal((await call(U, "POST", "/api/focus", { menu: "process", doc: "guide", seg: "x" })).status, 400);
+    sse.close();
   });
 
   test("TC-LIVE-02 사이트 밖에서 docs/를 고쳐도 감시가 다시 색인한다", async () => {

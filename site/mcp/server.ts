@@ -7,7 +7,7 @@ import { z } from "zod";
 /**
  * workflow-docs MCP 서버(3.0, REQUIREMENT-3.0 3.1). Claude Code가 업무 문서 사이트를 직접 다루게 한다.
  * 사이트 서버(`cd site && npm run dev`)의 REST API를 부르므로 저장 규칙·충돌 검사·실시간 반영이 화면 편집과 같다.
- * 휴지통·영구 삭제·메뉴 삭제 도구는 두지 않는다(D-24). 쓰기 도구는 변경 메모 앞에 "Claude Code:"를 붙인다(D-26).
+ * 휴지통·영구 삭제·메뉴 삭제 도구는 두지 않는다(D-24). 모든 요청에 X-Workflow-Agent: claude-code를 붙여 화면이 Claude의 변경을 알린다(3.4). 쓰기 도구는 변경 메모 앞에 "Claude Code:"를 붙인다(D-26).
  * stdout은 MCP 통신에 쓰이므로 로그는 stderr로만 남긴다.
  */
 
@@ -34,7 +34,8 @@ class ToolError extends Error {}
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(API + path, init);
+    // 사이트가 Claude Code의 변경을 알아보고 열린 화면에 알리도록 표시한다(3.4)
+    res = await fetch(API + path, { ...init, headers: { ...(init?.headers as Record<string, string> | undefined), "x-workflow-agent": "claude-code" } });
   } catch {
     throw new ToolError(`사이트 서버(${API})에 연결할 수 없습니다. 리포에서 \`cd site && npm run dev\`로 먼저 실행하세요.`);
   }
@@ -94,7 +95,7 @@ async function resolveRef(ref: string): Promise<Ref> {
     const u = new URL(s);
     const [category, menu, doc] = u.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     if (!doc) throw new ToolError(`문서 주소가 아닙니다: ${s} (예: ${WEB}/sdlc/메뉴/문서)`);
-    return { category, menu, doc, version: u.searchParams.get("v") ?? undefined, seg: u.searchParams.get("seg") ?? u.hash.match(/seg=([\d-]+)/)?.[1] };
+    return { category, menu, doc, version: u.searchParams.get("v") ?? undefined, seg: u.searchParams.get("seg") ?? u.hash.match(/seg=([\d,-]+)/)?.[1] };
   }
   if (/^[a-z0-9-]+(\/[a-z0-9-]+){1,2}$/.test(s)) {
     const parts = s.split("/");
@@ -115,10 +116,17 @@ const loadDoc = (r: Ref) => api<DocDetail>(`/api/docs/${r.menu}/${r.doc}`);
 const loadSegments = (r: Ref, version: string) =>
   api<{ format: string; version: string; entry: string; segments: Segment[] }>(`/api/docs/${r.menu}/${r.doc}/segments?v=${encodeURIComponent(version)}`);
 
-function segRange(seg?: string): [number, number] | null {
+/** 조각 지정 `12`, `12-15`, 목록 `3,10-12`를 id 집합으로(사이트 web/src/lib/seg.ts의 parseSeg와 같은 규칙) */
+function parseSeg(seg?: string): Set<number> | null {
   if (!seg) return null;
-  const m = /^(\d+)(?:-(\d+))?$/.exec(seg);
-  return m ? [Number(m[1]), Number(m[2] ?? m[1])] : null;
+  const out = new Set<number>();
+  for (const part of seg.split(",")) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim());
+    if (!m) continue;
+    const a = Number(m[1]), b = Number(m[2] ?? m[1]);
+    for (let i = Math.min(a, b); i <= Math.max(a, b) && i - Math.min(a, b) < 5000; i++) out.add(i);
+  }
+  return out.size ? out : null;
 }
 
 /** 파일·폴더 경로를 업로드 목록으로 펼친다. 폴더는 폴더 이름부터의 상대 경로를 유지한다. filename은 파일 1개일 때 저장 이름 */
@@ -211,7 +219,7 @@ server.registerTool("get_document", {
     `대분류/메뉴/문서: ${r.category}/${r.menu}/${r.doc}`,
     `형식: ${d.kind} · 상태: ${d.status} · 현재 버전: ${versionLabel(d.currentVersion)} · 대표 파일: ${cur?.files.find((f) => f.isEntry)?.path ?? "-"}`,
     d.originUrl ? `출처: ${d.originUrl}` : "",
-    `텍스트 편집: ${/(html?|docx|pptx|xlsx)$/i.test(cur?.files.find((f) => f.isEntry)?.path ?? "") ? "가능(get_text → edit_text)" : d.kind === "markdown" ? "Markdown 전체 저장(save_markdown)" : "지원 안 함"}`,
+    `텍스트 편집: ${/(html?|svg|docx|pptx|xlsx)$/i.test(cur?.files.find((f) => f.isEntry)?.path ?? "") ? "가능(get_text → edit_text)" : d.kind === "markdown" ? "Markdown 전체 저장(save_markdown)" : "지원 안 함"}`,
     "버전:",
     ...d.versions.map((v) => `- ${versionLabel(v.version)}${v.version === d.currentVersion ? " (최신)" : ""} · ${v.source ?? ""} · ${v.createdAt ?? ""}${v.note ? ` · ${v.note}` : ""}`),
   ].filter(Boolean).join("\n");
@@ -219,7 +227,7 @@ server.registerTool("get_document", {
 
 server.registerTool("get_text", {
   title: "텍스트 조각 조회",
-  description: "HTML·DOCX·PPTX·XLSX 문서의 텍스트 조각(태그 안 글자)을 [id] 위치: 글자 형식으로 보여 준다. edit_text에 이 id를 쓴다. 주소에 seg가 있으면 그 범위 주변만, query가 있으면 그 글자가 든 조각만 보여 준다.",
+  description: "HTML·SVG·DOCX·PPTX·XLSX 문서의 텍스트 조각(태그 안 글자)을 [id] 위치: 글자 형식으로 보여 준다. edit_text에 이 id를 쓴다. 주소에 seg가 있으면 그 범위 주변만, query가 있으면 그 글자가 든 조각만 보여 준다.",
   inputSchema: {
     ref: REF,
     query: z.string().optional().describe("이 글자가 든 조각만"),
@@ -233,19 +241,23 @@ server.registerTool("get_text", {
   const version = r.version ?? d.currentVersion;
   const { segments, format, entry } = await loadSegments(r, version);
   let list = segments;
-  const range = segRange(r.seg);
-  if (range) { const c = context ?? 3; list = list.filter((s) => s.id >= range[0] - c && s.id <= range[1] + c); }
+  const picked = parseSeg(r.seg);
+  if (picked) {
+    const c = context ?? 3;
+    const ids = [...picked];
+    list = list.filter((s) => ids.some((id) => Math.abs(s.id - id) <= c));
+  }
   if (query) list = list.filter((s) => s.text.includes(query));
   const max = limit ?? 300;
   const head = `${d.title} · ${format} · ${entry} · ${versionLabel(version)}${version === d.currentVersion ? " (최신, 편집 가능)" : " (이전 버전: 편집은 최신 버전에서만)"} · 조각 ${list.length}/${segments.length}개`;
-  const mark = (s: Segment) => (range && s.id >= range[0] && s.id <= range[1] ? "▶ " : "");
+  const mark = (s: Segment) => (picked?.has(s.id) ? "▶ " : "");
   const body = list.slice(0, max).map((s) => `${mark(s)}[${s.id}] ${s.group}${s.svg ? " (다이어그램)" : ""}${s.fmt ? ` (${s.fmt})` : ""}${s.multiline ? " (줄바꿈 가능)" : ""}: ${s.text}`);
   return [head, ...body, list.length > max ? `… ${list.length - max}개 더 있음(limit·query로 좁히세요)` : ""].filter(Boolean).join("\n");
 }));
 
 server.registerTool("edit_text", {
   title: "텍스트 고치기",
-  description: "HTML·DOCX·PPTX·XLSX 문서의 태그 안 글자만 고쳐 새 버전으로 저장한다(구조·서식은 그대로). 각 변경은 {segment, text}(조각 글자 전체를 바꿈) 또는 {find, replace}(그 글자가 든 조각에서 부분 교체) 중 하나. 최신 버전에서만 고칠 수 있다.",
+  description: "HTML·SVG·DOCX·PPTX·XLSX 문서의 태그 안 글자만 고쳐 새 버전으로 저장한다(구조·서식은 그대로). 각 변경은 {segment, text}(조각 글자 전체를 바꿈) 또는 {find, replace}(그 글자가 든 조각에서 부분 교체) 중 하나. 최신 버전에서만 고칠 수 있다.",
   inputSchema: {
     ref: REF,
     changes: z.array(z.object({
@@ -281,10 +293,11 @@ server.registerTool("edit_text", {
   }
   const payload = [...next].filter(([id, t]) => byId.get(id)!.text !== t).map(([id, t]) => ({ id, hash: byId.get(id)!.hash, text: t }));
   if (!payload.length) return "바뀐 글자가 없습니다(원래 글자와 같음).";
-  const res = await api<{ version: string; changed: number }>(`/api/docs/${r.menu}/${r.doc}/text-edit`,
+  const res = await api<{ version: string; changed: number; warnings?: string[] }>(`/api/docs/${r.menu}/${r.doc}/text-edit`,
     json({ baseVersion: d.currentVersion, changes: payload, note: withPrefix(note, `텍스트 ${payload.length}곳 수정`) }));
   return [`${d.title}: ${payload.length}곳을 고쳐 ${versionLabel(res.version)}로 저장했습니다.`, docUrl(r.category, r.menu, r.doc),
-    ...payload.map((p) => `- [${p.id}] ${byId.get(p.id)!.group}: 「${byId.get(p.id)!.text}」 → 「${p.text}」`)].join("\n");
+    ...payload.map((p) => `- [${p.id}] ${byId.get(p.id)!.group}: 「${byId.get(p.id)!.text}」 → 「${p.text}」`),
+    ...(res.warnings ?? []).map((w) => `주의: ${w}`)].join("\n");
 }));
 
 server.registerTool("save_markdown", {
@@ -369,6 +382,20 @@ server.registerTool("release_document", {
   const res = await api<{ from: string; version: string }>(`/api/docs/${r.menu}/${r.doc}/release`,
     json({ note: withPrefix(undefined, `정식 버전으로 확정 (${versionLabel(d.currentVersion)} → ${next})`) }));
   return `${versionLabel(res.from)} → ${res.version}(approved)로 확정했습니다.\n${docUrl(r.category, r.menu, r.doc)}`;
+}));
+
+server.registerTool("focus_in_site", {
+  title: "사이트 화면 이동",
+  description: "열려 있는 사이트 화면을 그 문서(주소의 버전·seg 조각 포함)로 옮기고 조각을 강조한다. 고친 곳을 사용자에게 보여 줄 때 쓴다.",
+  inputSchema: { ref: REF },
+  annotations: { readOnlyHint: true },
+}, safe(async ({ ref }) => {
+  const r = await resolveRef(ref);
+  const res = await api<{ clients: number }>("/api/focus", json({ menu: r.menu, doc: r.doc, version: r.version, seg: r.seg }));
+  const url = docUrl(r.category, r.menu, r.doc, r.version, r.seg);
+  return res.clients > 0
+    ? `열린 사이트 화면 ${res.clients}개를 옮겼습니다.\n${url}`
+    : `열린 사이트 화면이 없습니다. 브라우저에서 이 주소를 여세요:\n${url}`;
 }));
 
 await server.connect(new StdioServerTransport());

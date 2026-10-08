@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+  <title>일반 SVG 샘플</title>
+  <desc>보이지 않는 설명</desc>
+  <style>.t { font: 14px sans-serif; }</style>
+  <rect x="10" y="10" width="180" height="60" fill="#eef" stroke="#336"/>
+  <text class="t" x="20" y="35">빌드 &amp; 배포</text>
+  <text class="t" x="20" y="55"><tspan x="20">첫 줄</tspan><tspan x="20" dy="16">둘째 줄 R&amp;D</tspan></text>
+  <text class="t" x="220" y="40">게이트 판정</text>
+</svg>

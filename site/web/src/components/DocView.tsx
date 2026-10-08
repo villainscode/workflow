@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FilePlus2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { Download, ExternalLink, FilePlus2, Link2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -11,17 +11,21 @@ import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { useConfirm } from "./confirm/ConfirmProvider.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { ReleaseBadge } from "./ReleaseBadge.tsx";
+import { OriginBar, useScripts } from "./OriginBar.tsx";
 import { Viewer } from "../viewers/Viewer.tsx";
 import { DiffViewer } from "../viewers/DiffViewer.tsx";
 import { SegmentDiffViewer } from "../viewers/SegmentDiffViewer.tsx";
+import { HtmlRefView } from "../viewers/HtmlRefView.tsx";
+import { SegmentRefList } from "../viewers/SegmentRefList.tsx";
+import { parseSeg } from "../lib/seg.ts";
 
 // 줄 단위 비교가 의미 있는 텍스트 형식
-const TEXT = /\.(md|markdown|html?|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
+const TEXT = /\.(md|markdown|html?|svg|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
 // zip 형식이라 줄 대신 텍스트 조각 목록으로 비교하는 형식(2.0)
 const SEGMENT_DIFF = /\.(docx|pptx|xlsx)$/i;
 
 export function DocView() {
-  const { menu = "", doc = "" } = useParams();
+  const { category = "", menu = "", doc = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const { data, error, isLoading } = useDoc(menu, doc);
   const openUpload = useOpenUpload();
@@ -33,7 +37,9 @@ export function DocView() {
   // 텍스트 편집(2.0): 최신 버전의 HTML을 그 자리에서 고친다. 저장하면 새 버전 안내를 잠깐 보여 준다
   const [textEditing, setTextEditing] = useState(false);
   const [savedNotice, setSavedNotice] = useState("");
-  useEffect(() => { setTextEditing(false); }, [menu, doc]);
+  // 참조 복사 모드(3.2): 글자를 눌러 참조 주소를 복사한다
+  const [refCopy, setRefCopy] = useState(false);
+  useEffect(() => { setTextEditing(false); setRefCopy(false); }, [menu, doc]);
   useEffect(() => {
     if (!savedNotice) return;
     const t = setTimeout(() => setSavedNotice(""), 5000);
@@ -44,6 +50,9 @@ export function DocView() {
     document.addEventListener("fullscreenchange", sync);
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
+
+  // 외부 문서(출처 있음)의 HTML 스크립트 켜기 상태(3.3). 훅이라 아래 조기 반환보다 먼저 부른다
+  const [scripts, setScripts] = useScripts(menu, doc, params.get("v") ?? data?.currentVersion ?? "", !!data?.originUrl);
 
   if (isLoading) return <EmptyState title="불러오는 중…" />;
   if (error || !data) return <EmptyState title="문서를 열 수 없습니다" body={String(error ?? "")} />;
@@ -56,9 +65,16 @@ export function DocView() {
   const cmpVersion = data.versions.find((v) => v.version === cmpKey && v.version !== version.version);
   const cmpEntry = cmpVersion?.files.find((f) => f.isEntry);
   const comparable = !!entry && (TEXT.test(entry.path) || SEGMENT_DIFF.test(entry.path)) && data.versions.length > 1;
-  const onTextEditExit = (saved?: string) => {
+  // 참조 보기(3.2): 주소의 ?seg= 조각을 강조하거나 참조 복사 모드일 때. HTML·DOCX·PPTX·XLSX만
+  const referable = !!entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path);
+  const highlight = referable ? parseSeg(params.get("seg")) : [];
+  const exitRef = () => { setRefCopy(false); setParam("seg", null); };
+  const onTextEditExit = (saved?: string, warnings?: string[]) => {
     setTextEditing(false);
-    if (saved) { setParam("v", null); setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다`); }
+    if (saved) {
+      setParam("v", null);
+      setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다${warnings?.length ? ` · 주의: ${warnings.join(" · ")}` : ""}`);
+    }
   };
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
@@ -67,7 +83,7 @@ export function DocView() {
   };
 
   return (
-    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
+    <div className="grid h-full grid-rows-[auto_auto_minmax(0,1fr)]">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
         <h1 className="min-w-0 flex-1 truncate text-base font-bold" title={data.title}>{data.title}</h1>
         <select
@@ -112,20 +128,24 @@ export function DocView() {
             }} />
           )}
           <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />
-          {entry && /\.(html?|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+          {entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing}
-              onClick={() => setTextEditing(true)} />
+              onClick={() => { setRefCopy(false); setParam("seg", null); setTextEditing(true); }} />
+          )}
+          {referable && !cmpVersion && !textEditing && (
+            <IconButton icon={Link2} label="참조 복사 (글자를 눌러 Claude Code에 붙여 넣을 주소 복사)" active={refCopy}
+              onClick={() => setRefCopy((v) => !v)} />
           )}
           <IconButton icon={Presentation} label="프레젠테이션 (전체 화면)" disabled={!entry}
             onClick={() => void stage.current?.requestFullscreen()} />
           <IconButton icon={Settings2} label="문서 관리" onClick={() => setSettingsOpen(true)} />
           {data.notionUrl && (
-            <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.notionUrl} target="_blank" rel="noreferrer" title="Notion에서 열기">
+            <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.notionUrl} target="_blank" rel="noreferrer" data-tip="Notion에서 열기">
               Notion <ExternalLink size={16} aria-hidden />
             </a>
           )}
           {data.gdriveUrl && (
-            <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.gdriveUrl} target="_blank" rel="noreferrer" title="Google Drive에서 열기">
+            <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.gdriveUrl} target="_blank" rel="noreferrer" data-tip="Google Drive에서 열기">
               Drive <ExternalLink size={16} aria-hidden />
             </a>
           )}
@@ -139,11 +159,16 @@ export function DocView() {
           </details>
         )}
       </div>
+      <div>
+        {data.originUrl && (
+          <OriginBar origin={data.originUrl} html={!!entry && /\.html?$/i.test(entry.path)} scripts={scripts} setScripts={setScripts} />
+        )}
+      </div>
       <div ref={stage} className="relative min-h-0 min-w-0 bg-bg">
         {presenting && entry ? (
           <>
             <PresentationContent key={fileSrc(entry)} file={entry}
-              ctx={{ menu, doc, version: version.version, isCurrent: version.version === data.currentVersion }} />
+              ctx={{ menu, doc, version: version.version, isCurrent: version.version === data.currentVersion, scripts }} />
             <IconButton icon={Minimize} label="프레젠테이션 끝내기 (Esc)" variant="outline"
               className="absolute top-3 right-3 z-10 bg-surface/90 shadow" onClick={() => void document.exitFullscreen()} />
           </>
@@ -156,6 +181,12 @@ export function DocView() {
           ) : (
             <HtmlTextEditor menu={menu} doc={doc} version={version.version} onExit={onTextEditExit} />
           )
+        ) : (refCopy || highlight.length > 0) && referable && !cmpVersion ? (
+          /\.(html?|svg)$/i.test(entry.path) ? (
+            <HtmlRefView category={category} menu={menu} doc={doc} version={version.version} highlight={highlight} copy={refCopy} onExit={exitRef} />
+          ) : (
+            <SegmentRefList category={category} menu={menu} doc={doc} version={version.version} highlight={highlight} copy={refCopy} onExit={exitRef} />
+          )
         ) : cmpVersion && cmpEntry && comparable ? (
           SEGMENT_DIFF.test(entry.path) ? (
             <SegmentDiffViewer menu={menu} doc={doc} fromVersion={cmpVersion.version} toVersion={version.version} />
@@ -166,7 +197,7 @@ export function DocView() {
           <Viewer
             key={fileSrc(entry)}
             file={entry}
-            ctx={{ menu, doc, version: version.version, isCurrent: version.version === data.currentVersion }}
+            ctx={{ menu, doc, version: version.version, isCurrent: version.version === data.currentVersion, scripts }}
           />
         )}
       </div>

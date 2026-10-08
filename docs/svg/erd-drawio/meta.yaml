@@ -1,0 +1,14 @@
+title: ERD
+category: image
+menu: svg
+kind: image
+status: draft
+current: v0.0
+versions:
+  - version: v0.0
+    entry: erd.drawio.svg
+    note:
+    source: upload
+    created: 2026-10-08
+notion_url:
+gdrive_url:

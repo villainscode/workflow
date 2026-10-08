@@ -66,7 +66,7 @@ function TabMenu({ cat, index, count, anchor, onClose, onRename }: {
       <button className={item} disabled={busy || index === 0} onClick={() => move(index - 1)}><ChevronLeft size={16} aria-hidden /> 왼쪽으로</button>
       <button className={item} disabled={busy || index === count - 1} onClick={() => move(index + 1)}><ChevronRight size={16} aria-hidden /> 오른쪽으로</button>
       <div className="my-1 border-t border-line" />
-      <button className={`${item} text-crit`} disabled={busy || !!deleteBlock} onClick={remove} title={deleteBlock || "삭제"}>
+      <button className={`${item} text-crit`} disabled={busy || !!deleteBlock} onClick={remove} data-tip={deleteBlock || undefined}>
         <Trash2 size={16} aria-hidden /> 삭제
       </button>
       {deleteBlock && <p className="px-2.5 pb-1 text-xs text-muted">{deleteBlock}</p>}
@@ -205,7 +205,7 @@ export function TopMenuBar({ categories }: { categories: Category[] }) {
               className={`flex cursor-grab items-center self-stretch pl-1 text-muted active:cursor-grabbing ${
                 drag?.from === i ? "opacity-100" : "opacity-0 group-hover:opacity-100"
               }`}
-              title="끌어서 순서 변경 (왼쪽·오른쪽 어디로든 놓을 수 있습니다)"
+              data-tip="끌어서 순서 변경 (왼쪽·오른쪽 어디로든 놓을 수 있습니다)"
               aria-label={`${c.name} 순서 변경 핸들`}
               role="img"
             >
@@ -220,7 +220,7 @@ export function TopMenuBar({ categories }: { categories: Category[] }) {
                   draggable={false}
                   onDoubleClick={() => setRenaming(c.key)}
                   className={`py-3 pl-1 text-sm font-medium whitespace-nowrap ${active ? "pr-1 text-fg" : "pr-3 text-muted hover:text-fg"}`}
-                  title="더블클릭으로 이름 변경"
+                  data-tip="더블클릭으로 이름 변경"
                 >
                   {c.name}
                 </NavLink>

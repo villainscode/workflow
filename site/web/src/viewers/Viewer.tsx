@@ -19,7 +19,7 @@ export function Viewer({ file, ctx }: { file: VersionFile; ctx: DocContext }) {
   const e = ext(file.path);
   const src = fileSrc(file);
   if (e === "md" || e === "markdown") return <MarkdownViewer file={file} src={src} ctx={ctx} />;
-  if (e === "html" || e === "htm") return <HtmlViewer url={src} />;
+  if (e === "html" || e === "htm") return <HtmlViewer key={String(ctx.scripts ?? true)} url={src} scripts={ctx.scripts ?? true} />;
   if (IMAGE.has(e)) return <ImageViewer url={src} />;
   if (e === "drawio") return <ImageViewer url={convertSrc(file, "svg")} />;
   if (e === "pdf") return <PdfViewer url={src} />;

@@ -11,3 +11,5 @@ menus:
   image:
     - slug: git
       name: Git관련이미지
+    - slug: svg
+      name: SVG편집

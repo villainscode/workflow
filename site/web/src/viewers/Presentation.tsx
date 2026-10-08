@@ -3,6 +3,7 @@ import { fileSrc, useText, type VersionFile } from "../lib/api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
 import { Viewer } from "./Viewer.tsx";
+import { htmlSandbox } from "./HtmlViewer.tsx";
 import type { DocContext } from "./MarkdownViewer.tsx";
 
 /** 프레젠테이션 기준 너비. 문서를 이 너비로 그린 뒤 화면 너비에 맞춰 같은 비율로 키운다(또는 줄인다). */
@@ -55,7 +56,7 @@ export function PresentationContent({ file, ctx }: { file: VersionFile; ctx: Doc
     return (
       <ScaledBox>
         <iframe src={fileSrc(file)} title="문서" className="block h-full w-full border-0 bg-surface"
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads" />
+          sandbox={htmlSandbox(ctx.scripts ?? true)} />
       </ScaledBox>
     );
   }

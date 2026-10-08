@@ -21,7 +21,7 @@ function htmlFiles(dir: string): string[] {
   });
 }
 
-const targets = [...htmlFiles(DOCS), join(ROOT, "scripts/fixtures/sample.docx"), join(ROOT, "scripts/fixtures/sample-rich.docx"), join(ROOT, "scripts/fixtures/sample.pptx"), join(ROOT, "scripts/fixtures/sample-slides.pptx"), join(ROOT, "scripts/fixtures/sample.xlsx"), join(ROOT, "scripts/fixtures/sample-shared.xlsx")];
+const targets = [...htmlFiles(DOCS), join(ROOT, "scripts/fixtures/sample.docx"), join(ROOT, "scripts/fixtures/sample-rich.docx"), join(ROOT, "scripts/fixtures/sample.pptx"), join(ROOT, "scripts/fixtures/sample-slides.pptx"), join(ROOT, "scripts/fixtures/sample.xlsx"), join(ROOT, "scripts/fixtures/sample-shared.xlsx"), join(ROOT, "scripts/fixtures/sample-drawio.svg"), join(ROOT, "scripts/fixtures/sample-plain.svg")];
 const work = mkdtempSync(join(tmpdir(), "textedit-"));
 
 for (const file of targets) {
@@ -50,6 +50,9 @@ for (const file of targets) {
     let p = 0; while (a[p] === b[p]) p++;
     let q = 0; while (q < a.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
     ok(a.length - p - q <= target.text.length + 20, `바뀐 구간이 그 조각 근처뿐 (원본에서 ${a.length - p - q}자)`);
+  } else if (format === "svg") {
+    const out = new TextDecoder().decode(r.data);
+    ok(!/&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i.test(out), "XML에 없는 엔티티(&nbsp; 등)가 생기지 않음");
   } else {
     const z1 = unzipSync(data), z2 = unzipSync(r.data);
     const diffParts = Object.keys(z1).filter((k) => strFromU8(z1[k]) !== strFromU8(z2[k] ?? new Uint8Array()));

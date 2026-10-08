@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { adapterFor, EditError, type Segment } from "../server/textedit/index.ts";
 import { wrapForEdit } from "../server/textedit/html.ts";
+import { splitLines, svgAdapter, visualWidth, wrapSvgForEdit } from "../server/textedit/svg.ts";
 import { FIXTURES, HTML_DOC } from "./helpers.ts";
 
 const same = (a: Uint8Array, b: Uint8Array) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
@@ -15,11 +16,12 @@ const enc = (s: string) => new TextEncoder().encode(s);
 const dec = (b: Uint8Array) => new TextDecoder().decode(b);
 const rejects = (fn: () => unknown, status: number) =>
   assert.throws(fn, (e: unknown) => e instanceof EditError && e.status === status);
+const XML_BAD_ENTITY = /&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i;
 const hasSoffice = (() => { try { execFileSync("which", ["soffice"], { stdio: "ignore" }); return true; } catch { return false; } })();
 
 const SAMPLES: [string, Uint8Array][] = [
   ["inline.html", enc(HTML_DOC)],
-  ...["sample.docx", "sample-rich.docx", "sample.pptx", "sample-slides.pptx", "sample.xlsx", "sample-shared.xlsx"]
+  ...["sample.docx", "sample-rich.docx", "sample.pptx", "sample-slides.pptx", "sample.xlsx", "sample-shared.xlsx", "sample-drawio.svg", "sample-plain.svg"]
     .map((f): [string, Uint8Array] => [f, new Uint8Array(readFileSync(join(FIXTURES, f)))]),
 ];
 
@@ -51,7 +53,9 @@ for (const [name, data] of SAMPLES) {
       assert.equal(after.length, segs.length);
       assert.equal(after[target.id].text, newText);
       assert.ok(after.every((s: Segment, i) => i === target.id || s.text === segs[i].text), "나머지 조각 그대로");
-      if (format === "html") {
+      if (format === "svg") {
+        assert.doesNotMatch(dec(r.data), XML_BAD_ENTITY, "XML에 없는 엔티티가 생기지 않음");
+      } else if (format === "html") {
         const a = dec(data), b = dec(r.data);
         let p = 0; while (a[p] === b[p]) p++;
         let q = 0; while (q < a.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
@@ -73,7 +77,7 @@ for (const [name, data] of SAMPLES) {
       rejects(() => adapter.apply(data, [{ id: target.id, hash: target.hash, text: "줄\n바꿈" }]), 400);
     });
 
-    test("TC-TE-06 고친 파일을 LibreOffice가 연다(PDF 변환)", { skip: format === "html" || !hasSoffice ? "HTML이거나 LibreOffice 없음" : false, timeout: 180_000 }, () => {
+    test("TC-TE-06 고친 파일을 LibreOffice가 연다(PDF 변환)", { skip: format === "html" || format === "svg" || !hasSoffice ? "HTML·SVG이거나 LibreOffice 없음" : false, timeout: 180_000 }, () => {
       const work = mkdtempSync(join(tmpdir(), "textedit-"));
       const out = join(work, `edited.${format}`);
       writeFileSync(out, adapter.apply(data, [{ id: target.id, hash: target.hash, text: "열기 검사" }]).data);
@@ -165,5 +169,80 @@ describe("TC-TE-OOXML DOCX·PPTX·XLSX 규칙", () => {
     assert.equal(adapterFor("a.md"), null);
     assert.equal(adapterFor("a.pdf"), null);
     assert.equal(adapterFor("A.HTML")?.format, "html", "확장자 대소문자 무시");
+  });
+});
+
+describe("TC-TE-SVG SVG 규칙", () => {
+  const drawio = new Uint8Array(readFileSync(join(FIXTURES, "sample-drawio.svg")));
+  const plain = new Uint8Array(readFileSync(join(FIXTURES, "sample-plain.svg")));
+  const dsegs = svgAdapter.extract(drawio);
+  const psegs = svgAdapter.extract(plain);
+  const tspans = (xml: string, from: number) => {
+    const i = xml.indexOf("<text", from);
+    return [...xml.slice(i, xml.indexOf("</text>", i)).matchAll(/<tspan[^>]*>([^<]*)<\/tspan>/g)].map((m) => m[1]);
+  };
+
+  test("TC-TE-SVG-01 draw.io SVG는 HTML 글자만 조각이 되고(예비 글자 제외), 묶음 이름은 칸 id다", () => {
+    assert.equal(dsegs.filter((s) => s.text === "tokens 모듈").length, 1, "같은 글자가 두 벌 있어도 조각은 하나");
+    assert.equal(dsegs[0].group, "s-0-0-tokens");
+    assert.ok(dsegs.every((s) => !s.svg));
+  });
+
+  test("TC-TE-SVG-02 HTML 글자를 고치면 예비 글자(<text>)도 원래 줄 수에 맞춰 나눠 바뀐다", () => {
+    const desc = dsegs.find((s) => s.text.startsWith("iframe 로그인의"))!;
+    const xml0 = dec(drawio);
+    const before = tspans(xml0, xml0.indexOf("iframe 로그인의"));
+    assert.equal(before.length, 3, "auth_codes 예비 글자는 3줄(제목 1 + 설명 2)");
+    const text = "iframe 로그인에서 한 번만 쓰는 코드(60초)와 비밀번호 단계용 표(10분)";
+    const xml = dec(svgAdapter.apply(drawio, [{ id: desc.id, hash: desc.hash, text }]).data);
+    const after = tspans(xml, xml.indexOf("iframe 로그인에서"));
+    assert.equal(after.length, 3, "줄 수 그대로");
+    assert.equal(after[0], "auth_codes", "바꾸지 않은 줄(제목)은 그대로");
+    assert.equal(after.slice(1).join(" ").replace(/\s+/g, " "), text, "나머지 줄을 이으면 새 글자");
+    assert.ok(after[1].length > after[2].length, "원래처럼 첫 줄이 길고 둘째 줄이 짧다(원래 줄 길이 비율)");
+    assert.equal(svgAdapter.extract(new TextEncoder().encode(xml))[desc.id].text, text);
+  });
+
+  test("TC-TE-SVG-03 특수 문자와 줄바꿈 없는 공백(U+00A0)을 XML 방식으로 쓴다(&nbsp; 없음)", () => {
+    const t = dsegs.find((s) => s.text.includes("\u00a0"))!;
+    const xml = dec(svgAdapter.apply(drawio, [{ id: t.id, hash: t.hash, text: t.text + "\u00a0& <확인>" }]).data);
+    assert.doesNotMatch(xml, XML_BAD_ENTITY);
+    assert.ok(xml.includes("&amp; &lt;확인&gt;"));
+  });
+
+  test("TC-TE-SVG-04 글자가 원래 줄보다 눈에 띄게 길어지면 경고, 비슷하면 경고 없음", () => {
+    const desc = dsegs.find((s) => s.text.startsWith("iframe 로그인의"))!;
+    const long = svgAdapter.apply(drawio, [{ id: desc.id, hash: desc.hash, text: "아주 긴 설명 ".repeat(20) }]);
+    assert.equal(long.warnings?.length, 1);
+    assert.match(long.warnings![0], new RegExp(`^\\[${desc.id}\\].*넘칠 수 있습니다`));
+    const short = svgAdapter.apply(drawio, [{ id: desc.id, hash: desc.hash, text: "iframe 로그인의 1회용 코드(60초) · 비밀번호 단계용 표(9분)" }]);
+    assert.deepEqual(short.warnings, []);
+  });
+
+  test("TC-TE-SVG-05 일반 SVG: <text>·<tspan> 글자가 조각(svg 표시), title·desc·style은 제외, 길어지면 경고", () => {
+    assert.deepEqual(psegs.map((s) => s.text), ["빌드 & 배포", "첫 줄", "둘째 줄 R&D", "게이트 판정"]);
+    assert.ok(psegs.every((s) => s.svg));
+    const s = psegs[2];
+    const r = svgAdapter.apply(plain, [{ id: s.id, hash: s.hash, text: "둘째 줄 R&D 그리고 훨씬 더 긴 글자" }]);
+    assert.match(dec(r.data), /<tspan x="20" dy="16">둘째 줄 R&amp;D 그리고 훨씬 더 긴 글자<\/tspan>/);
+    assert.equal(r.warnings?.length, 1);
+  });
+
+  test("TC-TE-SVG-06 편집용 사본: HTML 글자는 <span data-seg>, SVG 글자는 <tspan data-seg>, XML로 유효", () => {
+    const v1 = wrapSvgForEdit(drawio);
+    assert.ok(v1.includes(`<span data-seg="0">tokens 모듈</span>`));
+    assert.doesNotMatch(v1, XML_BAD_ENTITY);
+    const v2 = wrapSvgForEdit(plain);
+    assert.ok(v2.includes(`<tspan data-seg="0">빌드 &amp; 배포</tspan>`));
+    assert.ok(!v2.includes("data-seg=\"4\""), "title·desc는 감싸지 않음");
+  });
+
+  test("TC-TE-SVG-07 줄 나누기: 줄 수 고정, 원래 폭 비율, 공백에서 끊으면 공백은 버림", () => {
+    assert.deepEqual(splitLines("가나다", 1, [10]), ["가나다"]);
+    const out = splitLines("하나 둘 셋 넷 다섯 여섯", 2, [10, 10]);
+    assert.equal(out.length, 2);
+    assert.equal(out.join(" "), "하나 둘 셋 넷 다섯 여섯");
+    assert.equal(splitLines("ab", 3, [1, 1, 1]).length, 3, "글자가 짧아도 줄 수는 그대로(빈 줄 허용)");
+    assert.equal(visualWidth("가a"), 3);
   });
 });

@@ -63,7 +63,7 @@ export function SearchBox() {
         className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-md text-muted hover:text-accent"
         onClick={searchNow}
         aria-label="검색"
-        title="검색"
+        data-tip="검색"
       >
         <Search size={20} aria-hidden />
       </button>

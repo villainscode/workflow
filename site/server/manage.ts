@@ -182,7 +182,7 @@ function docMetaPath(docsRoot: string, menu: string, doc: string) {
   return p;
 }
 
-export function updateDoc(docsRoot: string, menu: string, doc: string, change: { title?: string; status?: string }) {
+export function updateDoc(docsRoot: string, menu: string, doc: string, change: { title?: string; status?: string; origin?: string | null }) {
   const metaPath = docMetaPath(docsRoot, menu, doc);
   const meta = parseDocument(readFileSync(metaPath, "utf8"));
   if (change.title !== undefined) {
@@ -192,6 +192,12 @@ export function updateDoc(docsRoot: string, menu: string, doc: string, change: {
   if (change.status !== undefined) {
     if (!STATUSES.has(change.status)) throw new StoreError(400, "상태는 draft, review, approved 중 하나입니다");
     meta.set("status", change.status);
+  }
+  // 외부에서 가져온 문서의 출처(3.3). 빈 값이면 지운다
+  if (change.origin !== undefined) {
+    const o = change.origin?.trim() ?? "";
+    if (o && !/^https?:\/\/\S+$/.test(o)) throw new StoreError(400, "출처는 http:// 또는 https:// 주소여야 합니다");
+    if (o) meta.set("origin_url", o); else meta.delete("origin_url");
   }
   writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
 }

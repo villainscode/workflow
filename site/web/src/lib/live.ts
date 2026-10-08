@@ -1,13 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 /**
- * 서버의 변경 알림(SSE)을 받으면 목록과 문서 정보를 다시 불러온다.
+ * 서버의 변경 알림(SSE)을 받으면 목록과 문서 정보를 다시 불러온다. onEvent에는 알림 내용을 넘긴다(3.4 Claude 저장·화면 이동).
  * 페이지를 떠날 때(pagehide) 연결을 닫고, 뒤로 가기 캐시에서 돌아오면(pageshow) 다시 연다.
  * 닫지 않으면 캐시에 남은 페이지들이 연결을 계속 잡고 있어, 같은 호스트 연결 한도(6개)가 차면 사이트가 멈춘다.
  */
-export function useLiveUpdates() {
+export interface LiveEvent {
+  type: "changed" | "focus"; reason?: string; by?: string;
+  category?: string; menu?: string; doc?: string; title?: string; version?: string;
+  segs?: number[]; seg?: string;
+}
+
+export function useLiveUpdates(onEvent?: (e: LiveEvent) => void) {
   const qc = useQueryClient();
+  const handler = useRef(onEvent);
+  handler.current = onEvent;
   useEffect(() => {
     let es: EventSource | null = null;
     const refresh = () => {
@@ -17,7 +25,12 @@ export function useLiveUpdates() {
     const open = () => {
       es?.close();
       es = new EventSource("/api/events");
-      es.onmessage = refresh;
+      es.onmessage = (m) => {
+        let e: LiveEvent | null = null;
+        try { e = JSON.parse(m.data) as LiveEvent; } catch { /* 형식이 다르면 새로 불러오기만 */ }
+        if (!e || e.type === "changed") refresh();
+        if (e) handler.current?.(e);
+      };
     };
     const close = () => { es?.close(); es = null; };
     const onShow = (e: PageTransitionEvent) => { if (e.persisted) { open(); refresh(); } };

@@ -118,3 +118,32 @@ export async function upload(base: string, fields: Record<string, string>, files
 }
 
 export const readText = (p: string) => readFileSync(p, "utf8");
+
+/** SSE(/api/events)를 열어 두고, 조건에 맞는 이벤트를 기다린다 */
+export async function openEvents(base: string) {
+  const ctrl = new AbortController();
+  const res = await fetch(`${base}/api/events`, { signal: ctrl.signal });
+  const reader = res.body!.getReader();
+  const events: any[] = [];
+  let buf = "";
+  void (async () => {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += new TextDecoder().decode(value);
+        let i;
+        while ((i = buf.indexOf("\n\n")) >= 0) {
+          const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+          const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+          if (line) events.push(JSON.parse(line.slice(6)));
+        }
+      }
+    } catch { /* 닫힘 */ }
+  })();
+  return {
+    events,
+    next: (pred: (e: any) => boolean, ms = 5000) => waitFor(async () => events.find(pred), ms, "SSE 이벤트"),
+    close: () => ctrl.abort(),
+  };
+}

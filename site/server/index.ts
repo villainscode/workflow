@@ -1,4 +1,4 @@
-import { createReadStream, mkdirSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve, join, sep, extname } from "node:path";
 import Fastify, { type FastifyError } from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -8,6 +8,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
+import { parse as parseYaml } from "yaml";
 import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
 import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
@@ -41,11 +42,23 @@ function broadcast(event: object) {
 }
 
 let warnings: string[] = [];
-function reindex(reason: string) {
+/** 다시 색인하고 화면에 알린다. detail에는 바뀐 문서·버전·조각과 누가 바꿨는지(by)를 담는다(3.4) */
+function reindex(reason: string, detail?: object) {
   sqlite.exec(DDL);
   warnings = scanDocs(db, DOCS_ROOT, REPO_ROOT);
   warnings.forEach((w) => app.log.warn(w));
-  broadcast({ type: "changed", reason });
+  broadcast({ type: "changed", reason, ...detail });
+}
+
+// MCP(Claude Code)가 보낸 요청은 X-Workflow-Agent 헤더로 알 수 있다(3.4)
+const agentOf = (req: { headers: Record<string, unknown> }) =>
+  req.headers["x-workflow-agent"] === "claude-code" ? "claude-code" : undefined;
+
+/** 문서 하나에 대한 변경 알림 내용: 대분류·제목은 meta.yaml에서 읽는다 */
+function docEvent(req: { headers: Record<string, unknown> }, r: { menu: string; doc: string; version?: string }, segs?: number[]) {
+  const metaPath = join(DOCS_ROOT, r.menu, r.doc, "meta.yaml");
+  const meta = existsSync(metaPath) ? (parseYaml(readFileSync(metaPath, "utf8")) as { title?: string; category?: string }) : {};
+  return { by: agentOf(req), category: meta.category, menu: r.menu, doc: r.doc, title: meta.title, version: r.version, segs };
 }
 
 const app = Fastify({ logger: { level: "info" }, bodyLimit: MAX_UPLOAD });
@@ -119,7 +132,7 @@ app.post("/api/upload", async (req) => {
     menu: fields.menu, doc: fields.doc || undefined, title: fields.title, slug: fields.slug,
     version: fields.version, note: fields.note, entry: fields.entry || undefined, origin: fields.origin || undefined, files,
   });
-  reindex("upload");
+  reindex("upload", docEvent(req, result));
   return result;
 });
 
@@ -127,7 +140,7 @@ app.post<{ Params: { menu: string; doc: string }; Body: { baseVersion: string; c
   "/api/docs/:menu/:doc/edit",
   async (req) => {
     const result = saveEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
-    reindex("edit");
+    reindex("edit", docEvent(req, result));
     return result;
   },
 );
@@ -152,16 +165,18 @@ app.patch<{ Params: { key: string }; Body: { name?: string; index?: number } }>(
 app.delete<{ Params: { key: string } }>("/api/categories/:key", async (req) =>
   done("category", deleteCategory(DOCS_ROOT, req.params.key)));
 
-app.patch<DocParams & { Body: { title?: string; status?: string } }>("/api/docs/:menu/:doc", async (req) =>
+app.patch<DocParams & { Body: { title?: string; status?: string; origin?: string | null } }>("/api/docs/:menu/:doc", async (req) =>
   done("doc", updateDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
 app.post<DocParams & { Body: { menu: string } }>("/api/docs/:menu/:doc/move", async (req) =>
   done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body.menu)));
 // 텍스트 편집(2.0): 조각 목록과 저장
 app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/segments", async (req) =>
   readSegments(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v));
-// HTML 편집 화면용 사본. 화면은 이 사본을 스크립트 없이(sandbox="allow-same-origin") 연다
-app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/edit-view", async (req, reply) =>
-  reply.type("text/html; charset=utf-8").header("Cache-Control", "no-store").send(htmlEditView(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v)));
+// HTML·SVG 편집 화면용 사본. 화면은 이 사본을 스크립트 없이(sandbox="allow-same-origin") 연다
+app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/edit-view", async (req, reply) => {
+  const view = htmlEditView(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v);
+  return reply.type(view.type === "svg" ? "image/svg+xml; charset=utf-8" : "text/html; charset=utf-8").header("Cache-Control", "no-store").send(view.body);
+});
 // 저장하지 않은 미리보기: 바뀐 조각을 반영한 대표 파일을 그대로 돌려준다
 // ?to=pdf면 LibreOffice로 PDF 변환해 돌려준다(PPTX 미리보기). 변환 결과는 내용 해시로 캐시한다
 app.post<DocParams & { Querystring: { to?: string }; Body: { baseVersion: string; changes: Change[] } }>("/api/docs/:menu/:doc/text-preview", async (req, reply) => {
@@ -173,11 +188,27 @@ app.post<DocParams & { Querystring: { to?: string }; Body: { baseVersion: string
   }
   return reply.type(mimeOf(r.entry)).send(Buffer.from(r.data));
 });
-app.post<DocParams & { Body: { baseVersion: string; changes: Change[]; note?: string } }>("/api/docs/:menu/:doc/text-edit", async (req) =>
-  done("text-edit", saveTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
+app.post<DocParams & { Body: { baseVersion: string; changes: Change[]; note?: string } }>("/api/docs/:menu/:doc/text-edit", async (req) => {
+  const result = saveTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
+  reindex("text-edit", docEvent(req, result, (req.body.changes ?? []).map((c) => c.id)));
+  return result;
+});
 
-app.post<DocParams & { Body: { note?: string } | undefined }>("/api/docs/:menu/:doc/release", async (req) =>
-  done("release", release(DOCS_ROOT, req.params.menu, req.params.doc, req.body?.note)));
+app.post<DocParams & { Body: { note?: string } | undefined }>("/api/docs/:menu/:doc/release", async (req) => {
+  const result = release(DOCS_ROOT, req.params.menu, req.params.doc, req.body?.note);
+  reindex("release", docEvent(req, result));
+  return result;
+});
+
+// 열린 사이트 화면을 문서·버전·조각으로 옮긴다(3.4 focus_in_site). 받은 화면 수를 돌려준다
+app.post<{ Body: { menu: string; doc: string; version?: string; seg?: string } }>("/api/focus", async (req, reply) => {
+  const { menu, doc, version, seg } = req.body ?? {};
+  const metaPath = join(DOCS_ROOT, menu ?? "", doc ?? "", "meta.yaml");
+  if (!/^[a-z0-9-]+$/.test(menu ?? "") || !/^[a-z0-9-]+$/.test(doc ?? "") || !existsSync(metaPath)) return reply.code(404).send({ error: "문서를 찾을 수 없습니다" });
+  if (seg && !/^[\d,-]+$/.test(seg)) return reply.code(400).send({ error: "seg는 12, 12-15, 3,10-12 형식입니다" });
+  broadcast({ type: "focus", ...docEvent(req, { menu, doc, version }), seg });
+  return { clients: clients.size };
+});
 app.delete<DocParams>("/api/docs/:menu/:doc", async (req) => done("trash", trashDoc(DOCS_ROOT, req.params.menu, req.params.doc)));
 
 app.get("/api/trash", async () => listTrash(DOCS_ROOT));

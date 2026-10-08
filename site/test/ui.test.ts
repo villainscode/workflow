@@ -3,7 +3,7 @@
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { execSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -187,6 +187,192 @@ describe("화면", { skip }, () => {
     await page.waitForFunction(() => document.body.innerText.includes("주간 회의록"), { timeout: 10_000 });
     await upload(srv.url, { menu: "notes", title: "뒤로 가기 후 추가", slug: "after-back" }, [["b.html", "<p>b</p>"]]);
     await page.waitForFunction(() => document.body.innerText.includes("뒤로 가기 후 추가"), { timeout: 10_000 });
+  });
+
+  test("TC-UI-14 아이콘에 마우스를 올리거나 키보드로 포커스하면 툴팁, 대화상자 위에서도 보이고 누르거나 Esc면 닫힌다", async () => {
+    await open("/sdlc/process/guide", "샘플 프로세스 가이드");
+    const tip = async () => page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[role="tooltip"]')!;
+      const r = el.getBoundingClientRect();
+      return { open: el.matches(":popover-open") && getComputedStyle(el).opacity === "1", text: el.textContent, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight };
+    });
+    const waitTip = (text: string) => page.waitForFunction((t: string) => {
+      const el = document.querySelector<HTMLElement>('[role="tooltip"]');
+      return el?.matches(":popover-open") && el.textContent === t && getComputedStyle(el).opacity === "1";
+    }, { timeout: 3000 }, text);
+
+    assert.equal(await page.$eval('button[aria-label="다운로드"]', (b: Element) => b.getAttribute("title")), null, "기본 title 툴팁은 쓰지 않음");
+    await page.hover('button[aria-label="다운로드"]');
+    await waitTip("다운로드");
+    assert.ok((await tip()).inView);
+    await page.hover('button[aria-label="문서 관리"]');
+    const t0 = Date.now();
+    await waitTip("문서 관리");
+    assert.ok(Date.now() - t0 < 300, "떠 있는 상태에서 옆 아이콘으로 옮기면 기다리지 않고 바뀜");
+    await page.keyboard.press("Escape");
+    assert.equal((await tip()).open, false, "Esc로 닫힘");
+
+    await page.click('button[aria-label="문서 관리"]');                    // 대화상자(showModal) 위에서도 보임
+    await page.waitForSelector("dialog[open]");
+    await page.hover('dialog[open] button[aria-label="닫기"]');
+    await waitTip("닫기");
+    const onTop = await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[role="tooltip"]')!;
+      const r = el.getBoundingClientRect();
+      return document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2).includes(el) || getComputedStyle(el).pointerEvents === "none";
+    });
+    assert.ok(onTop);
+    await page.mouse.down(); await page.mouse.up();
+    assert.equal((await tip()).open, false, "누르면 닫힘");
+
+    await page.keyboard.press("Escape");                                   // 대화상자 닫기
+    await page.waitForSelector("dialog[open]", { hidden: true });
+    await page.click('input[aria-label="문서 검색"]');
+    await page.keyboard.press("Tab");                                      // 키보드로 옮긴 포커스에도 뜬다
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "검색");
+    await waitTip("검색");
+  });
+
+  test("TC-UI-15 외부 문서는 스크립트를 끈 채 출처와 함께 열리고, 켜기는 버전별로 기억된다(D-25, D-27)", async () => {
+    await upload(srv.url, { menu: "notes", title: "외부 아티팩트", slug: "ext", origin: "https://claude.ai/artifact/abc" },
+      [["ext.html", "<p id=t>원래 글자</p><script>document.getElementById('t').textContent='스크립트 실행됨'</script>"]]);
+    const sandbox = () => page.$eval('iframe[title="문서"]', (f: HTMLIFrameElement) => f.getAttribute("sandbox"));
+    await open("/sdlc/notes/ext", "외부 아티팩트");
+    await page.waitForFunction(() => document.body.innerText.includes("외부 문서") && document.body.innerText.includes("스크립트 꺼짐"));
+    assert.ok(await page.$('a[href="https://claude.ai/artifact/abc"]'), "출처 링크");
+    assert.doesNotMatch(await sandbox(), /allow-scripts/);
+    assert.doesNotMatch(await sandbox(), /allow-same-origin/);
+
+    await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent === "스크립트 켜기")!.click());
+    await page.waitForFunction(() => document.querySelector('iframe[title="문서"]')?.getAttribute("sandbox")?.includes("allow-scripts"));
+    assert.match(await sandbox(), /allow-scripts/);
+    await open("/sdlc/notes/ext", "외부 아티팩트");                         // 다시 열어도 켜진 채(기억)
+    await page.waitForFunction(() => document.body.innerText.includes("스크립트 켜짐"));
+    assert.match(await sandbox(), /allow-scripts/);
+
+    await upload(srv.url, { menu: "notes", doc: "ext" }, [["ext.html", "<p>새 버전</p>"]]);   // 새 버전은 다시 꺼짐
+    await open("/sdlc/notes/ext", "외부 아티팩트");
+    await page.waitForFunction(() => document.body.innerText.includes("스크립트 꺼짐"));
+    assert.doesNotMatch(await sandbox(), /allow-scripts/);
+
+    await open("/sdlc/process/guide", "샘플 프로세스 가이드");             // 출처 없는 문서는 막대 없음, 스크립트 켜짐
+    assert.ok(!(await text()).includes("외부 문서"));
+    assert.match(await sandbox(), /allow-scripts/);
+  });
+
+  test("TC-UI-16 HTML 참조 복사: 글자를 누르면 조각 주소, Alt+클릭은 문단 범위를 복사한다(3.2)", async () => {
+    await browser.defaultBrowserContext().overridePermissions(WEB, ["clipboard-read", "clipboard-write", "clipboard-sanitized-write"]);
+    await upload(srv.url, { menu: "notes", title: "참조 시험", slug: "ref" }, [["ref.html", "<h1>제목</h1><p>첫 <b>굵은</b> 문장</p><ul><li>항목 하나</li></ul>"]]);
+    await open("/sdlc/notes/ref", "참조 시험");
+    await page.click('button[aria-label^="참조 복사"]');
+    const handle = await page.waitForSelector('iframe[title="참조 보기"]');
+    assert.equal(await handle.evaluate((f: HTMLIFrameElement) => f.getAttribute("sandbox")), "allow-same-origin", "스크립트 없음");
+    const frame = await handle.contentFrame();
+    await frame.waitForSelector('span[data-seg="2"]');
+    const clip = () => page.evaluate(() => navigator.clipboard.readText());
+
+    await (await frame.$('span[data-seg="2"]')).click();
+    await page.waitForFunction(() => document.body.innerText.includes("복사함: [2]"));
+    assert.equal(await clip(), `${WEB}/sdlc/notes/ref?v=v0.0&seg=2`);
+
+    await page.keyboard.down("Alt");
+    await (await frame.$('span[data-seg="1"]')).click();
+    await page.keyboard.up("Alt");
+    await page.waitForFunction(() => document.body.innerText.includes("복사함: [1-3]"));
+    assert.equal(await clip(), `${WEB}/sdlc/notes/ref?v=v0.0&seg=1-3`);
+  });
+
+  test("TC-UI-17 주소에 ?seg=가 있으면 참조 보기로 그 조각을 강조하고, 원래 보기로 돌아간다(3.2, D-28)", async () => {
+    await open("/sdlc/notes/ref?seg=1,4", "참조 시험");
+    const frame = await (await page.waitForSelector('iframe[title="참조 보기"]')).contentFrame();
+    await frame.waitForSelector("[data-ref-hit]");
+    assert.deepEqual(await frame.$$eval("[data-ref-hit]", (els: Element[]) => els.map((e) => e.textContent)), ["첫", "항목 하나"]);
+    assert.ok((await text()).includes("참조 위치 [1,4]"));
+    await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("원래 보기로"))?.click());
+    await page.waitForSelector('iframe[title="문서"]');
+    assert.doesNotMatch(page.url(), /seg=/);
+  });
+
+  test("TC-UI-18 DOCX 참조: ?seg= 줄을 강조하고, 줄을 누르면 그 조각 주소를 복사한다(3.2)", async () => {
+    await upload(srv.url, { menu: "notes", title: "워드 참조", slug: "word-ref" }, [["sample.docx", readFileSync(join(SITE, "scripts/fixtures/sample.docx"))]]);
+    await open("/sdlc/notes/word-ref?seg=1", "워드 참조");
+    await page.waitForSelector('span[data-seg="1"][data-ref-hit]');
+    await page.click('button[aria-label^="참조 복사"]');
+    await page.click('span[data-seg="0"]');
+    await page.waitForFunction(() => document.body.innerText.includes("복사함: [0]"));
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `${WEB}/sdlc/notes/word-ref?v=v0.0&seg=0`);
+  });
+
+  /** MCP(Claude Code)처럼 X-Workflow-Agent 헤더를 붙여 조각 하나를 고친다 */
+  async function claudeEdit(menu: string, doc: string, index: number, text: string) {
+    const d = await (await fetch(`${srv.url}/api/docs/${menu}/${doc}`)).json();
+    const seg = (await (await fetch(`${srv.url}/api/docs/${menu}/${doc}/segments`)).json()).segments[index];
+    const res = await fetch(`${srv.url}/api/docs/${menu}/${doc}/text-edit`, {
+      method: "POST", headers: { "content-type": "application/json", "x-workflow-agent": "claude-code" },
+      body: JSON.stringify({ baseVersion: d.currentVersion, changes: [{ id: seg.id, hash: seg.hash, text }], note: "Claude Code: 시험" }),
+    });
+    assert.equal(res.status, 200);
+    return seg.id as number;
+  }
+
+  test("TC-UI-19 Claude가 보고 있는 문서를 고치면 알림과 함께 바뀐 조각을 강조하고, 다른 문서면 알림의 열기로 간다(3.4, D-29)", async () => {
+    await open("/sdlc/notes/ref", "참조 시험");
+    const id = await claudeEdit("notes", "ref", 4, "항목 하나 (Claude)");
+    await page.waitForFunction(() => document.querySelector('[role="status"]')?.textContent?.includes("Claude Code가 ‘참조 시험’ 문서를 v0.1 버전으로 저장했습니다"), { timeout: 10_000 });
+    await page.waitForFunction((i: number) => location.search.includes(`seg=${i}`), {}, id);
+    const frame = await (await page.waitForSelector('iframe[title="참조 보기"]')).contentFrame();
+    await frame.waitForFunction(() => document.querySelector("[data-ref-hit]")?.textContent === "항목 하나 (Claude)", { timeout: 10_000 });
+
+    const gid = await claudeEdit("process", "guide", 0, "샘플 프로세스 문서 (Claude)");   // 다른 문서: 이동하지 않고 "열기"
+    await page.waitForFunction(() => [...document.querySelectorAll('[role="status"] button')].some((b) => b.textContent === "열기"), { timeout: 10_000 });
+    assert.match(page.url(), /\/sdlc\/notes\/ref/);
+    await page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>('[role="status"] button')].find((b) => b.textContent === "열기")!.click());
+    await page.waitForFunction((i: number) => location.pathname === "/sdlc/process/guide" && location.search.includes(`seg=${i}`), {}, gid);
+  });
+
+  test("TC-UI-20 focus 요청이 오면 열린 화면이 그 문서·버전·조각으로 이동해 강조한다(3.4 focus_in_site)", async () => {
+    await open("/sdlc/notes/minutes", "주간 회의록");
+    const r = await fetch(`${srv.url}/api/focus`, {
+      method: "POST", headers: { "content-type": "application/json", "x-workflow-agent": "claude-code" },
+      body: JSON.stringify({ menu: "notes", doc: "ref", version: "v0.0", seg: "1-3" }),
+    });
+    assert.ok((await r.json()).clients >= 1);
+    await page.waitForFunction(() => location.pathname === "/sdlc/notes/ref" && location.search.includes("v=v0.0") && location.search.includes("seg=1-3"), { timeout: 10_000 });
+    const frame = await (await page.waitForSelector('iframe[title="참조 보기"]')).contentFrame();
+    await frame.waitForFunction(() => document.querySelectorAll("[data-ref-hit]").length === 3, { timeout: 10_000 });
+    assert.ok((await text()).includes("가리켰습니다"));
+  });
+
+  test("TC-UI-21 SVG(draw.io) 텍스트 편집: 그림 위에서 고치고, 상자를 넘치면 경고하고 확인 창에도 보인다", async () => {
+    await upload(srv.url, { menu: "notes", title: "ERD 그림", slug: "erd" }, [["erd.drawio.svg", readFileSync(join(SITE, "scripts/fixtures/sample-drawio.svg"))]]);
+    await open("/sdlc/notes/erd", "ERD 그림");
+    await page.click('button[aria-label="텍스트 편집"]');
+    await page.waitForFunction(() => document.querySelector<HTMLIFrameElement>('iframe[title="텍스트 편집"]')?.contentDocument?.querySelector("span[data-seg][contenteditable]"), { timeout: 30_000 });
+    assert.equal(await page.evaluate(() => document.querySelector<HTMLIFrameElement>('iframe[title="텍스트 편집"]')!.contentDocument!.documentElement.localName), "svg");
+    const typeInto = async (id: number, text: string) => {
+      await page.evaluate((i: number) => {
+        const d = document.querySelector<HTMLIFrameElement>('iframe[title="텍스트 편집"]')!.contentDocument!;
+        const el = d.querySelector<HTMLElement>(`span[data-seg="${i}"]`)!;
+        el.focus();
+        const r = d.createRange(); r.selectNodeContents(el);
+        const sel = d.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+      }, id);
+      await page.keyboard.type(text);
+    };
+    const desc = await page.evaluate(() => [...document.querySelector<HTMLIFrameElement>('iframe[title="텍스트 편집"]')!.contentDocument!.querySelectorAll("span[data-seg]")]
+      .find((s) => s.textContent?.startsWith("iframe 로그인의"))!.getAttribute("data-seg"));
+    await typeInto(Number(desc), "iframe 로그인 1회용 코드(60초)");                        // 짧으면 경고 없음
+    await page.waitForFunction(() => document.body.innerText.includes("변경 1건"));
+    assert.equal(await page.$('[role="alert"]'), null);
+    await typeInto(Number(desc), "아주 긴 설명 ".repeat(14));                               // 길면 경고
+    await page.waitForSelector('[role="alert"]', { timeout: 5000 });
+    assert.match(await page.$eval('[role="alert"]', (e: Element) => e.textContent), /글자가 상자를 넘치는 곳 1곳/);
+    await page.click('button[aria-label="저장 (새 버전)"]');
+    await page.waitForSelector("dialog[open]");
+    assert.match(await page.$eval("dialog[open]", (e: Element) => e.textContent), /상자를 넘치는 곳이 1곳[\s\S]*⚠/);
+    await clickConfirm("저장");
+    await page.waitForFunction(() => document.body.innerText.includes("v0.1 버전으로 저장했습니다"), { timeout: 10_000 });
+    assert.match(await text(), /주의: \[\d+\].*넘칠 수 있습니다/);
   });
 
   test("TC-UI-12 없는 문서·없는 대분류는 안내 화면", async () => {
