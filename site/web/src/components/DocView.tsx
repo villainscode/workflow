@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FilePlus2, Minimize, Presentation, Settings2 } from "lucide-react";
+import { Download, ExternalLink, FilePlus2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
+import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
 import { IconButton } from "./IconButton.tsx";
 import { useParams, useSearchParams } from "react-router";
@@ -11,9 +13,12 @@ import { EmptyState } from "./EmptyState.tsx";
 import { ReleaseBadge } from "./ReleaseBadge.tsx";
 import { Viewer } from "../viewers/Viewer.tsx";
 import { DiffViewer } from "../viewers/DiffViewer.tsx";
+import { SegmentDiffViewer } from "../viewers/SegmentDiffViewer.tsx";
 
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
+// zip 형식이라 줄 대신 텍스트 조각 목록으로 비교하는 형식(2.0)
+const SEGMENT_DIFF = /\.(docx|pptx)$/i;
 
 export function DocView() {
   const { menu = "", doc = "" } = useParams();
@@ -25,6 +30,15 @@ export function DocView() {
   // 프레젠테이션 모드: 문서 영역(stage)만 브라우저 전체 화면으로 띄운다. Esc로 나가도 이벤트로 상태를 맞춘다
   const stage = useRef<HTMLDivElement>(null);
   const [presenting, setPresenting] = useState(false);
+  // 텍스트 편집(2.0): 최신 버전의 HTML을 그 자리에서 고친다. 저장하면 새 버전 안내를 잠깐 보여 준다
+  const [textEditing, setTextEditing] = useState(false);
+  const [savedNotice, setSavedNotice] = useState("");
+  useEffect(() => { setTextEditing(false); }, [menu, doc]);
+  useEffect(() => {
+    if (!savedNotice) return;
+    const t = setTimeout(() => setSavedNotice(""), 5000);
+    return () => clearTimeout(t);
+  }, [savedNotice]);
   useEffect(() => {
     const sync = () => setPresenting(document.fullscreenElement !== null && document.fullscreenElement === stage.current);
     document.addEventListener("fullscreenchange", sync);
@@ -41,7 +55,11 @@ export function DocView() {
   const cmpKey = params.get("cmp");
   const cmpVersion = data.versions.find((v) => v.version === cmpKey && v.version !== version.version);
   const cmpEntry = cmpVersion?.files.find((f) => f.isEntry);
-  const comparable = !!entry && TEXT.test(entry.path) && data.versions.length > 1;
+  const comparable = !!entry && (TEXT.test(entry.path) || SEGMENT_DIFF.test(entry.path)) && data.versions.length > 1;
+  const onTextEditExit = (saved?: string) => {
+    setTextEditing(false);
+    if (saved) { setParam("v", null); setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다`); }
+  };
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
     if (v) next.set(k, v); else next.delete(k);
@@ -94,6 +112,10 @@ export function DocView() {
             }} />
           )}
           <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />
+          {entry && /\.(html?|docx|pptx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+            <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing}
+              onClick={() => setTextEditing(true)} />
+          )}
           <IconButton icon={Presentation} label="프레젠테이션 (전체 화면)" disabled={!entry}
             onClick={() => void stage.current?.requestFullscreen()} />
           <IconButton icon={Settings2} label="문서 관리" onClick={() => setSettingsOpen(true)} />
@@ -109,6 +131,7 @@ export function DocView() {
           )}
         </div>
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
+        {savedNotice && <p className="basis-full rounded-md bg-ok-soft px-3 py-1 text-xs text-ok">{savedNotice}</p>}
         {version.note && (
           <details className="basis-full text-xs text-muted">
             <summary className="cursor-pointer">{versionLabel(version.version)} 변경 메모{version.createdAt ? ` · ${version.createdAt}` : ""}</summary>
@@ -126,8 +149,19 @@ export function DocView() {
           </>
         ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
+        ) : textEditing ? (
+          /\.(docx|pptx)$/i.test(entry.path) ? (
+            <OfficeTextEditor menu={menu} doc={doc} version={version.version}
+              format={/\.pptx$/i.test(entry.path) ? "pptx" : "docx"} onExit={onTextEditExit} />
+          ) : (
+            <HtmlTextEditor menu={menu} doc={doc} version={version.version} onExit={onTextEditExit} />
+          )
         ) : cmpVersion && cmpEntry && comparable ? (
-          <DiffViewer from={cmpEntry} to={entry} fromLabel={versionLabel(cmpVersion.version)} toLabel={versionLabel(version.version)} />
+          SEGMENT_DIFF.test(entry.path) ? (
+            <SegmentDiffViewer menu={menu} doc={doc} fromVersion={cmpVersion.version} toVersion={version.version} />
+          ) : (
+            <DiffViewer from={cmpEntry} to={entry} fromLabel={versionLabel(cmpVersion.version)} toLabel={versionLabel(version.version)} />
+          )
         ) : (
           <Viewer
             key={fileSrc(entry)}

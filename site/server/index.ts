@@ -1,5 +1,5 @@
 import { createReadStream, mkdirSync } from "node:fs";
-import { resolve, join, sep } from "node:path";
+import { resolve, join, sep, extname } from "node:path";
 import Fastify, { type FastifyError } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyMultipart from "@fastify/multipart";
@@ -10,12 +10,14 @@ import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
 import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
-import { StoreError, release, saveEdit, upload, type IncomingFile } from "./store.ts";
+import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
+import { mimeOf } from "./scan.ts";
+import type { Change } from "./textedit/index.ts";
 import {
   addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc,
   trashDoc, updateCategory, updateDoc,
 } from "./manage.ts";
-import { convert, type Target } from "./convert.ts";
+import { convert, convertData, type Target } from "./convert.ts";
 
 const SITE_ROOT = resolve(import.meta.dirname, "..");
 const REPO_ROOT = resolve(SITE_ROOT, "..");
@@ -152,6 +154,26 @@ app.patch<DocParams & { Body: { title?: string; status?: string } }>("/api/docs/
   done("doc", updateDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
 app.post<DocParams & { Body: { menu: string } }>("/api/docs/:menu/:doc/move", async (req) =>
   done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body.menu)));
+// 텍스트 편집(2.0): 조각 목록과 저장
+app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/segments", async (req) =>
+  readSegments(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v));
+// HTML 편집 화면용 사본. 화면은 이 사본을 스크립트 없이(sandbox="allow-same-origin") 연다
+app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/edit-view", async (req, reply) =>
+  reply.type("text/html; charset=utf-8").header("Cache-Control", "no-store").send(htmlEditView(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v)));
+// 저장하지 않은 미리보기: 바뀐 조각을 반영한 대표 파일을 그대로 돌려준다
+// ?to=pdf면 LibreOffice로 PDF 변환해 돌려준다(PPTX 미리보기). 변환 결과는 내용 해시로 캐시한다
+app.post<DocParams & { Querystring: { to?: string }; Body: { baseVersion: string; changes: Change[] } }>("/api/docs/:menu/:doc/text-preview", async (req, reply) => {
+  const r = previewTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
+  reply.header("Cache-Control", "no-store");
+  if (req.query.to === "pdf") {
+    const pdf = await convertData(CACHE_DIR, r.data, extname(r.entry).toLowerCase(), "pdf");
+    return reply.type("application/pdf").send(createReadStream(pdf));
+  }
+  return reply.type(mimeOf(r.entry)).send(Buffer.from(r.data));
+});
+app.post<DocParams & { Body: { baseVersion: string; changes: Change[]; note?: string } }>("/api/docs/:menu/:doc/text-edit", async (req) =>
+  done("text-edit", saveTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
+
 app.post<DocParams>("/api/docs/:menu/:doc/release", async (req) => done("release", release(DOCS_ROOT, req.params.menu, req.params.doc)));
 app.delete<DocParams>("/api/docs/:menu/:doc", async (req) => done("trash", trashDoc(DOCS_ROOT, req.params.menu, req.params.doc)));
 

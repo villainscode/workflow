@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루션을 만들기 위한 **설계 단계 문서(드래프트)**를 관리하는 워크 리포지토리다. 대상은 요구사항, 시퀀스 다이어그램, ERD, 시스템 아키텍처, 개발 도구, 코드 리뷰, 빌드·배포, 운영이고, 의사 결정 기록도 여기에 남긴다. 문서 안의 YAML·셸·워크플로 코드는 대상 팀 저장소에 적용할 예시이고, 이 리포에서 실행하는 코드가 아니다.
 
-리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트를 `site/`에 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`에 있다. 사이트 작업을 할 때는 먼저 그 문서의 현재 단계와 결정 사항(D-n)을 확인하고, 미결정 항목은 진행하기 전에 묻는다.
+리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트를 `site/`에 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`(1.x)와 `REQUIREMENT-2.0.md`(2.0: HTML·DOCX·PPTX 텍스트 편집)에 있다. 사이트 작업을 할 때는 먼저 그 문서의 현재 단계와 결정 사항(D-n)을 확인하고, 미결정 항목은 진행하기 전에 묻는다.
 
 - 응답과 문서는 한국어로 쓴다.
 - 결과물은 코드보다 설명, 프로세스, 그림, 문서 위주로 만든다.
@@ -50,7 +50,7 @@ versions:
   - version: v0.0
     entry: review-gate.html
     note: 변경 메모
-    source: upload        # upload | edit | scan | release
+    source: upload        # upload | edit | text-edit | scan | release
     created: 2026-10-06
 notion_url:               # 등록 후 채운다
 gdrive_url:
@@ -75,6 +75,7 @@ cd site
 npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(predev)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173) 실행
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
+npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없이 저장하면 바이트 동일 등)
 ```
 
 - **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
@@ -84,6 +85,21 @@ npm run build      # 타입 검사 후 site/dist로 빌드
   - 관리 작업은 `useAction().run(작업, 확인옵션)`으로 넘기면 확인 후 실행된다. 무엇이 바뀌는지는 `details`에 적는다.
   - tone은 일반(`default`, 파랑), 이동(`warning`, 주황), 삭제·휴지통(`danger`, 빨강 `--crit`)이다. danger는 기본 포커스가 "취소"다. 포커스는 창이 열리고 60ms 뒤에 준다. 창을 연 Enter 키 입력이 새로 포커스된 버튼으로 이어져 확인 없이 실행되는 것을 막기 위해서다. Enter로 확인 창을 여는 입력칸은 Enter의 기본 동작도 막는다.
   - 순서 변경(↑↓)과 보기 전환은 확인하지 않는다.
+- **텍스트 편집 2.0** (`server/textedit/`, 계획은 `REQUIREMENT-2.0.md`): HTML·DOCX·PPTX의 태그 안 글자만 고친다.
+  - 형식별 어댑터가 "텍스트 조각"(id, 글자, 해시)을 뽑는다. 저장할 때는 바뀐 조각의 **원본 구간만** 교체한다. 그래서 구조·서식·속성과 나머지 바이트는 그대로다.
+  - HTML은 parse5의 텍스트 노드 원본 위치를 쓴다. 앞뒤 공백(들여쓰기)은 편집 구간 밖에 남기고, `pre` 안만 줄바꿈을 허용한다.
+  - DOCX·PPTX는 zip 안 XML의 `<w:t>`·`<a:t>` 위치를 htmlparser2(xmlMode)로 찾는다. 같은 서식이고 사이에 run 경계만 있는 run은 한 조각으로 합치고, 저장할 때 첫 run에 글자를 넣고 나머지를 비운다. 바뀐 파트만 다시 써서 zip을 다시 묶는다.
+  - API: `GET /api/docs/:menu/:doc/segments?v=`, `POST /api/docs/:menu/:doc/text-edit`(`{ baseVersion, changes: [{id, hash, text}], note }`). 저장하면 `source: text-edit` 새 버전이 생긴다. 기준 버전이 최신이 아니거나 조각 해시가 다르면 409를 낸다.
+  - **HTML 그 자리 편집** (`viewers/HtmlTextEditor.tsx`): 최신 버전 HTML 문서 상단의 "텍스트 편집" 버튼으로 연다.
+    - 서버의 `GET /api/docs/:menu/:doc/edit-view?v=`가 조각마다 `<span data-seg>`(SVG 글자는 `<tspan data-seg>`)로 감싸고 `<base>`를 넣은 사본을 준다.
+    - 화면은 이 사본을 `sandbox="allow-same-origin"`(스크립트 없음)으로 열어, 각 span에 `contenteditable="plaintext-only"`를 켠다. SVG 글자는 누르면 입력창으로 고친다(title·desc는 감싸지 않는다).
+    - Enter는 막고(pre 안만 허용), Esc는 그 조각을 되돌리고, 링크·버튼·폼은 동작하지 않게 한다.
+    - 바뀐 조각은 `data-changed`로 표시한다. 작성 중 내용은 localStorage(`workflow:textdraft:*`)에 둔다. 저장은 확인 창을 거쳐 `text-edit` API로 한다.
+  - **DOCX 목록 편집** (`viewers/OfficeTextEditor.tsx`): 왼쪽은 영역(본문·머리글·바닥글·표 칸)과 문단별 조각 칸이다. 서식 힌트 `fmt`(b·i·u)로 원래 서식을 보여 준다. 오른쪽은 `POST /api/docs/:menu/:doc/text-preview`(저장 안 함)가 돌려준 파일을 docx-preview로 그린다.
+  - **PPTX 목록 편집**(같은 `OfficeTextEditor`): 슬라이드 번호는 `presentation.xml`의 발표 순서다(파일 이름 slideN과 다를 수 있다). 미리보기는 `text-preview?to=pdf`(서버 LibreOffice 변환, `convert.ts`의 `convertData`로 내용 해시 캐시)를 PDF 뷰어로 열고, 고치던 슬라이드 쪽(`#page=n`)을 보여 준다.
+  - **DOCX·PPTX 버전 비교** (`viewers/SegmentDiffViewer.tsx`): 문서 상단 "비교"를 고르면 두 버전의 텍스트 조각을 jsdiff `diffArrays`로 맞춰 바뀜·추가·삭제를 보여 준다. HTML 등 텍스트 형식은 기존 줄 단위 `DiffViewer`를 쓴다.
+  - 저장·임시 보관·편집 막대는 `viewers/textedit/session.tsx`의 `useTextSession`과 `EditBar`를 HTML·DOCX 편집기가 함께 쓴다.
+  - 어댑터를 고쳤다면 `npm run check:textedit`로 확인한다(검사용 샘플은 `site/scripts/fixtures/`).
 - **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다. 정식 문서에 업로드나 편집으로 새 버전이 생기면(v1.0 → v1.1) 상태는 approved 그대로 둔다(D-15). 업로드·저장 코드는 status를 건드리지 않는다.
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
 - **아이콘**: 사이트의 기능 버튼은 Lucide(`lucide-react`) 아이콘으로 만들고 `components/IconButton.tsx`를 쓴다. 아이콘만 있는 버튼은 `label`이 aria-label과 title(마우스를 올렸을 때 설명)이 된다. 대화상자의 확인·취소처럼 실수하면 안 되는 버튼과 휴지통의 복원·영구 삭제는 아이콘과 글자를 함께 둔다(`text` prop). 유니코드 기호(✕ ☰ ▾ 등)를 아이콘으로 쓰지 않는다.

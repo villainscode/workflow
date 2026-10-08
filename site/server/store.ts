@@ -3,6 +3,8 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync
 import { dirname, extname, join, normalize, relative, isAbsolute } from "node:path";
 import { unzipSync } from "fflate";
 import { loadSite, type MenuNode } from "./sitefiles.ts";
+import { adapterFor, EditError, type Change } from "./textedit/index.ts";
+import { wrapForEdit } from "./textedit/html.ts";
 import { Document, parseDocument, YAMLSeq } from "yaml";
 
 /** docs/에 파일과 yaml을 쓰는 작업. 원본(파일)을 먼저 쓰고, 색인은 호출한 쪽에서 다시 만든다. */
@@ -21,7 +23,7 @@ export interface UploadInput {
   version?: string;      // 없으면 다음 버전을 자동으로 정한다
   note?: string;
   entry?: string;        // 대표 파일. 없으면 자동 선택
-  source?: "upload" | "edit";
+  source?: "upload" | "edit" | "text-edit";
   files: IncomingFile[];
 }
 
@@ -225,4 +227,74 @@ export function release(docsRoot: string, menu: string, doc: string) {
   meta.set("status", "approved");
   writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
   return { menu, doc, from: js.current, version };
+}
+
+// ---------- 텍스트 편집(2.0): HTML·DOCX·PPTX의 태그 안 글자만 고친다 ----------
+
+function versionEntry(docsRoot: string, menu: string, doc: string, version?: string) {
+  const docDir = join(docsRoot, menu, doc);
+  const metaPath = join(docDir, "meta.yaml");
+  if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  const meta = parseDocument(readFileSync(metaPath, "utf8")).toJS() as { current: string; versions: { version: string; entry: string }[] };
+  const v = version || meta.current;
+  const found = meta.versions.find((x) => x.version === v);
+  if (!found) throw new StoreError(404, `${v} 버전이 없습니다`);
+  return { docDir, current: meta.current, version: v, entry: found.entry, path: join(docDir, v, found.entry) };
+}
+
+/** HTML 편집 화면용 사본(조각마다 data-seg로 감싼 HTML) */
+export function htmlEditView(docsRoot: string, menu: string, doc: string, version?: string) {
+  const v = versionEntry(docsRoot, menu, doc, version);
+  if (adapterFor(v.entry)?.format !== "html") throw new StoreError(400, "HTML 문서만 그 자리 편집을 지원합니다");
+  const dir = v.entry.includes("/") ? v.entry.slice(0, v.entry.lastIndexOf("/") + 1) : "";
+  return wrapForEdit(readFileSync(v.path), `/files/${menu}/${doc}/${v.version}/${dir}`);
+}
+
+/** 대표 파일의 텍스트 조각 목록. 지원하지 않는 형식이면 400 */
+export function readSegments(docsRoot: string, menu: string, doc: string, version?: string) {
+  const v = versionEntry(docsRoot, menu, doc, version);
+  const a = adapterFor(v.entry);
+  if (!a) throw new StoreError(400, `${extname(v.entry)} 파일은 텍스트 편집을 지원하지 않습니다 (HTML·DOCX·PPTX)`);
+  return { format: a.format, version: v.version, entry: v.entry, segments: a.adapter.extract(readFileSync(v.path)) };
+}
+
+/** 저장하지 않고 바뀐 조각을 반영한 대표 파일을 돌려준다(DOCX·PPTX 편집기의 미리보기용) */
+export function previewTextEdit(docsRoot: string, menu: string, doc: string, input: { baseVersion: string; changes: Change[] }) {
+  const v = versionEntry(docsRoot, menu, doc, input.baseVersion);
+  const a = adapterFor(v.entry);
+  if (!a) throw new StoreError(400, `${extname(v.entry)} 파일은 텍스트 편집을 지원하지 않습니다`);
+  try {
+    return { format: a.format, entry: v.entry, data: a.adapter.apply(readFileSync(v.path), input.changes ?? []).data };
+  } catch (e) {
+    if (e instanceof EditError) throw new StoreError(e.status, e.message);
+    throw e;
+  }
+}
+
+/**
+ * 바뀐 텍스트 조각만 원본에 반영해 새 버전(source: text-edit)으로 저장한다.
+ * 기준 버전이 최신이 아니거나 조각의 원래 글자가 달라졌으면 거부한다. 대표 파일 말고는 그대로 복사한다.
+ */
+export function saveTextEdit(docsRoot: string, menu: string, doc: string,
+  input: { baseVersion: string; changes: Change[]; note?: string }) {
+  const v = versionEntry(docsRoot, menu, doc, input.baseVersion);
+  if (v.current !== input.baseVersion) {
+    throw new StoreError(409, `편집하는 동안 새 버전(${v.current})이 생겼습니다. 새로고침해서 최신 내용을 확인하세요`);
+  }
+  const a = adapterFor(v.entry);
+  if (!a) throw new StoreError(400, `${extname(v.entry)} 파일은 텍스트 편집을 지원하지 않습니다`);
+  let result: { data: Uint8Array; changed: number };
+  try {
+    result = a.adapter.apply(readFileSync(v.path), input.changes ?? []);
+  } catch (e) {
+    if (e instanceof EditError) throw new StoreError(e.status, e.message);
+    throw e;
+  }
+  if (result.changed === 0) throw new StoreError(409, "바뀐 텍스트가 없습니다");
+
+  const baseDir = join(v.docDir, input.baseVersion);
+  const files: IncomingFile[] = listFiles(baseDir).map((p) => ({
+    path: p, data: p === v.entry ? result.data : readFileSync(join(baseDir, p)),
+  }));
+  return { ...upload(docsRoot, { menu, doc, entry: v.entry, note: input.note, source: "text-edit", files }), changed: result.changed };
 }
