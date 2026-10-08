@@ -9,7 +9,7 @@ import { loadSite, type MenuNode } from "./sitefiles.ts";
 
 interface MetaFile {
   title: string; category: string; menu: string; kind: string; type?: string; sdlc?: string;
-  status?: string; current: string; notion_url?: string | null; gdrive_url?: string | null;
+  status?: string; current: string; notion_url?: string | null; gdrive_url?: string | null; origin_url?: string | null;
   versions: { version: string; entry: string; note?: string; source?: string; created?: string | Date }[];
 }
 
@@ -89,7 +89,7 @@ export function scanDocs(db: BetterSQLite3Database, docsRoot: string, repoRoot: 
         const doc = tx.insert(documents).values({
           menuSlug: menuDir.name, slug: docDir.name, title: meta.title, kind: meta.kind, type: meta.type ?? null,
           sdlc: meta.sdlc ?? null, status: meta.status ?? "draft", currentVersion: meta.current,
-          notionUrl: meta.notion_url ?? null, gdriveUrl: meta.gdrive_url ?? null,
+          notionUrl: meta.notion_url ?? null, gdriveUrl: meta.gdrive_url ?? null, originUrl: meta.origin_url ?? null,
         }).returning({ id: documents.id }).get();
 
         for (const v of meta.versions ?? []) {

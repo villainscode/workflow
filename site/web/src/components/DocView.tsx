@@ -18,7 +18,7 @@ import { SegmentDiffViewer } from "../viewers/SegmentDiffViewer.tsx";
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
 // zip 형식이라 줄 대신 텍스트 조각 목록으로 비교하는 형식(2.0)
-const SEGMENT_DIFF = /\.(docx|pptx)$/i;
+const SEGMENT_DIFF = /\.(docx|pptx|xlsx)$/i;
 
 export function DocView() {
   const { menu = "", doc = "" } = useParams();
@@ -112,7 +112,7 @@ export function DocView() {
             }} />
           )}
           <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />
-          {entry && /\.(html?|docx|pptx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+          {entry && /\.(html?|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing}
               onClick={() => setTextEditing(true)} />
           )}
@@ -150,9 +150,9 @@ export function DocView() {
         ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
         ) : textEditing ? (
-          /\.(docx|pptx)$/i.test(entry.path) ? (
+          /\.(docx|pptx|xlsx)$/i.test(entry.path) ? (
             <OfficeTextEditor menu={menu} doc={doc} version={version.version}
-              format={/\.pptx$/i.test(entry.path) ? "pptx" : "docx"} onExit={onTextEditExit} />
+              format={/\.pptx$/i.test(entry.path) ? "pptx" : /\.xlsx$/i.test(entry.path) ? "xlsx" : "docx"} onExit={onTextEditExit} />
           ) : (
             <HtmlTextEditor menu={menu} doc={doc} version={version.version} onExit={onTextEditExit} />
           )

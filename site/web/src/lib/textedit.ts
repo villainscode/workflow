@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 
 /** 2.0 텍스트 편집 API */
 export interface Segment { id: number; text: string; hash: string; multiline: boolean; group: string; svg?: boolean; fmt?: string }
-export interface SegmentList { format: "html" | "docx" | "pptx"; version: string; entry: string; segments: Segment[] }
+export interface SegmentList { format: "html" | "docx" | "pptx" | "xlsx"; version: string; entry: string; segments: Segment[] }
 
-export const TEXT_EDITABLE = /\.(html?|docx|pptx)$/i;
+export const TEXT_EDITABLE = /\.(html?|docx|pptx|xlsx)$/i;
 
 export const useSegments = (menu: string, doc: string, version: string) =>
   useQuery({

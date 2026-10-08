@@ -1,0 +1,783 @@
+<!doctype html><html><head><!-- frame-runtime --><script>window.__FRAME_PREAMBLE={"v":1,"capabilities":{"artifact":"artifact.w_ePPE-a.js","assets":"assets.DOAjpBS9.js","comments":"comments.BcqPhVn7.js","db":"db.zFlAA4qL.js","dictation":"dictation.f3j7VXQ8.js","downloads":"downloads.axDW2QAi.js","embed":"embed.SWCZLzn6.js","endpoints":"endpoints.BPfoKaE1.js","files":"files.IkpCjcgM.js","mcp":"mcp.kl0G36TA.js","network":"network.B5UA9Su4.js","permissions":"permissions.BHAs_S4o.js","reads":"reads.Bgov9hIw.js","room":"room.Dy3vHyq9.js","sample":"sample.t8BQC4US.js","self":"artifact.w_ePPE-a.js","user":"user.CB0zJsP2.js"},"transforms":"_transforms.OOT2SKiU.js","comments":"_comments.CVOoGJSh.js","translate":"_translate.DqxC5ek1.js","ldx":"_ldx.B4FSryPi.js"}     </script><script>(function(){"use strict";function fr(t){return t==="cookie"||t==="query"?t:void 0}function dr(t){return typeof t=="number"&&Number.isSafeInteger(t)&&t>0?t:void 0}var eo=3e5;function hr(t,e){try{const r=t("navigation")[0],n=[r.responseStart,r.redirectEnd-r.redirectStart,r.domContentLoadedEventStart,e(),r.connectEnd-r.domainLookupStart,r.responseStart-r.requestStart];r.requestStart>0||(n.length=4);for(let a=0;a<n.length;a++)if(n[a]>=0&&n[a]<=3e5)n[a]=n[a]|0;else{if(a<4)return;n.length=4}return n}catch{return}}var pr=["light","dark","system"],mr=/^[A-Za-z0-9_-]{1,64}$/,Tt=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,vr=new Set(["class","hidden","value","checked","style","title","alt","placeholder","lang","dir","role","tabindex","disabled","readonly","contenteditable","open","colspan","rowspan"]);function _r(t){const e=t.toLowerCase();return e.startsWith("data-")||e.startsWith("aria-")||vr.has(e)}var Lt="data-ldx-props";function yr(t,e){if(e.toLowerCase()===Lt)return!0;const r=t.getAttribute(Lt);if(r===null)return!1;try{const n=JSON.parse(r);if(n===null||typeof n!="object"||Array.isArray(n))return!0;const a=e.toLowerCase();return Object.keys(n).some(s=>s.toLowerCase()===a)}catch{return!0}}var to="http://www.w3.org/1999/xhtml",gr="http://www.w3.org/2000/svg",wr=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),br=new Set(["script","style"]);function Er(t){const e=t.localName.toLowerCase();return t.namespaceURI==="http://www.w3.org/1999/xhtml"?!wr.has(e):t.namespaceURI===gr?!br.has(e):!1}function tt(t,e){return t===e||(t===160||t===32)&&(e===160||e===32)}function Sr(t,e){const r=t.length,n=e.length;let a=0;for(;a<r&&a<n&&tt(t.charCodeAt(a),e.charCodeAt(a));)a++;let s=0;for(;s<r-a&&s<n-a&&tt(t.charCodeAt(r-1-s),e.charCodeAt(n-1-s));)s++;return{p:a,s}}function Ar(t,e){const r=t.firstChild;if(t.childNodes.length!==1||r===null||r.nodeType!==Node.TEXT_NODE){t.textContent=e;return}const n=r.data,a=n.length,s=e.length,{p:l,s:u}=Sr(n,e);l===a&&u===0&&a===s||r.replaceData(l,a-l-u,e.slice(l,s-u));const O=r.data,k=t.ownerDocument.getSelection?.()??null,E=k!==null&&k.rangeCount>0&&(k.anchorNode===r||k.focusNode===r)?{anchor:k.anchorNode,anchorOffset:k.anchorOffset,focus:k.focusNode,focusOffset:k.focusOffset}:null;let h=-1,S=-1;for(let p=0;p<O.length&&p<e.length;p++){const F=O.charCodeAt(p),R=e.charCodeAt(p);F!==R&&tt(F,R)&&(h<0&&(h=p),S=p)}const L=h>=0;if(L&&r.replaceData(h,S-h+1,e.slice(h,S+1)),L&&E!==null&&E.anchor!==null&&E.focus!==null)try{k.setBaseAndExtent(E.anchor,E.anchorOffset,E.focus,E.focusOffset)}catch{}}var kr=new Set(["html","head","body","frameset"]);function Rr(t){return t.namespaceURI==="http://www.w3.org/1999/xhtml"&&kr.has(t.localName)}function Tr(t){if(t===null||typeof t!="object")return!1;const e=t;if(typeof e.target!="string"||!mr.test(e.target)||e.text!==void 0&&typeof e.text!="string")return!1;if(e.attrsSet!==void 0){if(e.attrsSet===null||typeof e.attrsSet!="object")return!1;for(const[r,n]of Object.entries(e.attrsSet))if(!Tt.test(r)||typeof n!="string")return!1}if(e.attrsRemoved!==void 0){if(!Array.isArray(e.attrsRemoved))return!1;for(const r of e.attrsRemoved)if(typeof r!="string"||!Tt.test(r))return!1}return!0}function Lr(t,e){if(t===null||typeof t!="object")return!1;const{seq:r,elements:n}=t;if(typeof r!="number"||!Number.isSafeInteger(r)||!Array.isArray(n)||n.length===0||n.length>64)return!1;for(let a=0;a<n.length;a++)if(!e(n[a]))return!1;return!0}function Or(t){return t===null||typeof t!="object"?!1:Lr(t.__frame_patch,Tr)}function Mr(t){if(t===null||typeof t!="object")return!1;const e=t.__frame_init;return e!==null&&typeof e=="object"}function Pr(t){return t!==null&&typeof t=="object"&&t.__frame_size_poke===!0}function Nr(t){if(t===null||typeof t!="object")return!1;const e=t.__frame_host_visible;return e!==null&&typeof e=="object"&&typeof e.visible=="boolean"}function Cr(t){if(t===null||typeof t!="object")return!1;const e=t.__frame_theme;if(e===null||typeof e!="object")return!1;const r=e.theme;return typeof r=="string"&&pr.includes(r)}var Fr=["ok","empty","snapshot_error","snapshot_timeout","unclonable","oversize","unavailable","restore_error","withheld"],jr=["TypeError","RangeError","ReferenceError","SyntaxError","DataCloneError","QuotaExceededError","AbortError","TimeoutError","SecurityError","Error","other"];function xr(t){return typeof t=="string"&&jr.includes(t)?t:"other"}var Ir=Object.freeze({until:null,now:!1}),Dr="__claude_hot",Hr="__claude_hot_in",Br=/^__claude_hot(?:_in)?(?::|$)/,Ot=/^[0-9a-z]{1,32}$/,rt=t=>t===void 0?Dr:"__claude_hot:"+t,Le=t=>t===void 0?Hr:"__claude_hot_in:"+t;function qr(t,e){const r=[];for(let n=0;n<t.length;n++){const a=t.key(n);a!==null&&a!==e&&Br.test(a)&&r.push(a)}for(const n of r)t.removeItem(n)}function Ur(t){let e=null;try{e=q(JSON.parse(t)?.hot)}catch{return null}return e===null||typeof e.k!="string"||!Ot.test(e.k)?null:he(e.g)?{k:e.k,g:e.g}:{k:e.k}}var ro=262144,Kr=3e3,Gr=5e3,Mt=/^[a-z0-9._:-]{1,64}$/,$r=["none","hot-restart","hard-reload"],zr=["asset","doc","added","removed"],Vr=1500,Wr=/^[0-9a-f]{64}$/;function q(t){return t!==null&&typeof t=="object"?t:null}function he(t){return typeof t=="number"&&Number.isInteger(t)&&t>=0&&t<2**31}function Pt(t){return t===void 0||typeof t=="number"&&Number.isFinite(t)}function Xr(t){return t===void 0||typeof t=="string"&&Mt.test(t)}function Nt(t){const e=q(t);return e!==null&&(e.until===null||typeof e.until=="number"&&Number.isFinite(e.until))&&typeof e.now=="boolean"}function nt(t){const e=q(t);return e!==null&&typeof e.ver=="string"&&e.ver.length<=128&&Pt(e.seq)&&typeof e.handoff=="string"&&Fr.includes(e.handoff)&&Xr(e.note)}function Ct(t){const e=q(t);return e!==null&&he(e.gen)&&(e.phase==="final"||e.phase==="pending")&&(e.from===null||nt(e.from))}function Yr(t){const e=q(t);return e!==null&&e.kv===1&&he(e.gen)&&nt(e.from)&&Object.hasOwn(e,"data")}function Jr(t){const e=q(t);return e!==null&&e.__frame_hot_snapshot===!0&&he(e.gen)&&typeof e.timeoutMs=="number"&&e.timeoutMs>=0&&e.timeoutMs<=6e4&&(e.handoff===void 0||typeof e.handoff=="boolean")&&(e.deadline===void 0||Nt(e.deadline))&&Pt(e.seq)&&(e.note===void 0||typeof e.note=="string")&&(e.key===void 0||typeof e.key=="string")}function Zr(t){const e=q(t);return e!==null&&e.__frame_hot_start===!0&&he(e.gen)&&nt(e.from)}function Qr(t){return typeof t=="string"&&t.length>=1&&t.length<=128}function Ft(t){return q(t)!==null&&!Array.isArray(t)}function en(t){const e=q(t);return e!==null&&e.__frame_cap_grant===!0&&typeof e.cap=="string"&&Qr(e.ver)&&(e.grant===void 0||Ft(e.grant))&&(e.budgets===void 0||Ft(e.budgets)&&Object.values(e.budgets).every(Number.isFinite))&&(e.brokerGen===void 0||he(e.brokerGen))}function tn(t){const e=q(t);return e!==null&&e.__frame_cap_rewired===!0&&(e.caps===void 0||Array.isArray(e.caps)&&e.caps.every(r=>typeof r=="string"))&&(e.brokerGen===void 0||he(e.brokerGen))}function Ge(t){const e=q(t);return e!==null&&typeof e.ver=="string"&&e.ver.length<=128&&Number.isFinite(e.seq)}function jt(t){if(t==null||typeof t=="string")return!0;const e=q(t);return e!==null&&typeof e.doc=="string"&&typeof e.profile=="string"}function rn(t){const e=q(t);return e!==null&&typeof e.path=="string"&&zr.includes(e.kind)&&jt(e.from)&&jt(e.to)}function nn(t){return t===null?null:Object.freeze(t.filter(rn))}function on(t){const e=q(t);return e!==null&&e.__frame_hot_update===!0&&Number.isFinite(e.id)&&Ge(e.from)&&Ge(e.to)&&(e.changed===null||Array.isArray(e.changed))&&$r.includes(e.required)&&Nt(e.deadline)&&typeof e.verdictTimeoutMs=="number"&&e.verdictTimeoutMs>=0&&e.verdictTimeoutMs<=6e4&&(e.preflight===void 0||typeof e.preflight=="string"&&Wr.test(e.preflight))}function an(t){const e=q(t);return e!==null&&e.__frame_hot_readdress===!0&&Ge(e.from)&&Ge(e.to)}var pe=/^[\w.-]+\.js$/;function sn(t,e,r){return r?"inert":typeof e=="string"&&pe.test(e)?t?[e]:"inert":t?"inert":"framed"}var xt=Object.freeze({[Symbol("claude.hot.restart")]:!0});function It(t,e){let r;try{r=t??sessionStorage}catch{return null}const n=rt(e?.k),a=Le(e?.k);let s=null;try{s=r.getItem(n)}catch{}try{r.removeItem(n)}catch{}try{qr(r,a)}catch{}let l=null;if(s!==null&&!(e!==null&&e.g===void 0))try{const u=JSON.parse(s);Yr(u)&&(e===null||u.gen===e.g)&&(l=u)}catch{}if(l===null)try{r.removeItem(a)}catch{}return l}function Dt(){const t=/^\/_f\/([^/]{1,128})\//.exec(location.pathname);return t?t[1]:""}var ln=/^[^/\\?#]{1,128}$/,ot=t=>ln.test(t)&&t!=="."&&t!=="..";function Ht(t,e,r){const n=new URL(t),a="/_f/"+e+"/";if(!e||!n.pathname.startsWith(a)||!ot(r))return null;const s=n.search.slice(1).split("&").filter(l=>!/^__frame_t(?:=|$)/.test(l)).join("&");return n.origin+"/_f/"+r+"/"+n.pathname.slice(a.length)+(s?"?"+s:"")+n.hash}var $e="{}";function Oe(t){if(!t)return null;const e={ver:t.ver,handoff:t.handoff};return t.seq!==void 0&&(e.seq=t.seq),t.note!==void 0&&(e.note=t.note),e}function Bt(t,e){return t!==null&&t.note===void 0&&e?.note!==void 0?{...t,note:e.note}:t}function qt(t){const e=t?.k;return e!==null&&typeof e=="object"?e:void 0}function cn(t,e,r,n=null){const a=setTimeout,s=clearTimeout,l=queueMicrotask,u=performance.now.bind(performance),O=new TextEncoder;let k=null,E=null;try{k=history,E=k.replaceState.bind(k)}catch{}const h=(...o)=>{try{console.warn(...o)}catch{}};let S=Dt(),L=null;try{L=sessionStorage}catch{}const p={storage:L,fetch:typeof fetch=="function"?fetch.bind(globalThis):null,entry:location.origin+location.pathname+location.search,ver:S,priors:[],key:n?.k};let F=n?.k;const R=typeof requestAnimationFrame=="function"?requestAnimationFrame:o=>a(()=>o(u()),16);let _=e?.data??{},y=Oe(e?.from),j=e?.gen??0,I=e!==null,B=!1,G=!1,D=null,be=!1;const Fe=new AbortController;let je=null,U=null,Ee=null,xe=!1,le=()=>{};const ce=new Promise(o=>{le=o});let ve=!1,c=!1,g=!1,v,A=null,H=!1,X=!1,K=!1,te=!1,Y=!1,_e=!1;const ye=o=>{for(const f of[rt(o),Le(o)])try{L?.removeItem(f)}catch{}},$=(o,f)=>{try{f!==null&&r.post(o,f)}catch{}},Ie=()=>Y||=K&&(U===null||te),J=()=>{const o={__frame_hot:!0,ready:U!==null,accept:Ee!==null,demand:!0};_e=!Y,_e&&(o.booting=!0),ve&&(o.readData=!0),g&&(o.threw=!0),A?.assess&&(o.preflight=!0),$(o,D)};let De=!1,re=!1,ue=!1,He=!1;const Je=()=>{De||!be||ue||(De=!0,$({__frame_reveal_hold:!0},"*"))},Se=()=>new Promise(o=>{let f,d=0;const m=M=>{if(f===void 0)f=M;else if(M!==f||++d>=8){o();return}try{R(m)}catch{o()}};try{R(m)}catch{o()}}),Be=()=>{ue=!0,$({__frame_reveal_ready:!0},"*")},qe=o=>{re||(re=!0,o.then(f=>{if(f===!1)return;let d=null;try{d=A?.settle?.()??null}catch{}return(d===null?Se():new Promise(m=>{a(m,50),Promise.resolve(d).then(m,m)}).then(Se)).then(Be)}))},yt=()=>{if(He||!ue)return;He=!0;const o=()=>{try{A?.afterReveal?.()}catch{}};o(),Se().then(()=>{o(),Be()})},ee=(o=!1)=>{if(xe||U===null||!I||!G)return;xe=!0;const f=U,d=_;l(()=>{let m;try{m=f(d)}catch(P){throw le(!1),P}let M=!1;try{M=typeof m?.then=="function"}catch{}if(!M){le(!0);return}Promise.resolve(m).then(()=>le(!0),P=>{le(!1),l(()=>{throw P})})}),qe(o?ce:r.dcl.then(()=>ce))},fe=o=>typeof o=="string"&&Mt.test(o)?o:void 0,Ae=o=>{const f={__frame_hot_restart:!0},d=fe(o?.note);d!==void 0&&(f.note=d),o?.required==="hard-reload"&&(f.required="hard-reload"),$(f,D)},Ue=Object.freeze({get data(){return G||(c=!0),!I&&!ve&&(ve=!0,G&&J()),_},get from(){return y},get gen(){return j},signal:Fe.signal,snapshot(o){typeof o=="function"&&(je=o)},ready(o){typeof o!="function"||U!==null||(U=o,Je(),J(),B&&$({__frame_hot_ready:!0,gen:j},D),ee())},accept(o){typeof o=="function"&&(Ee=o,J())},restart(o){const f={note:o?.note,required:o?.required};if(G){Ae(f);return}const d=v;v={note:fe(d?.note)??f.note,required:d?.required==="hard-reload"||f.required==="hard-reload"?"hard-reload":void 0}}});let i=null,w=()=>{};const b=new Promise(o=>{w=o});let N=null;const Z=()=>N??=r.dcl.then(()=>{let o=!1;try{o=i!==null&&i.expect()}catch{}if(!o)return;const f=i.maxMs;return new Promise(d=>{b.then(d),a(d,f)})}),Q=()=>{if(!H||X||A===null)return;X=!0;const o=A;Z().then(()=>{try{ue||o.afterStart(qt(e),!1)}catch{}})},de=o=>{e!==null&&c&&(ve=!0),_={},y=null,j=0;try{L?.removeItem(Le(n?.k))}catch{}e!==null&&!o&&qe(r.dcl.then(()=>U!==null?ce:void 0))},Gn=()=>{H=!0,qe(Z().then(()=>U!==null?ce:void 0)),Q()};try{addEventListener("error",()=>{g||U!==null||(g=!0,J())})}catch{}const sr=()=>{a(()=>{!Y&&Ie()&&_e&&J()},0)};try{K=document.readyState==="complete",K||addEventListener("load",()=>{K=!0,sr()},{once:!0})}catch{K=!0}Ie(),ce.then(()=>{te=!0,sr()});let ge=-1,gt,wt,Ke=!0,bt=!1,Et,Ze=null;const St=o=>{const f=Ze===null;Ze=Ke&&o[0]!=="withheld"?o:["withheld",o[1],$e];let d=o[0];if(Ke&&d!=="withheld"){const M={ver:S,handoff:d};gt!==void 0&&(M.seq=gt),wt!==void 0&&(M.note=wt);try{if(L===null)throw new Error("no storage");L.setItem(rt(F),'{"kv":1,"gen":'+ge+',"from":'+JSON.stringify(M)+(Et!==void 0?',"k":'+JSON.stringify(Et):"")+',"data":'+(d==="ok"?o[2]:$e)+"}")}catch{d="unavailable"}}else{d="withheld",ye(F);try{A?.release?.()}catch{}}const m={__frame_hot_snapshotted:!0,gen:ge,handoff:d,bytes:o[1]};o[3]!==void 0&&(m.errName=o[3]),$(m,D),f&&(d==="snapshot_error"||d==="unclonable"||d==="oversize")&&h("claude.hot: snapshot",d,o[3])},ke=o=>{try{return xr(o?.name)}catch{return"other"}},Re=(o,f,d=0)=>St(f===void 0?[o,d,$e]:[o,d,$e,ke(f)]),$n=o=>{if(o.gen<=ge)return;const f=ge>=0;if(ge=o.gen,gt=o.seq,wt=fe(o.note),typeof o.key=="string"&&Ot.test(o.key)&&o.key!==F&&(ye(F),F=o.key),Ke&&=o.handoff!==!1,f){Ze!==null?St(Ze):bt&&$({__frame_hot_held:!0,gen:ge},D);return}Fe.abort();const d=Object.freeze({handoff:Ke,timeoutMs:o.timeoutMs,deadline:o.deadline??Ir}),m=je,M=()=>{if(Ke)try{Et=A?.capture()}catch{}if(m===null){Re("empty");return}let T=!1;const z=a(()=>{T||(T=!0,Re("snapshot_timeout"))},Math.max(0,d.timeoutMs));Promise.resolve().then(()=>m(d)).then(Te=>{if(T)return;T=!0,s(z);let ne;try{ne=JSON.stringify(Te)}catch(At){Re("unclonable",At);return}if(typeof ne!="string"){Re("unclonable");return}let oe=ne.length;try{oe=O.encode(ne).length}catch{}if(oe>262144){Re("oversize",void 0,oe);return}St(["ok",oe,ne])},Te=>{T||(T=!0,s(z),Re("snapshot_error",Te))})};let P=null;try{P=A?.holdForIme()??null}catch{}if(P===null)M();else{bt=!0,$({__frame_hot_held:!0,gen:ge},D);const T=()=>{bt=!1,M()};P.then(T,T)}},zn=o=>{if(!B||I||U===null||o.gen!==j)return;let f=null;try{f=It(L,n&&{k:n.k,g:o.gen})}catch{}if(f!==null&&f.gen!==o.gen){f=null;try{L?.removeItem(Le(n?.k))}catch{}}_=f?.data??{},y=Bt(Oe(f?.from??o.from),Oe(o.from)),f!==null&&(j=f.gen),I=!0,B=!1;const d=qt(f);ce.then(m=>{try{m&&A?.afterStart(d,!0)}catch{}}),ee(!0)},ir=o=>{const f=S,d=p.entry;let m="",M,P=null;try{if(m=location.href,M=k.state,P=Ht(m,f,o),P!==null)if(E(M,"",P),location.pathname.startsWith("/_f/"+o+"/"))P=location.href;else return{failed:"navigate event canceled"}}catch(T){return{failed:ke(T)}}S=p.ver=o,p.priors.push(f)>8&&p.priors.splice(1,1);try{p.entry=Ht(d,f,o)??d}catch{}return[P,f,d,m,M]},Vn=({from:o,to:f})=>{let d,m;if(!ot(f.ver))d="adopt_failed",m="not a version path segment";else if(f.ver===S)d="adopted";else if(!S||o.ver!==S)d="stale";else{const P=ir(f.ver);"failed"in P?(d="adopt_failed",m=P.failed):d=P[0]===null?"adopt_skipped":"adopted"}m!==void 0&&h(`claude.hot: could not move this page's URL to its new version folder /_f/${f.ver}/ (${m})`);const M={__frame_hot_readdressed:!0,to:f.ver,at:S,outcome:d};$(M,D)};let Qe=0;const Wn=o=>{const f=Ee;if(f===null||o.id<=Qe)return;Qe=o.id;const d=A?.assess;if(o.preflight===void 0||d===void 0){lr(o,f);return}let m=!1;const M=z=>{m||(m=!0,s(T),o.id===Qe&&lr(o,f,z))},P=()=>M(d.timeout(o)),T=a(P,Vr+100);d.run(o,window).then(M,P)},lr=(o,f,d)=>{let m,M=!1,P=!1,T,z,Te=null;const ne=C=>{if(P)return!1;if(T!==void 0&&T!==C)return h(`claude.hot: u.${C}() ignored - u.${T}() was called first`),!1;const ae=T===void 0;return T=C,ae},oe=C=>{T="restart",h(`claude.hot: ${C} - restarting`)},At=()=>{if(!ne("adopt")||o.id!==Qe)return;const C=o.to.ver;if(et.required!=="none"){oe(`u.adopt() needs required 'none', it is '${et.required}'`);return}if(!ot(C)){oe("u.adopt() cannot address this version");return}if(!S||C===S)return;const ae=ir(C);if("failed"in ae){z="adopt_failed",oe(`adopt_failed ${ae.failed}; URL not changed`);return}const[V,Rt,Jn,ur,Zn]=ae;V===null?(z="adopt_skipped",h(`claude.hot: adopt_skipped - page already left /_f/${Rt}/; URL not changed, update still applied`)):z="adopted",Te=()=>{if(S===C){if(V!==null)try{if(location.href!==V)h("claude.hot: adopt_revert_skipped - update not applied; URL left where the page navigated");else{if(E(Zn,"",ur),location.href!==ur){h("claude.hot: adopt_revert_failed navigate event canceled - URL still at the new version");return}z="adopt_reverted",h("claude.hot: adopt_reverted - adopt() was called but the handler threw; URL restored")}}catch(Qn){h(`claude.hot: adopt_revert_failed ${ke(Qn)} - URL still at the new version`);return}S=p.ver=Rt,p.entry=Jn,p.priors[p.priors.length-1]===Rt&&p.priors.pop(),V===null&&(z=void 0)}}},et=Object.freeze({from:{ver:o.from.ver,seq:o.from.seq},to:{ver:o.to.ver,seq:o.to.seq},changed:nn(o.changed),required:o.required,deadline:o.deadline,adopt:At,defer(){return ne("defer")&&et.deadline.now&&oe("u.defer() past the deadline"),xt},restart(C){return ne("restart"),T==="restart"&&!P&&(m??=fe(C?.note),M||=C?.required==="hard-reload"),xt},...d?.update}),Xn=(C,ae)=>{P=!0,C==="threw"?(Te?.(),m??=ke(ae).toLowerCase()):T===void 0&&h(C==="timeout"?"claude.hot: accept handler did not answer in time - restarting":"claude.hot: accept handler settled without defer/restart/adopt - restarting");const V={__frame_hot_verdict:!0,id:o.id};V.verdict=C==="threw"||T===void 0||T==="restart"?"restart":T==="adopt"?"applied":"deferred",V.verdict==="restart"&&(M&&(V.required="hard-reload"),m!==void 0&&(V.note=m)),z!==void 0&&(V.verdict==="applied"||z!=="adopted")&&(V.adopt=z),$(Object.assign(V,d?.verdict),D)};let cr=!1;const kt=(C,ae)=>cr?!1:(cr=!0,s(Yn),Xn(C,ae),!0),Yn=a(()=>kt("timeout"),o.verdictTimeoutMs);Promise.resolve().then(()=>f(et)).then(()=>kt("settled"),C=>{!kt("threw",C)&&T==="adopt"&&Ae({note:ke(C).toLowerCase()}),h("claude.hot: accept",ke(C))})};try{t.hot===void 0&&Object.defineProperty(t,"hot",{value:Ue,writable:!1,configurable:!1,enumerable:!1})}catch{}return{hot:Ue,boot:p,afterConnect(){be=!0,(e!==null||U!==null)&&Je()},onInit(o,f){D=f,G=!0;const d=Ct(o)?o:null;d?.phase==="final"&&e!==null&&e.gen===d.gen?(I=!0,y=Bt(y,Oe(d.from)),Gn()):(B=d?.phase==="pending",de(B),I=!B,j=d?.gen??0,y=Oe(d?.from)),J(),_e&&a(()=>{Y||(Y=!0,J())},Gr),B&&U!==null&&$({__frame_hot_ready:!0,gen:j},f),v!==void 0&&(Ae(v),v=void 0),ee()},onNoInit(){G=!0,de(!1),I=!0,ee()},onShell(o){return o?.__frame_revealed===!0?(yt(),!1):Jr(o)?($n(o),!0):Zr(o)?(zn(o),!0):on(o)?(Wn(o),!0):an(o)?(Vn(o),!0):!1},attachExtras(o){A=o,Q(),o.assess&&J()},inSlot:()=>Le(F),hydration(o,f){i??={expect:o,maxMs:f}},hydrated(){w()},carried(){return I?_:{}},presented:()=>ue}}var no="frame_ldx_runtime",un="frame_ldx_build",oo="script#an-form",fn=256;function Ut(t,e,r){for(const n of t)r(n)&&t.delete(n);t.size>=fn&&!t.has(e)&&t.delete(t.values().next().value),t.add(e)}function Me(t,e,r,n){try{const a=t[e];if(typeof a!="function")return;t[e]=function(...s){if(n){let u;try{u=n(this)}catch{}if(u!==void 0)return u}const l=a.apply(this,s);try{r?.(this)}catch{}return l}}catch{}}var at;function dn(){if(at)return at;const t={media:new Set,contexts:new Set,gate:null,onStart:null,onStop:null};at=t;const e=l=>t.gate?.(l),r=l=>{t.onStop?.(l)},n=window.HTMLMediaElement?.prototype;n&&(Me(n,"play",l=>{Ut(t.media,l,u=>u.paused),t.onStart?.(l)},e),Me(n,"pause",r));const a=window.AudioContext,s=window.AudioNode?.prototype;return a&&s&&(Me(s,"connect",l=>{const u=l.context;u instanceof a&&(Ut(t.contexts,u,O=>O.state==="closed"),t.onStart?.(u))}),Me(a.prototype,"resume",void 0,e),Me(a.prototype,"suspend",r)),t}function hn(t){let e=window;for(let r=0;e.parent&&e.parent!==e&&r<8;r++)if(e=e.parent,t(e))return!0;return!1}function pn(){let t=null;const e=()=>t??parent,r=n=>t?n===t:hn(a=>a===n);return{post(n,a){if(t){e().postMessage(n,a);return}let s=parent;for(let l=0;l<8&&(s.postMessage(n,a),!(!s.parent||s.parent===s));l++)s=s.parent},on(n){const a=s=>{const l=s.source;r(l)&&n(s.data,s.origin,s.isTrusted,()=>{t??=l})};return addEventListener("message",a),()=>removeEventListener("message",a)},port:n=>({post(a,s){if(s?.activation){e().postMessage(a,{targetOrigin:n,includeUserActivation:!0});return}if(s?.transfer){e().postMessage(a,n,s.transfer);return}e().postMessage(a,n)},on(a,s){const l=u=>{r(u.source)&&u.origin===n&&a(u.data,u)};return addEventListener("message",l,s),()=>removeEventListener("message",l,s)}})}}function mn(){const t={post:()=>{},on:()=>()=>{}};return{...t,port:()=>t}}var vn=500,_n=2e4,yn="data-token-reads",gn="data-frame-refused-watch",wn="data-frame-unsupported",bn=/(?:^|\s)stylesheet(?:\s|$)/i;function En(t,e){let r="";if(t instanceof HTMLScriptElement?r=t.src:t instanceof HTMLLinkElement&&bn.test(t.rel)&&(r=t.href),!r)return null;try{const n=new URL(r);return n.origin===location.origin&&n.pathname.startsWith(e)?n.origin+n.pathname:null}catch{return null}}function Sn(t,e,r){if(!t||e!=="query")return;const n="/_f/"+t+"/";document.documentElement.setAttribute(gn,"");const a=location.href,s=fetch,l=setTimeout,u={method:"HEAD",cache:"no-store",credentials:"same-origin"},O=p=>p.ok||p.status===304;let k=!1,E=!1;const h=()=>removeEventListener("error",L,!0),S=async p=>{const F=await s(p,u);if(O(F))E=!0;else if(F.status===403){const R=await s(a,u);if(O(R)){const _=(await s(p,u)).status;_===403?(E=!0,document.documentElement.setAttribute(wn,""),r()):_<500&&(E=!0)}else R.status>=400&&R.status<500&&(E=!0)}},L=p=>{if(E||k)return;if(document.documentElement.hasAttribute(yn)){E=!0,h();return}const F=En(p.target,n);F&&(k=!0,l(()=>{S(F).catch(()=>{}).finally(()=>{k=!1,E&&h()})},vn))};addEventListener("error",L,!0),addEventListener("load",h,{once:!0}),l(h,_n)}var st="__frame_scroll",An=150,kn=310,Rn=160,Tn=3e4,Kt="p,h1,h2,h3,h4,h5,h6,li,pre,blockquote,tr,dt,dd,figcaption,summary",Gt=()=>innerWidth<=kn&&innerHeight<=Rn,$t=t=>{const e=document.createTreeWalker(t,NodeFilter.SHOW_TEXT);let r="";for(;r.length<600&&e.nextNode();)r+=e.currentNode.nodeValue.slice(0,600-r.length);const n=r.replace(/\s+/g," ").trim().slice(0,120);let a=2166136261;for(let s=0;s<n.length;s++)a=Math.imul(a^n.charCodeAt(s),16777619);return n.length>11?a>>>0||1:0},zt=t=>{for(let e=t;e&&e!==document.scrollingElement;e=e.parentElement){const r=getComputedStyle(e).position;if(r==="fixed"||r==="sticky"||e!==t&&e.scrollTop)return!1}return!0},Ln=()=>{const t=[],e=[];try{for(let r=0;r<16;r++){const n=document.elementFromPoint(innerWidth/(r%2?4:2),innerHeight*(r>>1)/8+1);let a=n?.closest(Kt)??n;for(;a&&!a.matches(Kt)&&![...a.childNodes].some(l=>l.nodeType===3&&l.nodeValue?.trim());)a=a.parentElement;const s=a&&!e.includes(a)?$t(a):0;s&&!t.some(l=>l[0]===s&&l[2]===a.tagName)&&zt(a)&&(e.push(a),t.push([s,Math.round(a.getBoundingClientRect().top),a.tagName]))}}catch{}return t.sort((r,n)=>+(r[1]<0)-+(n[1]<0)),t.length?t.slice(0,3):void 0},On=t=>{try{for(const[e,r,n]of t.a??[]){const a=document.getElementsByTagName(n);let s;for(let u=0;u<a.length&&a.length<5e3;u++)$t(a[u])===e&&(s=s===void 0||s?.contains(a[u])?a[u]:null);const l=s?.getBoundingClientRect();if(l?.height&&s.checkVisibility?.()!==!1&&zt(s)&&isFinite(r))return Math.max(0,Math.round(scrollY+l.top-r))}}catch{}return t.y};function Mn(){let t=0,e=!1,r=!1,n=!1,a={y:0},s=null;const l=y=>{try{sessionStorage.setItem(st,JSON.stringify(y))}catch{}},u=y=>{if(clearTimeout(t),s===null)return;const j=s;s=null,l({y:j,a:y&&j>0?Ln():void 0})},O=()=>{if(e){e=!1;return}r=!0,s=scrollY,clearTimeout(t),t=setTimeout(u,An,!0)};try{addEventListener("scroll",O,{passive:!0}),addEventListener("pagehide",()=>u())}catch{}const k=()=>{let y;try{y=sessionStorage.getItem(st)}catch{return null}if(y===null)return null;let j;try{j=JSON.parse(y)}catch{j=null}const{y:I,a:B}=j??{};if(!(typeof I=="number"&&Number.isFinite(I)&&I>=0)){try{sessionStorage.removeItem(st)}catch{}return null}const G=D=>Array.isArray(D)&&typeof D[0]=="number"&&Number.isFinite(D[1])&&typeof D[2]=="string";return{y:I,a:Array.isArray(B)&&B.length<4&&B.every(G)?B:void 0}};let E=!1,h=-1;const S=y=>{try{const j=scrollY,I=On(y);scrollTo({top:I,left:0,behavior:"instant"}),a=Gt()?y:{y:I,a:y.a},n=!0,clearTimeout(t),s=null,l(a),h=scrollY,h!==j&&(e=!0);const B=I!==y.y&&document.readyState!=="complete";(h!==I||B)&&!E&&(E=!0,addEventListener("load",()=>{try{scrollY===h&&S(k()??a)}catch{}},{once:!0}))}catch{}},L=()=>{try{return!!location.hash}catch{return!0}};let p=!1;const F=()=>{try{if(p||!Gt())return;p=!0;const y=Date.now(),j=()=>{try{removeEventListener("resize",j)}catch{}Date.now()-y>Tn||r||L()||S(k()??a)};addEventListener("resize",j)}catch{}};let R=!1,_=!1;return{restore(){if(R||(R=!0,L()))return;const y=k();y!==null&&(S(y),F())},promoted(){if(_||(_=!0,L()))return;const y=k();y!==null?(S(y),F()):n&&S(a)}}}function Pn(t,e,r,n){let a=null;try{a=window.trustedTypes?.createPolicy("frame-runtime",{createScriptURL:O=>O})??null}catch{}const s=window.Worker,l=s?.prototype,u=Object.freeze({Worker:s,workerOn:l?.addEventListener,workerPost:l?.postMessage,workerTerminate:l?.terminate,fetch:window.fetch.bind(window),preventDefault:Event.prototype.preventDefault,now:Date.now,policy:a,origins:e});r(t).then(O=>O?.bootTopLevel?O.bootTopLevel(u,n):n.settle()).catch(()=>n.settle())}var ao="modulepreload",so=function(t){return"/"+t},io={},Nn=function(e,r,n){let a=Promise.resolve();function s(l){const u=new Event("vite:preloadError",{cancelable:!0});if(u.payload=l,window.dispatchEvent(u),!u.defaultPrevented)throw l}return a.then(l=>{for(const u of l||[])u.status==="rejected"&&s(u.reason);return e().catch(s)})},Cn=window===top,Vt=Object.getOwnPropertyDescriptor(window,"claude"),ze=sn(Cn,window.__FRAME_PREAMBLE?.topLevel,Vt?.writable===!1),it=typeof ze=="object"&&ze[0],x=it?mn():pn();(function(){const t=Object.defineProperty,e=globalThis,r=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let n=0;for(let a=0;a<r.length;a++){const s=r[a];try{t(e,s,{value:void 0,writable:!1,configurable:!1})}catch{try{delete e[s]}catch{}try{t(e,s,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof e[s]=="function"&&n++}if(n&&ze==="framed")try{x.post({__frame_rtc_lockdown_failed:n},"*")}catch{}})();var Wt=1e4,Fn=2e3,lt=2e3,ct=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function Xt(t){for(const e of ct)if(e.endsWith(":*"))try{const r=new URL(t);if(`${r.protocol}//${r.hostname}:*`===e)return!0}catch{}else if(t===e)return!0;return!1}var Pe=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),Ne=window.__FRAME_PREAMBLE?.transforms,ut=window.__FRAME_PREAMBLE?.comments,ft=window.__FRAME_PREAMBLE?.translate,me=window.__FRAME_PREAMBLE?.ldx,Ve=fr(window.__FRAME_PREAMBLE?.cred),Yt=(()=>{try{const[t]=performance.getEntriesByType("navigation"),e=t?.serverTiming?.find(r=>r.name==="frame-cred-exp");return e!==void 0&&/^\d{1,15}$/.test(e.description)?dr(Number(e.description)):void 0}catch{return}})();function Jt(t){return Nn(()=>import("/_runtime/"+t),void 0)}var Ce=new Set,Zt=setTimeout,jn=fetch,xn=AbortController,In=800+800*Math.random(),Dn=3e3,We=null,Qt=new Map;function Hn(t,e){let r=Qt.get(t);return r||Qt.set(t,r=Bn(t,e)),r}function Bn(t,e){if(We?.has(t))return Promise.resolve("csp");if(navigator.onLine===!1)return Promise.resolve("offline");const r=new xn;let n=!1;return Zt(()=>{n=!0,r.abort()},Dn),jn("/_runtime/"+t,{signal:r.signal}).then(a=>(r.abort(),a.ok?/javascript/i.test(a.headers.get("content-type")??"")?e instanceof Error&&/:\d+:\d+\)?$/m.test(e.stack??"")?"eval":"served":"mime":"http"),()=>n?"timeout":We?.has(t)?"csp":"net")}function se(t){if(!We){const e=We=new Set;try{document.addEventListener("securitypolicyviolation",r=>{const n=/\/_runtime\/([^/?#]+)/.exec(r.blockedURI);n&&r.disposition!=="report"&&e.add(n[1])})}catch{}}return Jt(t).catch(()=>new Promise(e=>Zt(e,In)).then(()=>Jt(t+"?r=1")).then(e=>(e!==void 0&&Ce.add(t),e)))}function er(t,e,r){return{contract:t.contract,changes:new Set(t.changes??[]),flags:new Set(t.flags??[]),capabilities:t.capabilities??{},capBudgets:t.capBudgets??{},brokerGen:t.brokerGen,transforms:new Map,shellOrigin:e,shell:r,mount:_t,hooks:Xe,pipe:()=>({wrap:(n,a)=>(...s)=>{try{return a(...s)}catch(l){return Promise.reject(l)}}})}}var we=null,W=null;function tr(t,e,r){try{Object.defineProperty(t,e,{value:r,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(t,e,{value:r,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var dt=!1,Xe={editBefore:null,edit:null};function qn(t,e,r=!1){const n=[];let a;if(r)try{Xe.editBefore?.(t)}catch{}for(const s of t.elements){const l=document.querySelector(`[data-id="${s.target}"]`);if(!l){a=s.target;break}if([...Object.keys(s.attrsSet??{}),...s.attrsRemoved??[]].some(u=>!_r(u)||yr(l,u))){a=s.target;break}if(s.text!==void 0&&(!Er(l)||Rr(l))){a=s.target;break}for(const[u,O]of Object.entries(s.attrsSet??{}))if(!nr(l,u)){try{l.setAttribute(u,O)}catch{}rr(l,u,O)}for(const u of s.attrsRemoved??[])nr(l,u)||(l.removeAttribute(u),rr(l,u,null));typeof s.text=="string"&&Ar(l,s.text),n.push(s.target)}if(r)try{Xe.edit?.(t.seq,n,a)}catch{}if(a!==void 0){x.post({__frame_patch_miss:{seq:t.seq}},e);return}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:t.seq,targets:n}}))}catch{}}function rr(t,e,r){if(!(t instanceof HTMLInputElement))return;const n=e.toLowerCase();n==="checked"?t.checked=r!==null:n==="value"&&t.type!=="file"&&(t.value=r??"")}function nr(t,e){const r=e.toLowerCase(),n=t;return r==="data-id"||(r==="value"||r==="checked")&&(n.__artifactSecret===!0||/^(password|hidden|file)$/.test(n.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${t.getAttribute("autocomplete")??""} ${n.autocomplete??""}`))}function or(t){const e=document.documentElement;t==="light"||t==="dark"?(e.dataset.theme=t,e.style.colorScheme=t,dt=!0):dt&&(delete e.dataset.theme,e.style.colorScheme="",dt=!1)}var ie=new Map,ht=null;function pt(){let t;const e={u:new Promise(r=>{t=r}),r:r=>{e.done=!0,t(r)},done:!1,nulled:!1};return e}function Ye(t,e){t.nulled=!0,t.ver=e,t.r(null)}function mt(t,e){for(const[r,n]of ie)n.done||(e&&n.asked?e(r,n):Ye(n,t))}function Un(){for(const t of ie.values())if(t.asked&&!t.done)return!0;return!1}var Kn=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),vt=!1,_t=(t,e)=>{let r=ie.get(t);if(r?.nulled&&vt)r=pt(),ie.set(t,r);else if(!r||r.done){r?.nulled&&W&&x.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:t,phase:"install"}},W);return}const n=typeof e=="function"?Object.setPrototypeOf(e,Kn):Object.assign(Object.create(null),e);typeof n.then=="function"&&delete n.then,r.want=void 0,r.r(Object.freeze(n))};function ar(){const t=Vt?.value??{};tr(window,"claude",t);for(const e of Object.keys(Pe)){if(t[e]!==void 0){tr(t,e,t[e]);continue}ie.set(e,pt())}if(t.use===void 0){const e=r=>{if(typeof r!="string"||!Object.hasOwn(Pe,r))return Promise.resolve(null);let n=ie.get(r);return n?(ht&&(n.nulled||n.want!==void 0)&&(n=ht(r,n)),n.asked=!0,n.u):Promise.resolve(t[r]??null)};try{Object.defineProperty(t,"use",{value:e,writable:!0,configurable:!0,enumerable:!1})}catch{}}return t}if(ze==="framed"){let t;const e=Ne&&pe.test(Ne)?se(Ne).catch(c=>{t={f:Ne,e:c}}):Promise.resolve(void 0),r=c=>{if(c.type==="auxclick"&&c.button!==1)return;const g=c.target,v=g&&g.closest?g.closest("a[href],area[href]"):null;if(!v)return;const A=v.getAttribute("href");if(!A)return;let H;try{H=new URL(A,document.baseURI)}catch{return}if((H.protocol==="http:"||H.protocol==="https:")&&H.origin!==location.origin){c.preventDefault();const X=(v.getAttribute("target")??"").toLowerCase(),K=c.type==="auxclick"||c.metaKey||c.ctrlKey||c.shiftKey||c.altKey||!["","_self","_top","_parent"].includes(X);x.post({__frame_nav:!0,url:H.href,newTab:K},"*")}};addEventListener("click",r,!0),addEventListener("auxclick",r,!0);const n={},a=c=>{c.isTrusted&&(n.pointer=!0)},s=c=>{c.isTrusted&&(n.click=!0)};addEventListener("pointermove",a,{capture:!0,passive:!0}),addEventListener("click",s,{capture:!0,passive:!0});const l={cb:null};addEventListener("keydown",c=>l.cb?.(c),!0);const u={cb:null};addEventListener("keydown",c=>u.cb?.(c));const O=dn();e.then(c=>c?.installEscapeForward?.(l,g=>{W&&x.post(g,W)})),e.then(c=>{try{c?.installFocusKeep?.()}catch{}}),e.then(c=>{if(!c?.wireNav)return;const g=x.port("*");c.wireNav(g),removeEventListener("click",r,!0),removeEventListener("auxclick",r,!0),removeEventListener("pointermove",a,!0),removeEventListener("click",s,!0),c.wireEngagement?.(n,g,O)});let k=null;try{k=Mn()}catch{}const E=document.readyState==="loading"?new Promise(c=>document.addEventListener("DOMContentLoaded",()=>c(),{once:!0})):Promise.resolve();let h="dcl",S=!1;E.then(()=>{S=!0});let L=null,p=null;try{p=Ur(window.name),L=It(null,p)}catch{}const F=ar();let R=null;try{R=cn(F,L,{post:(c,g)=>x.post(c,g),dcl:E},p)}catch{}e.then(c=>{try{R&&c?.installHotExtras?.(R)}catch{}});let _=null;const y=()=>Array.isArray(_?.flags)&&_.flags.includes("frame_ldx_runtime")&&!!me&&pe.test(me)&&document.querySelector("script#an-form")!==null;try{R?.hydration(y,Kr)}catch{}let j=null,I=0;const B=x.on((c,g,v,A)=>{Xt(g)&&Mr(c)&&(A(),_=c.__frame_init,W=g,B(),clearTimeout(I),j?.())});if(Ve){const c=Yt===void 0?{__frame_cred:Ve}:{__frame_cred:Ve,exp:Yt};for(const g of ct)try{g.endsWith(":*")||x.post(c,g)}catch{}}x.post({__frame_connect:!0},"*");try{R?.afterConnect()}catch{}const G=setTimeout,D=clearTimeout;let be=()=>NaN,Fe=()=>[];try{be=performance.now.bind(performance),Fe=performance.getEntriesByType.bind(performance)}catch{}let je=0;const U=()=>{try{x.post({__frame_alive:!0},"*")}catch{}je=G(U,Fn)},Ee=()=>D(je);U(),addEventListener("load",Ee,{once:!0});const xe=new Promise(c=>{j=c,I=setTimeout(()=>{B(),c()},Wt)}),le=new WeakSet;addEventListener("error",c=>{c.target&&le.add(c.target)},!0);try{Sn(Dt(),Ve,()=>{e.then(c=>{try{c?.drawRefusedNotice?.()}catch{}})})}catch{}const ce=()=>{let c=[];try{c=[...document.querySelectorAll("link[rel~=stylesheet]:not([rel~=alternate])")].filter(v=>!v.sheet&&!v.disabled&&!le.has(v)&&v.getAttribute("href")&&URL.canParse(v.href)&&(!v.media||matchMedia(v.media).matches))}catch{}let g=c.length;return g===0?Promise.resolve():new Promise(v=>{try{const A=lt-be();A>0&&(h="sheets");const H=G(v,A>0?A<lt?A:lt:0),X=()=>{--g===0&&(D(H),v())};for(const K of c)K.addEventListener("load",X,{once:!0}),K.addEventListener("error",X,{once:!0})}catch{v()}})};E.then(()=>{try{k?.restore()}catch{}}),Promise.all([xe,E,e]).then(([,,c])=>{if(_?.hostOverlays!==!0||!W)return;let g=!1;try{g=c?.declaresCover?.()===!0}catch{}x.post({__frame_layout:{cover:g}},W)});const ve={cb:null};x.on((c,g)=>{if(Xt(g)&&Pr(c)){try{k?.promoted()}catch{}ve.cb?.()}}),xe.then(async()=>{if(!_||!W){mt();try{R?.onNoInit()}catch{}return}if(or(_.theme),_.hostVisible===!1&&e.then(i=>i?.applyHostVisible?.(!1,O)),_.hostKeys!==void 0){const i=W,w=_.hostKeys;e.then(b=>b?.installHostKeyForward?.(u,w,N=>x.post(N,i)))}try{R?.onInit(_.hot,W)}catch{}let c;const g=()=>{try{!c&&me&&y()&&(c=se(me),c.then(i=>i?.prefetch?.()).catch(()=>{}))}catch{}};g(),E.then(g);const v=W,A=x.port(v),H=(i,w)=>x.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:i,phase:w}},v),X=(i,w,b)=>{new Promise(N=>N(Hn(w,b))).then(N=>H(i,N),()=>H(i))},K=i=>x.post({__frame_cap_recovered:{cap:i}},v);let te=_.brokerGen;const Y=()=>R?.boot.ver??"",_e=Y(),ye=(i,w)=>{const b=Y();D(w.t),w.want=b,w.t=G(()=>{w.done||Ye(w,b)},Wt),x.post({__frame_cap_want:!0,cap:i,ver:b},v)},$=(i,w)=>{const b=ie.get(i.cap),N=Pe[i.cap];if(!w||!b||b.done||b.want!==i.ver||!pe.test(N))return;if(D(b.t),b.want=void 0,te=i.brokerGen??te,i.ver!==Y()){ye(i.cap,b);return}if(!i.grant||i.cap==="network"){Ye(b,i.ver);return}const Z=we,Q=we={...Z,capabilities:{...Z.capabilities,[i.cap]:i.grant},capBudgets:{...Z.capBudgets,[i.cap]:{...Z.capBudgets[i.cap],...i.budgets}}};se(N).then(de=>{Ce.has(N)&&K(i.cap),Q.brokerGen=te,vt=!0;try{de?.install?.(Q)}catch{H(i.cap,"install")}finally{vt=!1}},de=>X(i.cap,N,de)).then(()=>{b.done||Ye(b,i.ver)})};let Ie=!1,J=!1;x.on((i,w,b)=>{if(w!==v)return;try{if(R?.onShell(i))return}catch{}if(Cr(i)&&or(i.__frame_theme.theme),en(i)&&$(i,b),b&&tn(i)&&(te=i.brokerGen??te),Nr(i)){const Q=i.__frame_host_visible.visible;e.then(de=>de?.applyHostVisible?.(Q,O))}Or(i)&&qn(i.__frame_patch,v,b);const N=i?.__fc_mode;N&&typeof N=="object"&&!Ie&&ut&&pe.test(ut)&&(Ie=!0,se(ut).then(Q=>Q.install?.(v,N.on===!0,A)).catch(()=>{}));const Z=i?.__ft_cmd;Z&&typeof Z=="object"&&!J&&ft&&pe.test(ft)&&(J=!0,se(ft).then(Q=>Q.install?.(v,Z,A)).catch(()=>{}))});const De=Object.keys(_.capabilities??{}).filter(i=>Object.hasOwn(Pe,i)).map(i=>[i,Pe[i]]).filter(i=>typeof i[1]=="string"&&pe.test(i[1])),re=v;let ue=!1,He=()=>{};const Je=new Promise(i=>{He=()=>{ue=!0,i()}}),Se=()=>(ue||(h="caps"),Je),Be=L!==null||Ct(_.hot)||_.hostVisible===!1||_.hostOverlays===!0;S&&(h="init");const qe=E.then(()=>Be?Se():new Promise(i=>G(i,0))).then(ce).then(()=>{let i=!0;try{i=Be||Un()}catch{}return i?Se():void 0}).then(()=>{Ee();const i=hr(Fe,be);x.post(i?{__frame_ready:!0,nav:i,gate:h}:{__frame_ready:!0,gate:h},re),e.then(w=>{w?.installSizeReporter?.(re,ve,A),w?.installPaintReporter?.(A)})}),yt=await Promise.allSettled(De.map(([,i])=>se(i))),ee=await e;if(ee?.buildBoot||(t?X("_transforms",t.f,t.e):H("_transforms")),ee?.buildBoot)try{we=ee.buildBoot(_,ee.TRANSFORMS??{},{shellOrigin:re,mount:_t,hooks:Xe,shell:A},i=>x.post({__frame_cap_telemetry:i},re))}catch{H("_transforms","install"),we=er(_,re,A)}else we=er(_,re,A);ee?.buildBoot&&Ce.has(Ne??"")&&K("_transforms");const fe=we;fe.brokerGen=te,yt.forEach((i,w)=>{const[b,N]=De[w];if(i.status!=="fulfilled"){X(b,N,i.reason);return}Ce.has(N)&&K(b);try{i.value?.install?.(fe)}catch{H(b,"install")}});const Ae=_.capWants===!0;Ae&&(ht=(i,w)=>{const b=Y();if(!b)return w;if(!w.nulled)return w.want!==b&&ye(i,w),w;if(b===w.ver)return w;const N=pt();return ie.set(i,N),ye(i,N),N}),mt(_e,Ae&&Y()!==_e?ye:void 0),He(),await qe;let Ue=!1;try{Ue=y()}catch{}me&&Ue?(c??se(me)).then(i=>i?.boot?.({shellOrigin:v,build:fe.flags.has(un),hot:R?.hot??null,carried:R?.carried(),presented:()=>R?.presented()??!0})).catch(()=>!1).then(i=>{R?.hydrated(),i!==!0?H("_ldx"):Ce.has(me)&&K("_ldx")}):R?.hydrated()})}else it&&(ar(),Pn(it,ct,se,{settle:mt,mount:_t}))})();</script><!-- /frame-runtime --><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>플랫폼팀 개발 환경</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+
+<style>
+:root{
+  --ground:#F3F5F3; --surface:#FFFFFF; --surface-2:#EAEDEA;
+  --ink:#141B19; --ink-2:#3B4744; --muted:#68766F;
+  --line:#DBDFDA; --line-strong:#B6BEB8;
+  --accent:#1C6C5C; --accent-soft:#E2EEEA;
+  --warn:#8C5C0C; --warn-soft:#F5EEDF;
+  --font-body:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:3px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1412; --surface:#161D1A; --surface-2:#1D2521;
+    --ink:#E5EAE6; --ink-2:#BDC7C2; --muted:#8A9891;
+    --line:#28312C; --line-strong:#3B463F;
+    --accent:#63C1AA; --accent-soft:#152F29;
+    --warn:#D5A248; --warn-soft:#2C2517;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1412; --surface:#161D1A; --surface-2:#1D2521;
+  --ink:#E5EAE6; --ink-2:#BDC7C2; --muted:#8A9891;
+  --line:#28312C; --line-strong:#3B463F;
+  --accent:#63C1AA; --accent-soft:#152F29;
+  --warn:#D5A248; --warn-soft:#2C2517;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-body); font-weight:400; font-size:16px; line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+  word-break:keep-all; overflow-wrap:break-word;
+}
+.wrap{max-width:1220px; margin:0 auto; padding:0 28px 120px}
+
+.mast{padding:76px 0 44px; border-bottom:1px solid var(--line)}
+.eyebrow{
+  font-family:var(--font-mono); font-size:11.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 20px;
+}
+h1{
+  font-size:clamp(38px,5.6vw,60px); line-height:1.06; font-weight:600;
+  letter-spacing:-.025em; margin:0 0 28px; text-wrap:balance; max-width:14ch;
+}
+.lead{max-width:64ch; font-size:17.5px; color:var(--ink-2); margin:0 0 14px}
+.lead strong{font-weight:600; color:var(--ink)}
+.lead code{font-size:.92em}
+.mast-note{
+  max-width:64ch; margin-top:26px; padding:18px 20px;
+  border-left:2px solid var(--warn); background:var(--warn-soft);
+  font-size:15px; color:var(--ink-2); border-radius:0 var(--r) var(--r) 0;
+}
+
+.cols{display:grid; grid-template-columns:170px minmax(0,1fr); gap:50px; padding-top:56px}
+@media (max-width:1000px){ .cols{grid-template-columns:minmax(0,1fr); gap:0} .rail{display:none} }
+.rail{position:sticky; top:28px; align-self:start; font-size:13.5px}
+.rail-t{
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 14px; padding-left:11px;
+}
+.rail a{
+  display:block; padding:5px 0 5px 11px; color:var(--muted); text-decoration:none;
+  border-left:1.5px solid var(--line); line-height:1.45;
+}
+.rail a:hover{color:var(--ink); border-left-color:var(--line-strong)}
+.rail a.on{color:var(--ink); border-left-color:var(--accent); font-weight:500}
+
+main{min-width:0}
+section{margin:0 0 88px; scroll-margin-top:28px}
+.sec-n{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+  color:var(--accent); margin:0 0 10px;
+}
+h2{
+  font-size:clamp(24px,3vw,31px); line-height:1.22; font-weight:600;
+  letter-spacing:-.018em; margin:0 0 16px; text-wrap:balance;
+}
+h3{font-size:17px; font-weight:600; letter-spacing:-.01em; margin:38px 0 10px; line-height:1.4}
+.h3n{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:.1em;
+  color:var(--muted); margin:38px 0 8px; text-transform:uppercase;
+}
+.h3n + h3{margin-top:0}
+p{margin:0 0 15px; max-width:66ch}
+.dek{color:var(--ink-2); max-width:66ch}
+strong{font-weight:600}
+em{font-style:normal; background:var(--accent-soft); padding:.1em .3em; border-radius:2px}
+code{
+  font-family:var(--font-mono); font-size:.88em; background:var(--surface-2);
+  padding:.12em .38em; border-radius:2px; color:var(--ink);
+}
+
+figure{margin:26px 0; padding:0}
+.figbox{
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r); padding:22px 18px; overflow-x:auto;
+}
+figcaption{margin-top:14px; font-size:13.5px; color:var(--muted); line-height:1.6; max-width:70ch}
+svg{display:block; max-width:100%; height:auto}
+.dg{min-width:700px}
+.dg text{font-family:var(--font-body)}
+.dg .bx{fill:var(--surface-2); stroke:var(--line-strong); stroke-width:1.2}
+.dg .bx-sf{fill:var(--surface); stroke:var(--line-strong); stroke-width:1.2}
+.dg .bx-hi{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1.6}
+.dg .bx-warn{fill:var(--warn-soft); stroke:var(--warn); stroke-width:1.2; stroke-dasharray:6 4}
+.dg .lb{fill:var(--ink); font-size:13px; font-weight:500}
+.dg .lb-s{fill:var(--muted); font-size:11px}
+.dg .lb-w{fill:var(--warn); font-size:11px}
+.dg .mono{font-family:var(--font-mono); font-size:11.5px; fill:var(--ink)}
+.dg .mono-s{font-family:var(--font-mono); font-size:10.5px; fill:var(--muted)}
+.dg .el{fill:var(--muted); font-size:10.5px; font-family:var(--font-mono)}
+.dg .ln{stroke:var(--line-strong); stroke-width:1.3; fill:none}
+.dg .stem{stroke:var(--line-strong); stroke-width:1.1; fill:none; stroke-dasharray:3 3}
+.dg .cLine{color:var(--line-strong)}
+.dg .dot{fill:var(--surface); stroke:var(--line-strong); stroke-width:1.4}
+
+.tblwrap{overflow-x:auto; margin:20px 0 0; border:1px solid var(--line); border-radius:var(--r)}
+table{border-collapse:collapse; width:100%; min-width:640px; background:var(--surface)}
+th,td{text-align:left; padding:13px 18px; border-bottom:1px solid var(--line); vertical-align:top}
+th{
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); font-weight:400; background:var(--surface-2);
+}
+tbody tr:last-child td{border-bottom:none}
+td{font-size:14.5px; color:var(--ink-2); line-height:1.6}
+td.repo{font-family:var(--font-mono); font-size:13px; color:var(--ink); white-space:nowrap; font-weight:500}
+td.area{font-weight:500; color:var(--ink); white-space:nowrap}
+td.tech{font-family:var(--font-mono); font-size:13px; color:var(--ink)}
+.sub{display:block; font-family:var(--font-body); font-size:13px; color:var(--muted); margin-top:3px}
+
+td.who{font-size:14px; color:var(--ink-2); white-space:nowrap}
+.tag{
+  display:inline-block; font-family:var(--font-mono); font-size:10px; letter-spacing:.08em;
+  padding:2px 7px; border-radius:2px; margin-right:6px; white-space:nowrap;
+}
+.t-ok{background:var(--surface-2); color:var(--muted)}
+.t-gap{background:var(--warn-soft); color:var(--warn)}
+
+.note{
+  margin:22px 0 0; padding:16px 20px; background:var(--surface);
+  border:1px solid var(--line); border-left:2px solid var(--accent);
+  border-radius:0 var(--r) var(--r) 0; font-size:14.5px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn)}
+.note p{margin:0; max-width:64ch}
+.note p + p{margin-top:10px}
+
+.steps{margin:26px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
+.steps li{background:var(--surface); padding:16px 22px; display:grid;
+  grid-template-columns:140px minmax(0,1fr); gap:18px; align-items:start}
+@media (max-width:640px){ .steps li{grid-template-columns:minmax(0,1fr); gap:4px} }
+.steps .k{font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; color:var(--muted); padding-top:4px}
+.steps p{margin:0; font-size:14.5px; color:var(--ink-2)}
+
+footer{
+  border-top:1px solid var(--line); padding-top:26px; margin-top:20px;
+  font-size:13.5px; color:var(--muted); max-width:66ch;
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">플랫폼팀 온보딩 · 개발자를 위해</p>
+  <h1>플랫폼팀 개발 환경</h1>
+  <p class="lead"><strong>제품은 현장 디바이스 위에서 돕니다.</strong> <code>habilis_console</code>이 모든 디바이스에 설치되는 런타임이고, 기능은 전부 그 위에 올라가는 <strong>확장팩</strong>입니다. 클라우드에는 계정 · 배포 · 관측성만 있습니다.</p>
+  <p class="lead">언어는 <strong>Rust · Python · Kotlin이 기준 없이 섞여 있습니다.</strong> 역사적으로 그렇게 됐고 아직 정리하지 않았습니다.</p>
+</header>
+
+<div class="cols">
+
+  <nav class="rail" aria-label="목차">
+    <p class="rail-t">목차</p>
+    <a href="#arch">구조</a>
+    <a href="#pipe">파이프라인</a>
+    <a href="#repo">저장소</a>
+    <a href="#net">사내 네트워크</a>
+    <a href="#mon">모니터링</a>
+    <a href="#flow">개발 플로우</a>
+    <a href="#start">처음 붙을 때</a>
+    <a href="#gloss">용어</a>
+  </nav>
+
+  <main>
+
+  <!-- 1 -->
+  <section id="arch">
+    <p class="sec-n">01</p>
+    <h2>구조</h2>
+    <p class="dek">이 그림 하나가 거의 전부입니다. 런처가 런타임이고, 기능은 전부 그 위에 올라가는 확장팩입니다.</p>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 780 520" role="img" aria-label="클라우드의 배포·인증·관리 서버에서 확장팩과 런처를 내려받는다. 현장에는 같은 구성의 룸이 여러 개 있고, 룸 하나마다 워크스테이션 한 대와 로봇 한 대가 있다. 둘 다 habilis_console 런타임이 깔리고, 워크스테이션에는 브리지·관측성 저장·데이터셋 변환·학습 추론 팩이, 로봇에는 관측성 수집과 하드웨어 ROS2 팩이 올라가며 ROS2와 WebSocket으로 이어진다.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <rect class="bx" x="230" y="20" width="320" height="96" rx="3"/>
+          <text class="lb" x="246" y="42">클라우드 · AWS</text>
+          <text class="mono" x="246" y="64">habilis_oci_server</text>
+          <text class="mono-s" x="420" y="64">배포 · 라이선스</text>
+          <text class="mono" x="246" y="82">habilis_api_server</text>
+          <text class="mono-s" x="420" y="82">인증 · 사용자</text>
+          <text class="mono" x="246" y="100">habilis_admin_console</text>
+          <text class="mono-s" x="420" y="100">관리자 웹</text>
+
+          <g class="cLine">
+            <path class="ln" d="M390,116 L390,146" marker-end="url(#ar)"/>
+          </g>
+          <text class="el" x="402" y="138">확장팩 · 런처 내려받기</text>
+
+          <rect class="bx" x="20" y="150" width="740" height="352" rx="3"/>
+          <text class="el" x="40" y="176">현장 — 룸이 여러 개. 7층 · 6층 · 베트남</text>
+
+          <rect class="bx-sf" x="52" y="198" width="696" height="288" rx="3"/>
+          <rect class="bx-sf" x="46" y="192" width="696" height="288" rx="3"/>
+          <rect class="bx-sf" x="40" y="186" width="696" height="288" rx="3"/>
+
+          <text class="lb" x="58" y="208">룸 하나</text>
+          <text class="el" x="720" y="208" text-anchor="end">룸 N개 — 전부 같은 구성</text>
+
+          <rect class="bx-hi" x="56" y="216" width="664" height="110" rx="3"/>
+          <text class="lb" x="72" y="240">워크스테이션</text>
+          <text class="lb-s" x="72" y="258">10.&lt;층&gt;.&lt;룸&gt;.10 — 사람이 보는 콘솔 화면. habilis_console 런타임</text>
+
+          <rect class="bx-sf" x="72" y="272" width="118" height="44" rx="3"/>
+          <text class="mono" x="131" y="292" text-anchor="middle">rosbridge</text>
+          <text class="mono-s" x="131" y="307" text-anchor="middle">ROS2 ↔ WS</text>
+
+          <rect class="bx-sf" x="200" y="272" width="118" height="44" rx="3"/>
+          <text class="mono" x="259" y="292" text-anchor="middle">otel_backend</text>
+          <text class="mono-s" x="259" y="307" text-anchor="middle">ClickHouse</text>
+
+          <rect class="bx-sf" x="328" y="272" width="118" height="44" rx="3"/>
+          <text class="mono" x="387" y="292" text-anchor="middle">dataset_manager</text>
+          <text class="mono-s" x="387" y="307" text-anchor="middle">MCAP→LeRobot</text>
+
+          <rect class="bx-sf" x="456" y="272" width="118" height="44" rx="3"/>
+          <text class="mono" x="515" y="292" text-anchor="middle">ai_manager</text>
+          <text class="mono-s" x="515" y="307" text-anchor="middle">학습 · 추론</text>
+
+          <rect class="bx-sf" x="584" y="272" width="118" height="44" rx="3"/>
+          <text class="mono" x="643" y="292" text-anchor="middle">CONE-DA</text>
+          <text class="mono-s" x="643" y="307" text-anchor="middle">자동 수집</text>
+
+          <g class="cLine">
+            <path class="ln" d="M396,328 L396,356" marker-end="url(#ar)"/>
+            <path class="ln" d="M378,356 L378,330" marker-end="url(#ar)"/>
+          </g>
+          <text class="el" x="410" y="348">ROS2 ↔ WebSocket</text>
+
+          <rect class="bx-hi" x="56" y="358" width="664" height="110" rx="3"/>
+          <text class="lb" x="72" y="382">로봇</text>
+          <text class="lb-s" x="72" y="400">10.&lt;층&gt;.&lt;룸&gt;.11 — 센서와 팔이 붙은 쪽. habilis_console 런타임</text>
+
+          <rect class="bx-sf" x="72" y="414" width="178" height="44" rx="3"/>
+          <text class="mono" x="161" y="434" text-anchor="middle">otel_edge</text>
+          <text class="mono-s" x="161" y="449" text-anchor="middle">지표 · 로그 수집</text>
+
+          <rect class="bx-sf" x="262" y="414" width="440" height="44" rx="3"/>
+          <text class="mono" x="482" y="434" text-anchor="middle">anycam · rby1 · lakibeam · navigation</text>
+          <text class="mono-s" x="482" y="449" text-anchor="middle">타팀 하드웨어 · 주행 ROS2 팩</text>
+        </svg>
+      </div>
+      <figcaption>클라우드는 내려주는 쪽이고, 제품이 실제로 돌아가는 곳은 현장입니다. <strong>룸 하나에 워크스테이션과 로봇이 한 대씩</strong> 붙고 둘 다 같은 런타임이 깔립니다. 룸은 7층 · 6층 · 베트남에 여러 개 있고 <strong>구성은 전부 같습니다.</strong> 무겁고 사람이 보는 건 워크스테이션에, 센서와 팔에 붙어야 하는 건 로봇에 올라갑니다.</figcaption>
+    </figure>
+
+    <div class="note">
+      <p><strong>런처가 바뀌면 모든 확장팩에 영향이 갑니다.</strong> 모든 디바이스에 설치되는 유일한 공통 지점이라서요.</p>
+      <p><strong>확장팩끼리는 서로를 모릅니다.</strong> 각 팩은 자기 Docker 컨테이너 안에서 돌기 때문에, 팩 하나를 고치는 작업은 대체로 그 팩 안에서 끝납니다.</p>
+      <p><strong>버전이 같이 움직입니다.</strong> 런처와 팩들이 전부 <code>v0.9.0-dev.x</code> 대역에 있습니다. 팩 하나만 올리는 게 아니라 조합으로 움직입니다.</p>
+    </div>
+
+    <div class="tblwrap">
+      <table>
+        <thead>
+          <tr><th>영역</th><th>무엇</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="area">콘솔 · 런처</td><td class="tech">Tauri · Rust · Next.js<span class="sub">SSR 미사용</span></td></tr>
+          <tr><td class="area">확장팩 실행</td><td class="tech">Docker<span class="sub">런처에 내장</span></td></tr>
+          <tr><td class="area">로봇 통신</td><td class="tech">ROS2 · WebSocket · nginx<span class="sub">tachybridge가 변환, nginx가 TLS</span></td></tr>
+          <tr><td class="area">백엔드 API</td><td class="tech">Kotlin · Spring<span class="sub">인증 · 사용자 · 기능 플래그. 온프레미스를 고려하지 않은 스택 — 변경 검토 중</span></td></tr>
+          <tr><td class="area">관측성</td><td class="tech">OTLP · ClickHouse · Grafana · GlitchTip<span class="sub">edge에서 모아 backend에서 저장</span></td></tr>
+          <tr><td class="area">데이터셋</td><td class="tech">MCAP · LeRobot · NAS · SFTP</td></tr>
+          <tr><td class="area">인프라</td><td class="tech">현장 온프레미스 · AWS</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <p><strong>백엔드 API 스택은 바뀔 수 있습니다.</strong> Kotlin · Spring은 클라우드를 전제로 고른 스택이라 온프레미스를 고려하지 않았습니다. 무엇으로 갈지는 아직 정해지지 않았습니다.</p>
+    </div>
+
+    <p class="dek" style="margin-top:22px">Next.js를 SSR 없이 쓰는 건 Tauri 시절 유산입니다. 정적 번들을 로드해야 해서 못 썼고 그 설정이 남았습니다. <strong>데스크톱 앱은 걷어내는 중이고 웹이 default</strong>지만, 디바이스에 설치되는 런타임이라는 역할은 남습니다.</p>
+  </section>
+
+  <!-- 2 -->
+  <section id="pipe">
+    <p class="sec-n">02</p>
+    <h2>파이프라인 — 콘솔이 커버하는 범위</h2>
+    <p class="dek">제품이 하는 일을 한 줄로 줄이면 <strong>로봇에서 데이터를 모아 모델을 만들고 다시 로봇에 태우는 것</strong>입니다. 콘솔은 이 네 단계를 한 화면에서 돌리는 걸 목표로 하고 있고, <strong>단계마다 덮인 정도가 다릅니다.</strong></p>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 780 272" role="img" aria-label="수집, 변환, 학습, 추론 네 단계가 콘솔 확장팩 위에서 이어지고, 큐레이션과 NAS 보관, 브레인팀 GPU 학습, 외부 체크포인트는 콘솔 밖에 남아 있다">
+          <defs>
+            <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <text class="el" x="20" y="34">콘솔 안 — 확장팩이 덮는 구간</text>
+
+          <rect class="bx-hi" x="20" y="46" width="164" height="72" rx="3"/>
+          <text class="lb" x="102" y="72" text-anchor="middle">수집</text>
+          <text class="mono" x="102" y="92" text-anchor="middle">dataset_manager</text>
+          <text class="mono-s" x="102" y="108" text-anchor="middle">MCAP 녹화</text>
+
+          <rect class="bx-hi" x="212" y="46" width="164" height="72" rx="3"/>
+          <text class="lb" x="294" y="72" text-anchor="middle">변환</text>
+          <text class="mono" x="294" y="92" text-anchor="middle">dataset_manager</text>
+          <text class="mono-s" x="294" y="108" text-anchor="middle">MCAP → LeRobot</text>
+
+          <rect class="bx-sf" x="404" y="46" width="164" height="72" rx="3"/>
+          <text class="lb" x="486" y="72" text-anchor="middle">학습</text>
+          <text class="mono" x="486" y="92" text-anchor="middle">ai_manager</text>
+          <text class="mono-s" x="486" y="108" text-anchor="middle">LeRobot → 체크포인트</text>
+
+          <rect class="bx-sf" x="596" y="46" width="164" height="72" rx="3"/>
+          <text class="lb" x="678" y="72" text-anchor="middle">추론</text>
+          <text class="mono" x="678" y="92" text-anchor="middle">ai_manager</text>
+          <text class="mono-s" x="678" y="108" text-anchor="middle">체크포인트 → 로봇</text>
+
+          <g class="cLine">
+            <path class="ln" d="M184,82 L208,82" marker-end="url(#ar4)"/>
+            <path class="ln" d="M376,82 L400,82" marker-end="url(#ar4)"/>
+            <path class="ln" d="M568,82 L592,82" marker-end="url(#ar4)"/>
+            <path class="stem" d="M198,118 L198,186"/>
+            <path class="stem" d="M486,118 L486,186"/>
+            <path class="stem" d="M678,118 L678,186"/>
+          </g>
+
+          <text class="el" x="20" y="174">콘솔 밖에 남아 있는 것</text>
+
+          <rect class="bx-warn" x="20" y="186" width="356" height="56" rx="3"/>
+          <text class="lb" x="38" y="210">큐레이션 · NAS 보관</text>
+          <text class="lb-s" x="38" y="229">데이터팀이 사람 손으로 걸러내고 올립니다</text>
+
+          <rect class="bx-warn" x="404" y="186" width="164" height="56" rx="3"/>
+          <text class="lb" x="422" y="210">브레인팀 GPU</text>
+          <text class="lb-s" x="422" y="229">자체 서버 학습</text>
+
+          <rect class="bx-warn" x="596" y="186" width="164" height="56" rx="3"/>
+          <text class="lb" x="614" y="210">외부 체크포인트</text>
+          <text class="lb-s" x="614" y="229">경로에 직접 넣어야 함</text>
+        </svg>
+      </div>
+      <figcaption>네 단계가 전부 콘솔 안에 들어와 있지만 쓰는 사람이 다릅니다. 수집 · 변환은 데이터팀이, 학습 · 추론은 브레인팀이 같은 콘솔을 씁니다. 점선 박스는 아직 콘솔 밖에서 사람 손으로 일어나는 구간입니다.</figcaption>
+    </figure>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>단계</th><th>확장팩</th><th>관리 팀</th></tr></thead>
+        <tbody>
+          <tr><td class="area">수집</td><td class="tech">dataset_manager<span class="sub">콘솔 UI에서 녹화 — 에피소드 단위</span></td><td class="who">플랫폼팀</td></tr>
+          <tr><td class="area">수집 · 자동</td><td class="tech">CONE-DA<span class="sub">궤적을 만들어 사람 없이 모읍니다</span></td><td class="who">에이전트팀</td></tr>
+          <tr><td class="area">변환</td><td class="tech">dataset_manager<span class="sub">MCAP을 LeRobot 데이터셋으로. NAS · SFTP 전송까지</span></td><td class="who">플랫폼팀</td></tr>
+          <tr><td class="area">학습</td><td class="tech">ai_manager<span class="sub">ACT · DP · SmolVLA · Pi0.5 · GR00T 등</span></td><td class="who">에이전트팀</td></tr>
+          <tr><td class="area">추론</td><td class="tech">ai_manager<span class="sub">체크포인트를 골라 정책 서버로 실행</span></td><td class="who">에이전트팀</td></tr>
+          <tr><td class="area">로봇에 전달</td><td class="tech">rosbridge · console<span class="sub">추론 결과를 ROS2로 내려보냅니다</span></td><td class="who">플랫폼팀</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <p><strong>플랫폼팀이 직접 만드는 건 앞의 두 단계입니다.</strong> 학습 · 추론은 <code>ai_manager</code>가 하고, 콘솔은 그걸 설치 · 실행 · 모니터링하는 자리를 내어줍니다.</p>
+    </div>
+
+    <h3>어디서 막히나</h3>
+    <ul class="steps">
+      <li><span class="k">팀마다 따로</span><p>데이터팀과 콘솔이 <strong>수집 · 변환을 각자 만들고 있고 결과물 형식이 조금씩 다릅니다.</strong> LeRobot 기반 공통 kit와 인터페이스로 묶자는 논의가 개발본부에서 진행 중입니다.</p></li>
+      <li><span class="k">변환에서 깨짐</span><p>observation · action 개수 불일치, 카메라 해상도 validation, ROS 토픽 이름 변경 같은 이유로 변환이 막히는 일이 반복됩니다. <strong>전처리 로직을 <code>dataset_manager</code>에 둘지 <code>ai_manager</code>에 둘지도 아직 정해지지 않았습니다.</strong></p></li>
+      <li><span class="k">체크포인트</span><p>콘솔이 만든 체크포인트는 콘솔에서 바로 고를 수 있지만, <strong>밖에서 학습한 건 지정 경로에 직접 넣어줘야 합니다.</strong></p></li>
+      <li><span class="k">자원</span><p>GPU와 디스크가 수시로 모자랍니다. <strong>수집 중에 디스크가 차서 녹화가 멈춘 적이 있고</strong>, 확장팩이 GPU를 요구해서 노트북에서는 테스트가 안 됩니다.</p></li>
+      <li><span class="k">버전 조합</span><p>룸마다 설치된 확장팩 조합이 다르면 <strong>UI가 아예 안 뜹니다.</strong> <code>dataset_manager</code>가 없는 콘솔에서는 「원본」 · 「데이터셋」 화면을 쓸 수 없습니다.</p></li>
+    </ul>
+  </section>
+
+  <!-- 3 -->
+  <section id="repo">
+    <p class="sec-n">03</p>
+    <h2>저장소</h2>
+    <p class="dek">서비스마다 별도 저장소입니다. <strong>어디부터 열어야 할지 모르겠으면 <code>habilis_console</code>부터 보세요.</strong> 나머지가 전부 그 위에 얹히는 구조라 다른 팩들이 빨리 읽힙니다.</p>
+
+    <p class="h3n">플랫폼팀 — 확장팩</p>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>저장소</th><th>무엇</th></tr></thead>
+        <tbody>
+          <tr><td class="repo">habilis_console</td><td><strong>콘솔 본체.</strong> Tauri 앱, 브라우저 콘솔, 확장팩을 돌리는 Docker 런타임 내장</td></tr>
+          <tr><td class="repo">habilis_rosbridge</td><td>ROS2와 WebSocket을 잇는 브리지 (tachybridge + nginx TLS)</td></tr>
+          <tr><td class="repo">habilis_otel_edge</td><td>로봇 쪽 관측성 수집. 호스트 지표, docker · DDS · USB · 네트워크 감사, GPU 지표를 OTLP로 전송</td></tr>
+          <tr><td class="repo">habilis_otel_backend</td><td>워크스테이션 쪽 관측성 저장. ClickHouse 적재, Grafana · GlitchTip 포함</td></tr>
+          <tr><td class="repo">habilis_dataset_manager</td><td>녹화(MCAP)를 LeRobot 데이터셋으로 변환, 큐레이션, NAS · SFTP 전송</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="h3n">플랫폼팀 — 확장팩 아닌 저장소</p>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>저장소</th><th>무엇</th></tr></thead>
+        <tbody>
+          <tr><td class="repo">habilis_oci_server</td><td>배포 서버 <code>dl.habilis-console.com</code>. 확장팩 · 런처 다운로드, 라이선스, 설치 USB</td></tr>
+          <tr><td class="repo">habilis_api_server</td><td>Kotlin / Spring 백엔드. 인증, 사용자, 기능 플래그</td></tr>
+          <tr><td class="repo">habilis_admin_console</td><td>관리자 웹 콘솔. 사용자 · 쿼터 관리, 설치 USB 만들기</td></tr>
+          <tr><td class="repo">habilis-extension-release</td><td>모든 확장팩이 같이 쓰는 빌드 · 업로드 CI</td></tr>
+          <tr><td class="repo">tachybridge</td><td><code>habilis_rosbridge</code>의 핵심 C++ 구현. 통신을 깊이 건드릴 때 여기까지 내려갑니다</td></tr>
+          <tr><td class="repo">habilis_robot_sim</td><td>실물 로봇 대신 로봇 자리를 채우는 시뮬 팩. <strong>장비 없이 개발할 때 여기를 씁니다</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="h3n">다른 팀 — 참고용</p>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>저장소</th><th>무엇</th><th>관리 팀</th></tr></thead>
+        <tbody>
+          <tr><td class="repo">anycam</td><td>여러 제조사 카메라를 한 설정 형식으로 띄우는 ROS2 패키지</td><td class="who">로보틱스 SW팀</td></tr>
+          <tr><td class="repo">rby1_ros2</td><td>RB-Y1 로봇 모델 정의, 하드웨어 연동, 원격 조작</td><td class="who">로보틱스 SW팀</td></tr>
+          <tr><td class="repo">rby1_vacuum_gripper</td><td>RB-Y1M 툴 플랜지 출력으로 흡착 그리퍼를 제어</td><td class="who">로보틱스 SW팀</td></tr>
+          <tr><td class="repo">lakibeam_ros2</td><td>Lakibeam 1L 라이다 ROS2 드라이버</td><td class="who">로보틱스 SW팀</td></tr>
+          <tr><td class="repo">habilis_ai_manager</td><td>엣지 AI 추론 · 학습 관리</td><td class="who">에이전트팀</td></tr>
+          <tr><td class="repo">habilis_navigation</td><td>이동 · SLAM</td><td class="who">에이전트팀</td></tr>
+          <tr><td class="repo">CONE-DA</td><td>자동 수집. RBY1 SD 패널 셀용 궤적 생성과 수집 작업 4종</td><td class="who">에이전트팀</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <!-- 4 -->
+  <section id="net">
+    <p class="sec-n">04</p>
+    <h2>사내 네트워크</h2>
+    <p class="dek">IP만 보고도 <strong>어느 층 어느 룸의 무슨 장비인지</strong> 알 수 있게 대역이 나뉘어 있습니다. 규칙 하나만 외우면 됩니다.</p>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 780 400" role="img" aria-label="외부에서는 WireGuard VPN으로, 사무실 wifi에서는 VPN 없이 사내망에 접속하고, 사내망에서 게이트웨이를 거쳐 AWS VPC로 간다. 사내망은 7층·6층·베트남 대역으로, 클라우드는 staging과 prod 대역으로 나뉜다. 고객 현장은 사내망과 연결되지 않는다.">
+          <defs>
+            <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <g class="cLine">
+            <path class="ln" d="M160,49 L292,49" marker-end="url(#ar3)"/>
+            <path class="ln" d="M460,49 L592,49" marker-end="url(#ar3)"/>
+            <path class="ln" d="M380,110 L380,82" marker-end="url(#ar3)"/>
+          </g>
+
+          <rect class="bx" x="20" y="24" width="140" height="50" rx="3"/>
+          <text class="lb" x="90" y="54" text-anchor="middle">외부</text>
+
+          <rect class="bx-hi" x="300" y="24" width="160" height="50" rx="3"/>
+          <text class="lb" x="380" y="54" text-anchor="middle">사내망</text>
+
+          <rect class="bx" x="600" y="24" width="160" height="50" rx="3"/>
+          <text class="lb" x="680" y="54" text-anchor="middle">AWS VPC</text>
+
+          <text class="el" x="226" y="41" text-anchor="middle">VPN · WireGuard</text>
+          <text class="el" x="526" y="41" text-anchor="middle">gw</text>
+
+          <rect class="bx" x="300" y="110" width="160" height="46" rx="3"/>
+          <text class="lb" x="380" y="138" text-anchor="middle">사무실 wifi</text>
+          <text class="el" x="390" y="97">VPN 없이</text>
+
+          <text class="el" x="20" y="196">사내망 대역</text>
+          <rect class="bx-sf" x="20" y="206" width="140" height="50" rx="3"/>
+          <text class="lb" x="90" y="228" text-anchor="middle">7층</text>
+          <text class="mono" x="90" y="246" text-anchor="middle">10.0.0.0/16</text>
+
+          <rect class="bx-sf" x="170" y="206" width="140" height="50" rx="3"/>
+          <text class="lb" x="240" y="228" text-anchor="middle">6층</text>
+          <text class="mono" x="240" y="246" text-anchor="middle">10.1.0.0/16</text>
+
+          <rect class="bx-sf" x="320" y="206" width="140" height="50" rx="3"/>
+          <text class="lb" x="390" y="228" text-anchor="middle">베트남</text>
+          <text class="mono" x="390" y="246" text-anchor="middle">10.20.0.0/16</text>
+
+          <text class="el" x="20" y="277">각 룸 — .10 = PC · .11 = 로봇</text>
+
+          <text class="el" x="600" y="196">클라우드</text>
+          <rect class="bx-sf" x="600" y="206" width="160" height="50" rx="3"/>
+          <text class="lb" x="680" y="228" text-anchor="middle">staging</text>
+          <text class="mono" x="680" y="246" text-anchor="middle">10.101.0.0/16</text>
+
+          <rect class="bx-sf" x="600" y="266" width="160" height="50" rx="3"/>
+          <text class="lb" x="680" y="288" text-anchor="middle">prod</text>
+          <text class="mono" x="680" y="306" text-anchor="middle">10.100.0.0/16 · 미구축</text>
+
+          <rect class="bx-warn" x="20" y="326" width="740" height="56" rx="3"/>
+          <text class="lb" x="40" y="350">고객 현장</text>
+          <text class="lb-s" x="40" y="368">사내망과 연결되지 않습니다. 폐쇄망이면 설치 USB로 오프라인 설치</text>
+        </svg>
+      </div>
+      <figcaption>사무실 안에서는 VPN이 필요 없고, 밖에서 들어올 때만 씁니다. 고객 현장은 이 그림 어디에도 붙지 않는 별개의 망입니다.</figcaption>
+    </figure>
+
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>대역</th><th>어디</th></tr></thead>
+        <tbody>
+          <tr><td class="tech">10.0.0.0/16</td><td>사무실 <strong>7층</strong></td></tr>
+          <tr><td class="tech">10.1.0.0/16</td><td>사무실 <strong>6층</strong></td></tr>
+          <tr><td class="tech">10.20.0.0/16</td><td>베트남</td></tr>
+          <tr><td class="tech">10.101.0.0/16</td><td>클라우드 <strong>staging</strong> — AWS VPC. 테스트 환경 전체</td></tr>
+          <tr><td class="tech">10.100.0.0/16</td><td>클라우드 prod<span class="sub">staging 안정화 후 도입 검토 — 아직 미구축</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <p><strong>호스트 번호 규칙 — <code>10.&lt;층&gt;.&lt;룸&gt;.10 = PC, .11 = 로봇</code></strong></p>
+      <p><code>10.0.3.11</code> 은 7층 room-3 의 <strong>로봇</strong>, <code>10.1.11.10</code> 은 6층 room-11 의 <strong>워크스테이션</strong>입니다. 클라우드 staging도 같은 규칙을 그대로 씁니다.</p>
+    </div>
+
+    <h3>VPN</h3>
+    <p class="dek"><strong>사무실 wifi에서는 VPN 없이 접속됩니다.</strong> 외부에서 사내망에 들어올 때만 필요합니다.</p>
+    <p class="dek">WireGuard를 쓰고, <code>.conf</code> 파일을 사람·기기 단위로 발급합니다. 클라이언트를 설치한 뒤 받은 conf를 불러오면 됩니다. 발급은 플랫폼팀에 요청하세요.</p>
+    <p class="dek">외부 → VPN → gw → AWS VPC 순으로 들어갑니다. <code>admin.habilis-console.com</code> 같은 내부 서비스는 <strong>VPN이나 사내망에서만 열립니다.</strong></p>
+
+    <h3>고객 현장은 사내망과 다릅니다</h3>
+    <p class="dek">여기가 개발하면서 가장 자주 데이는 지점입니다. <strong>사무실에서 되는 게 현장에서 안 되는 경우는 대체로 네트워크 때문</strong>입니다. multicast가 막힌 현장이 실제로 있었고, 네트워크 환경 차이로 설치가 실패한 적도 있습니다.</p>
+    <p class="dek">아예 <strong>인터넷이 없는 폐쇄망</strong>도 대응 범위입니다. 관리 콘솔의 「설치 USB 만들기」로 런처와 확장팩 전체를 USB에 담아 오프라인 설치할 수 있습니다.</p>
+
+  </section>
+
+
+  <!-- 5 -->
+  <section id="mon">
+    <p class="sec-n">05</p>
+    <h2>모니터링</h2>
+    <p class="dek">문제가 생겼을 때 <strong>추측하기 전에 열어볼 곳이 이미 있습니다.</strong> 로그와 지표가 벌써 모이고 있는데 모르면 못 씁니다.</p>
+
+    <h3>2단 구조 — 현장에서 모으고, 클라우드엔 요약만</h3>
+    <ul class="steps">
+      <li><span class="k">로봇</span><p><code>otel_edge</code>가 호스트 지표와 컨테이너 로그를 모읍니다. 사이드카가 docker 이벤트 · DDS 설정 · USB · 네트워크 · 커널 로그 · GPU를 추가로 긁습니다.</p></li>
+      <li><span class="k">워크스테이션</span><p><code>otel_backend</code>가 OTLP(4317/4318)로 받아 <strong>로컬 ClickHouse에 전량 72시간</strong> 보관합니다. Grafana도 여기 있습니다.</p></li>
+      <li><span class="k">클라우드</span><p><strong>요약만</strong> 올라갑니다 — WARN 이상과 60초 단위 메트릭. ClickHouse와 Grafana가 전용 EC2 한 대에 같이 떠 있습니다.</p></li>
+    </ul>
+
+    <div class="note">
+      <p><strong>원본은 현장에만 있습니다.</strong> 로봇은 클라우드로 직접 보내지 않고 반드시 워크스테이션을 거칩니다.</p>
+      <p>그래서 깊이 파야 하면 현장 ClickHouse를 봐야 합니다. MCP(<code>:8128</code>)로 에이전트가 직접 질의할 수 있습니다.</p>
+    </div>
+
+    <h3>무엇을 어디서 보나</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>보고 싶은 것</th><th>어디</th></tr></thead>
+        <tbody>
+          <tr><td>로봇 한 대의 지표 · 로그 · 진단</td><td class="tech">현장 Grafana<span class="sub">otel_backend 안에 들어 있습니다</span></td></tr>
+          <tr><td>버전 · 사이트 전체 현황</td><td class="tech">grafana.habilis-console.com<span class="sub">version-monitoring 대시보드. 계정은 담당자에게</span></td></tr>
+          <tr><td>원본 데이터 직접 질의</td><td class="tech">현장 ClickHouse · MCP :8128</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <p><strong>계측하지 않는 구간이 있습니다.</strong> 고빈도 ROS 토픽(데이터 플레인)은 OTel을 걸지 않았습니다. 제어 플레인과 로봇↔클라우드 구간만 봅니다.</p>
+      <p>"로봇이 느리다"의 원인이 데이터 플레인이면 <strong>여기서는 안 보입니다.</strong> 그때는 ROS 쪽에서 직접 봐야 합니다.</p>
+    </div>
+
+    <div class="note warn">
+      <p><strong>GlitchTip은 아직 쓰지 않습니다.</strong> <code>otel_backend</code> 팩에 들어는 있지만 실제로 사용하는 단계가 아닙니다. 에러 추적도 지금은 Grafana와 로그로 합니다.</p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="flow">
+    <p class="sec-n">06</p>
+    <h2>개발 플로우</h2>
+
+    <h3>브랜치 전략</h3>
+    <p class="dek"><strong>git flow에서 <code>develop</code>만 빠졌다고 보면 됩니다.</strong> feature 브랜치에서 작업하고 로컬에서 테스트한 뒤 머지하고, 릴리즈 브랜치에서 다시 테스트합니다.</p>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 780 232" role="img" aria-label="main 브랜치에서 feature 브랜치가 갈라져 로컬 테스트 후 다시 머지되고, main에서 릴리즈 브랜치가 갈라져 실기 테스트를 거친다. git flow에서 develop 브랜치만 없는 형태.">
+          <defs>
+            <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <g class="cLine">
+            <path class="ln" d="M68,120 L740,120"/>
+            <path class="ln" d="M190,120 C215,120 215,60 240,60 L400,60 C425,60 425,120 450,120"/>
+            <path class="ln" d="M560,120 C585,120 585,180 610,180 L728,180" marker-end="url(#ar5)"/>
+          </g>
+
+          <text class="mono" x="20" y="124">main</text>
+
+          <circle class="dot" cx="190" cy="120" r="4"/>
+          <circle class="dot" cx="450" cy="120" r="4"/>
+          <circle class="dot" cx="560" cy="120" r="4"/>
+          <circle class="dot" cx="280" cy="60" r="4"/>
+          <circle class="dot" cx="350" cy="60" r="4"/>
+          <circle class="dot" cx="660" cy="180" r="4"/>
+
+          <text class="mono" x="240" y="32">feature/*</text>
+          <text class="mono-s" x="240" y="48">로컬에서 테스트</text>
+
+          <text class="mono" x="610" y="206">release/*</text>
+          <text class="mono-s" x="610" y="222">실기 테스트</text>
+
+          <text class="el" x="20" y="32">develop 없음</text>
+        </svg>
+      </div>
+      <figcaption>feature에서 로컬로 확인할 수 있는 건 여기까지입니다. 실제 동작 확인은 릴리즈 브랜치에서 장비에 올려야 끝납니다.</figcaption>
+    </figure>
+
+    <div class="note">
+      <p><strong><code>develop</code>이 없는 건 상태를 따라간 결과입니다.</strong> 아직 프로덕션 단계가 아니었고, 하드웨어 의존이 커서 dev 환경을 따로 두는 의미가 크지 않았습니다.</p>
+      <p><strong>테스트용 장비가 따로 없습니다.</strong> 제대로 확인하려면 결국 로봇이 붙은 룸에서 돌려봐야 하고, 그 자리가 곧 릴리즈 브랜치 테스트입니다.</p>
+    </div>
+
+    <h3>빌드에서 디바이스까지</h3>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 780 200" role="img" aria-label="브랜치에서 PR, 공통 CI 빌드, 배포 서버 업로드, 디바이스 내려받기로 이어지는 흐름. PR 단계의 코드 리뷰는 선택적이라 점선으로 표시되어 있다.">
+          <g class="cLine">
+            <path class="ln" d="M160,58 L200,58" marker-end="url(#ar)"/>
+            <path class="ln" d="M350,58 L390,58" marker-end="url(#ar)"/>
+            <path class="ln" d="M540,58 L580,58" marker-end="url(#ar)"/>
+          </g>
+
+          <rect class="bx" x="20" y="30" width="140" height="56" rx="3"/>
+          <text class="lb" x="90" y="63" text-anchor="middle">브랜치 · PR</text>
+
+          <rect class="bx" x="200" y="30" width="150" height="56" rx="3"/>
+          <text class="lb" x="275" y="56" text-anchor="middle">공통 CI</text>
+          <text class="mono-s" x="275" y="73" text-anchor="middle">extension-release</text>
+
+          <rect class="bx" x="390" y="30" width="150" height="56" rx="3"/>
+          <text class="lb" x="465" y="56" text-anchor="middle">배포 서버</text>
+          <text class="mono-s" x="465" y="73" text-anchor="middle">oci_server</text>
+
+          <rect class="bx-hi" x="580" y="30" width="160" height="56" rx="3"/>
+          <text class="lb" x="660" y="56" text-anchor="middle">디바이스</text>
+          <text class="mono-s" x="660" y="73" text-anchor="middle">내려받아 설치</text>
+
+          <text class="el" x="180" y="50" text-anchor="middle">머지</text>
+          <text class="el" x="370" y="50" text-anchor="middle">빌드</text>
+          <text class="el" x="560" y="50" text-anchor="middle">업로드</text>
+
+          <path class="stem" d="M90,86 L90,128"/>
+          <rect class="bx-warn" x="20" y="128" width="140" height="50" rx="3"/>
+          <text class="lb" x="90" y="149" text-anchor="middle">코드 리뷰</text>
+          <text class="lb-w" x="90" y="167" text-anchor="middle">선택적</text>
+
+          <path class="stem" d="M465,86 L465,128"/>
+          <rect class="bx" x="380" y="128" width="170" height="50" rx="3"/>
+          <text class="lb" x="465" y="149" text-anchor="middle">콘솔 버전 번들</text>
+          <text class="mono-s" x="465" y="167" text-anchor="middle">admin console에서 묶음</text>
+        </svg>
+      </div>
+      <figcaption>모든 확장팩이 <code>habilis-extension-release</code>의 같은 CI를 씁니다. CI를 고치면 모든 팩에 영향이 갑니다. 디바이스는 팩 태그를 직접 고르지 않고, 관리 콘솔에서 묶은 <strong>「콘솔 버전」 번들</strong>을 받습니다.</figcaption>
+    </figure>
+
+    <div class="note">
+      <p>개발이 두 명이고 제품마다 담당이 한 명이라, 리뷰를 건너뛰면 <strong>그 코드를 본 사람이 세상에 한 명뿐</strong>이 됩니다.</p>
+      <p>특히 <strong>런처와 공통 CI</strong>는 모든 팩에 영향이 가는 지점이라, 여기만이라도 리뷰를 거는 게 비용 대비 효과가 큽니다.</p>
+    </div>
+
+    <h3>배포 — 태그를 밀면 디바이스까지</h3>
+    <p class="dek">확장팩 레포에 <strong>태그를 푸시하면 공용 CI가 돕니다.</strong> 빌드 결과는 OCI 형식으로 배포 서버에 올라가고, 디바이스는 그걸 번들 단위로 내려받습니다.</p>
+
+    <ul class="steps">
+      <li><span class="k">태그 푸시</span><p>각 팩 레포가 <code>habilis-extension-release</code>의 워크플로를 호출합니다. <strong>prepare → bake</strong> 두 단계로 돌고, 러너 사양(2 · 8 · 16코어)을 고를 수 있습니다.</p></li>
+      <li><span class="k">두 형식 업로드</span><p>지금은 <strong>OCI Image Layout과 기존 <code>oci.tar</code>를 둘 다 올립니다.</strong> 런처가 양쪽을 다 지원해야 해서 기본값이 <code>both</code>입니다. Layout이 안정화되면 <code>oci.tar</code>를 걷어냅니다.</p></li>
+      <li><span class="k">배포 서버</span><p><code>habilis_oci_server</code>가 <code>dl.habilis-console.com</code>으로 내려줍니다. 확장팩뿐 아니라 <strong>런처 설치 스크립트, Intel/AMD · ARM 설치기, 설치 USB, 라이선스 파일</strong>이 전부 이 서버에서 나갑니다.</p></li>
+      <li><span class="k">콘솔 버전 번들</span><p>디바이스가 팩 태그를 직접 고르지 않습니다. <strong>관리 콘솔에서 팩 조합을 묶어 「콘솔 버전」을 만들고</strong>, 설치할 때 그 번들 이름을 지정합니다. 룸마다 다른 번들을 쓰는 이유가 여기 있습니다.</p></li>
+      <li><span class="k">채널</span><p><code>-dev</code> · <code>-rc</code> 태그는 <strong>기본 카탈로그에 뜨지 않습니다.</strong> 런처에서 experimental을 켠 곳만 받습니다. 정식 태그라야 콘솔 버전에 넣을 수 있습니다.</p></li>
+    </ul>
+
+    <div class="note warn">
+      <p><strong>팩 이름을 바꾸면 새 확장팩이 됩니다.</strong> 파이프라인이 <code>image_name</code>으로 팩을 구분해서, 이름을 바꾸면 이어지지 않고 별개로 올라갑니다.</p>
+      <p><strong>한 레포에 팩 하나입니다.</strong> Dockerfile 경로가 고정이라고 가정하고 짜여 있어서 모노레포로 여러 팩을 배포하는 건 아직 안 됩니다.</p>
+      <p><strong>CI는 분 단위로 돈이 나갑니다.</strong> 큰 러너를 쓰면 빠르지만 비용이 붙고, 실제로 GitHub Actions 사용량을 다 써서 빌드가 멈춘 적이 있습니다.</p>
+    </div>
+
+  </section>
+
+  <!-- 7 -->
+  <section id="start">
+    <p class="sec-n">07</p>
+    <h2>처음 붙을 때</h2>
+    <p class="dek">구조를 알았으면 그다음은 <strong>손에 쥐는 것</strong>입니다. 순서대로 하면 됩니다.</p>
+
+    <ul class="steps">
+      <li><span class="k">01 · VPN</span><p>사무실 wifi면 필요 없습니다. 밖에서 붙을 거면 WireGuard <code>.conf</code>를 플랫폼팀에 요청하세요. <strong>사람 · 기기 단위로 발급</strong>합니다.</p></li>
+      <li><span class="k">02 · 콘솔 설치</span><p>장비에 런처를 깝니다.<br><code>curl -fsSL https://dl.habilis-console.com/new-launcher/install.sh | sh -s -- --version &lt;번들명&gt;</code><br>번들명은 관리 콘솔에서 만든 <strong>콘솔 버전</strong> 이름입니다. 경로가 아직 <code>new-launcher</code>인 건 저장소 이름만 바뀐 흔적입니다.</p></li>
+      <li><span class="k">03 · 장비</span><p>런처는 <strong>리눅스만 지원</strong>합니다. <code>ai_manager</code> · <code>dataset_manager</code>가 GPU를 요구해서 <strong>노트북에서는 정상적인 테스트가 어렵습니다.</strong></p></li>
+      <li><span class="k">04 · 관리 콘솔</span><p><code>admin.habilis-console.com</code>에서 사용자 · 쿼터, 콘솔 버전 번들 만들기, 설치 USB를 다룹니다. VPN이나 사내망에서만 열립니다.</p></li>
+      <li><span class="k">05 · Grafana</span><p><code>grafana.habilis-console.com</code>의 version-monitoring 대시보드로 버전과 사이트 현황을 봅니다. 계정은 담당자에게 요청하세요.</p></li>
+      <li><span class="k">06 · 로봇 없이</span><p>실물 장비가 없을 때는 <code>habilis_robot_sim</code>이 로봇 자리를 채웁니다. <strong><code>docker compose up</code> 한 번으로 전부 뜨는 환경은 없습니다.</strong></p></li>
+    </ul>
+
+    <div class="note warn">
+      <p><strong>원격 개발 서버 접속 방법과 계정 발급 절차는 아직 문서로 없습니다.</strong> 지금은 물어보는 수밖에 없습니다.</p>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section id="gloss">
+    <p class="sec-n">08</p>
+    <h2>용어</h2>
+    <p class="dek">문서 안에서 설명 없이 쓰이는 말들입니다. 전부 사내에서만 통하는 표현이라 한 번 보고 넘어가면 편합니다.</p>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>말</th><th>뜻</th></tr></thead>
+        <tbody>
+          <tr><td class="area">런처 · 콘솔</td><td><code>habilis_console</code>. 모든 디바이스에 깔리는 런타임이자 브라우저로 보는 화면</td></tr>
+          <tr><td class="area">확장팩</td><td>런타임 위에서 도는 기능 단위. 각자 자기 Docker 컨테이너 안에서 돕니다</td></tr>
+          <tr><td class="area">콘솔 버전 번들</td><td>관리 콘솔에서 팩 조합을 묶은 설치 단위. 디바이스는 팩 태그가 아니라 이 이름으로 받습니다</td></tr>
+          <tr><td class="area">팩 태그</td><td><code>v0.9.0-dev.N</code> 같은 확장팩 버전. <code>-dev</code> · <code>-rc</code>는 experimental을 켠 곳에만 보입니다</td></tr>
+          <tr><td class="area">룸</td><td>워크스테이션 1대 + 로봇 1대가 있는 현장 단위. IP의 세 번째 자리가 룸 번호입니다</td></tr>
+          <tr><td class="area">에피소드</td><td>수집 한 회차. 녹화 하나를 가리킵니다</td></tr>
+          <tr><td class="area">MCAP</td><td>로봇에서 나온 <strong>원본</strong> 녹화 포맷</td></tr>
+          <tr><td class="area">LeRobot 데이터셋</td><td>MCAP을 변환한 결과. <strong>학습에 바로 쓰는</strong> 포맷입니다</td></tr>
+          <tr><td class="area">체크포인트</td><td>학습 결과 모델 파일. 추론할 때 콘솔에서 골라 올립니다</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>이 문서는 초안입니다. 틀린 부분, 빠진 저장소, 더 이상 안 쓰는 저장소가 있으면 알려주세요.</p>
+  </footer>
+
+  </main>
+</div>
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+  var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (!en.isIntersecting) return;
+        links.forEach(function(a){
+          a.classList.toggle('on', a.getAttribute('href') === '#' + en.target.id);
+        });
+      });
+    }, { rootMargin: '-10% 0px -75% 0px' });
+    secs.forEach(function(s){ io.observe(s); });
+  }
+})();
+</script>
+
+</body></html>

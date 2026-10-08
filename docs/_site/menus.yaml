@@ -5,6 +5,8 @@ menus:
       name: 스프린트 Git-flow 프로세스
     - slug: code-review-automation
       name: 코드 리뷰 자동화
+    - slug: onboarding
+      name: 온보딩
   agent: []
   image:
     - slug: git

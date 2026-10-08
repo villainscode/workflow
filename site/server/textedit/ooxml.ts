@@ -44,11 +44,11 @@ function slideOrder(zip: Record<string, Uint8Array>): Map<string, number> {
   return order;
 }
 
-const decodeXml = (s: string) =>
+export const decodeXml = (s: string) =>
   s.replace(/&(lt|gt|amp|quot|apos|#\d+|#x[0-9a-f]+);/gi, (_, e: string) =>
     e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1)))
       : ({ lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" } as Record<string, string>)[e.toLowerCase()]);
-const encodeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export const encodeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** XML 한 파트에서 글자 요소를 찾는다. 위치는 원본 문자열 기준이다 */
 function scanPart(kind: Kind, part: string, xml: string, slideNo = 0): TextEl[] {

@@ -1,0 +1,25 @@
+title: 플랫폼팀 개발 환경
+category: sdlc
+menu: onboarding
+kind: html
+status: approved
+current: v1.0
+versions:
+  - version: v0.0
+    entry: platform-env.html
+    note: "Claude Code: claude.ai 아티팩트에서 가져옴 (MCP 연결 시험)"
+    source: upload
+    created: 2026-10-08
+  - version: v0.1
+    entry: platform-env.html
+    note: "Claude Code: MCP 시험: 조각 id 수정 1건, 찾아 바꾸기 1건"
+    source: text-edit
+    created: 2026-10-08
+  - version: v1.0
+    entry: platform-env.html
+    note: "Claude Code: 정식 버전으로 확정 (v0.1 → v1.0)"
+    source: release
+    created: 2026-10-08
+notion_url:
+gdrive_url:
+origin_url: https://claude.ai/artifact/9w3zrAXkgcpU26gTufpiGw

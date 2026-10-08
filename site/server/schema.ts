@@ -29,6 +29,7 @@ export const documents = sqliteTable("document", {
   currentVersion: text("current_version").notNull(),
   notionUrl: text("notion_url"),
   gdriveUrl: text("gdrive_url"),
+  originUrl: text("origin_url"),
   deletedAt: text("deleted_at"),
 });
 
@@ -64,7 +65,7 @@ CREATE TABLE menu (slug TEXT PRIMARY KEY, category_key TEXT NOT NULL REFERENCES 
   parent_slug TEXT REFERENCES menu(slug), name TEXT NOT NULL, sort INTEGER NOT NULL);
 CREATE TABLE document (id INTEGER PRIMARY KEY AUTOINCREMENT, menu_slug TEXT NOT NULL REFERENCES menu(slug),
   slug TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, type TEXT, sdlc TEXT, status TEXT NOT NULL,
-  current_version TEXT NOT NULL, notion_url TEXT, gdrive_url TEXT, deleted_at TEXT, UNIQUE(menu_slug, slug));
+  current_version TEXT NOT NULL, notion_url TEXT, gdrive_url TEXT, origin_url TEXT, deleted_at TEXT, UNIQUE(menu_slug, slug));
 CREATE TABLE document_version (id INTEGER PRIMARY KEY AUTOINCREMENT, document_id INTEGER NOT NULL REFERENCES document(id),
   version TEXT NOT NULL, note TEXT, source TEXT, created_at TEXT, UNIQUE(document_id, version));
 CREATE TABLE version_file (id INTEGER PRIMARY KEY AUTOINCREMENT, version_id INTEGER NOT NULL REFERENCES document_version(id),

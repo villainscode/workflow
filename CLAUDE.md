@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루션을 만들기 위한 **설계 단계 문서(드래프트)**를 관리하는 워크 리포지토리다. 대상은 요구사항, 시퀀스 다이어그램, ERD, 시스템 아키텍처, 개발 도구, 코드 리뷰, 빌드·배포, 운영이고, 의사 결정 기록도 여기에 남긴다. 문서 안의 YAML·셸·워크플로 코드는 대상 팀 저장소에 적용할 예시이고, 이 리포에서 실행하는 코드가 아니다.
 
-리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트를 `site/`에 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`(1.x)와 `REQUIREMENT-2.0.md`(2.0: HTML·DOCX·PPTX 텍스트 편집)에 있다. 사이트 작업을 할 때는 먼저 그 문서의 현재 단계와 결정 사항(D-n)을 확인하고, 미결정 항목은 진행하기 전에 묻는다.
+리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트를 `site/`에 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`(1.x), `REQUIREMENT-2.0.md`(2.0: HTML·DOCX·PPTX·XLSX 텍스트 편집), `REQUIREMENT-3.0.md`(3.0: Claude Code 직접 연결)에 있다.
+
+**사이트 문서를 다룰 때는 `docs/` 파일을 직접 고치지 말고 workflow-docs MCP 도구를 쓴다**(`.mcp.json`, 사용법은 `.claude/skills/workflow-docs/SKILL.md`). 사이트 서버(`cd site && npm run dev`)가 켜져 있어야 한다. 사이트 작업을 할 때는 먼저 그 문서의 현재 단계와 결정 사항(D-n)을 확인하고, 미결정 항목은 진행하기 전에 묻는다.
 
 - 응답과 문서는 한국어로 쓴다.
 - 결과물은 코드보다 설명, 프로세스, 그림, 문서 위주로 만든다.
@@ -63,6 +65,7 @@ gdrive_url:
 | SDLC | `sprint-gitflow` | `process` | draft | 버전 관리·CI, 2주 스프린트 |
 | SDLC | `code-review-automation` | `review-gate` | draft | 코드 리뷰 게이트 설치·Slack·Ruleset |
 | SDLC | `code-review-automation` | `review-modes` | v1.0 | CI 리뷰 실행 방식 (API 키 vs Max 구독) |
+| SDLC | `onboarding` | `platform-env` | v1.0 | 플랫폼팀 개발 환경. 외부 claude.ai 아티팩트를 MCP로 가져와 시험한 문서(`origin_url`에 출처) |
 
 Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더까지 포함한 상대 경로로 연결한다. 예: `process.html`에서 `../../../code-review-automation/review-gate/v0.0/review-gate.html`. 새 버전을 만들면 다른 문서에서 이 문서를 가리키는 링크를 새 버전으로 바꿀지 판단한다.
 
@@ -76,7 +79,11 @@ npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(p
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없이 저장하면 바이트 동일 등)
+npm test           # 단위·텍스트 편집·API·MCP 자동 테스트(node:test)
+npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘 다
 ```
+
+- **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·5173). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
 
 - **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
@@ -97,9 +104,17 @@ npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없�
     - 바뀐 조각은 `data-changed`로 표시한다. 작성 중 내용은 localStorage(`workflow:textdraft:*`)에 둔다. 저장은 확인 창을 거쳐 `text-edit` API로 한다.
   - **DOCX 목록 편집** (`viewers/OfficeTextEditor.tsx`): 왼쪽은 영역(본문·머리글·바닥글·표 칸)과 문단별 조각 칸이다. 서식 힌트 `fmt`(b·i·u)로 원래 서식을 보여 준다. 오른쪽은 `POST /api/docs/:menu/:doc/text-preview`(저장 안 함)가 돌려준 파일을 docx-preview로 그린다.
   - **PPTX 목록 편집**(같은 `OfficeTextEditor`): 슬라이드 번호는 `presentation.xml`의 발표 순서다(파일 이름 slideN과 다를 수 있다). 미리보기는 `text-preview?to=pdf`(서버 LibreOffice 변환, `convert.ts`의 `convertData`로 내용 해시 캐시)를 PDF 뷰어로 열고, 고치던 슬라이드 쪽(`#page=n`)을 보여 준다.
-  - **DOCX·PPTX 버전 비교** (`viewers/SegmentDiffViewer.tsx`): 문서 상단 "비교"를 고르면 두 버전의 텍스트 조각을 jsdiff `diffArrays`로 맞춰 바뀜·추가·삭제를 보여 준다. HTML 등 텍스트 형식은 기존 줄 단위 `DiffViewer`를 쓴다.
+  - **XLSX 셀 편집** (`server/textedit/xlsx.ts`, 같은 `OfficeTextEditor`): 문자 셀만 고친다(숫자·수식 셀 제외). 시트 순서는 `workbook.xml` 기준이다.
+    - 공유 문자열(`sharedStrings.xml`)을 그 셀만 쓰면 그 자리에서 고친다. 여러 셀이 함께 쓰면 고친 셀용 `<si>`를 끝에 붙이고 그 셀의 `<v>`만 새 번호로 바꾼다(`uniqueCount` +1). 그래서 같은 글자를 쓰던 다른 셀은 그대로 남는다.
+    - 원래 줄바꿈이 있던 셀은 Enter를 허용한다. 미리보기는 기존 `SheetViewer`다.
+  - **DOCX·PPTX·XLSX 버전 비교** (`viewers/SegmentDiffViewer.tsx`): 문서 상단 "비교"를 고르면 두 버전의 텍스트 조각을 jsdiff `diffArrays`로 맞춰 바뀜·추가·삭제를 보여 준다. HTML 등 텍스트 형식은 기존 줄 단위 `DiffViewer`를 쓴다.
   - 저장·임시 보관·편집 막대는 `viewers/textedit/session.tsx`의 `useTextSession`과 `EditBar`를 HTML·DOCX 편집기가 함께 쓴다.
   - 어댑터를 고쳤다면 `npm run check:textedit`로 확인한다(검사용 샘플은 `site/scripts/fixtures/`).
+- **workflow-docs MCP** (`site/mcp/server.ts`, `.mcp.json`으로 등록, 3.0): 사이트 REST API를 감싼 stdio MCP 서버다.
+  - 도구: `list_documents`, `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename), `upload_version`, `create_menu`, `release_document`.
+  - 문서는 사이트 주소(`?v=`, `&seg=`), `대분류/메뉴/문서`, `대분류 > 메뉴 > 제목`, 제목으로 지정한다.
+  - 삭제·휴지통 도구는 두지 않는다(D-24). 쓰기 도구는 변경 메모 앞에 "Claude Code:"를 붙인다(D-26). 외부에서 가져온 문서는 `meta.yaml`의 `origin_url`에 출처를 남긴다.
+  - stdout은 MCP 통신용이라 로그는 stderr로만 쓴다. 점검은 `npm test`의 `test/mcp.test.ts`(임시 docs 사용)로 한다. `scripts/mcp-check.ts`는 켜 둔 사이트에 임시 메뉴 `zz-mcp`를 만들므로 쓴 뒤 지운다.
 - **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다. 정식 문서에 업로드나 편집으로 새 버전이 생기면(v1.0 → v1.1) 상태는 approved 그대로 둔다(D-15). 업로드·저장 코드는 status를 건드리지 않는다.
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
 - **아이콘**: 사이트의 기능 버튼은 Lucide(`lucide-react`) 아이콘으로 만들고 `components/IconButton.tsx`를 쓴다. 아이콘만 있는 버튼은 `label`이 aria-label과 title(마우스를 올렸을 때 설명)이 된다. 대화상자의 확인·취소처럼 실수하면 안 되는 버튼과 휴지통의 복원·영구 삭제는 아이콘과 글자를 함께 둔다(`text` prop). 유니코드 기호(✕ ☰ ▾ 등)를 아이콘으로 쓰지 않는다.
@@ -114,7 +129,7 @@ npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없�
   - 대표 파일은 `index.html` → 첫 HTML → 가장 얕은 첫 파일 순서로 고른다.
   - `..`나 숨김 파일 경로는 버린다.
   - 새 메뉴는 `menus.yaml`에 추가된다.
-- **실시간 반영**: chokidar가 `docs/`를 감시하고, 변경이 생기면 300ms 동안 모았다가 한 번 다시 색인한 뒤 SSE로 알린다. 화면은 `useLiveUpdates`로 목록과 문서 정보를 다시 불러온다. 파일 URL에 `?h=<sha256 앞 12자리>`를 붙여 같은 경로의 내용이 바뀌어도 iframe·이미지가 새로 고쳐진다.
+- **실시간 반영**: chokidar가 `docs/`를 감시하고, 변경이 생기면 300ms 동안 모았다가 한 번 다시 색인한 뒤 SSE로 알린다. 화면은 `useLiveUpdates`로 목록과 문서 정보를 다시 불러온다. SSE는 `pagehide`에서 닫고 `pageshow`(뒤로 가기 캐시 복귀)에서 다시 연다. 닫지 않으면 캐시에 남은 페이지들이 연결을 잡아 같은 호스트 연결 한도(6개)가 차고 사이트가 멈춘다(TC-UI-13). 파일 URL에 `?h=<sha256 앞 12자리>`를 붙여 같은 경로의 내용이 바뀌어도 iframe·이미지가 새로 고쳐진다.
 - **변환** (`server/convert.ts`): PPTX·DOCX → PDF는 `soffice --headless`, draw.io → SVG는 `drawio -x`로 변환한다.
   - 결과는 원본 sha256을 이름으로 `site/data/cache/`에 캐시한다. 변환기를 고쳤다면 캐시 파일을 지워야 다시 변환된다.
   - LibreOffice는 한 번에 하나씩 순서대로 돌리고, 별도 프로필(`cache/lo-profile`)을 쓴다.

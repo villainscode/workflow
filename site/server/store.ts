@@ -24,6 +24,8 @@ export interface UploadInput {
   note?: string;
   entry?: string;        // 대표 파일. 없으면 자동 선택
   source?: "upload" | "edit" | "text-edit";
+  /** 외부에서 가져온 문서의 출처 주소(예: claude.ai 아티팩트). meta.yaml의 origin_url에 남긴다 */
+  origin?: string;
   files: IncomingFile[];
 }
 
@@ -159,11 +161,13 @@ export function upload(docsRoot: string, input: UploadInput) {
     meta = new Document({
       title: input.title!.trim(), category, menu: input.menu, kind: KIND[ext] ?? "code", status: "draft",
       current: version, versions: [versionEntry], notion_url: null, gdrive_url: null,
+      ...(input.origin ? { origin_url: input.origin } : {}),
     });
   } else {
     const seq = meta.get("versions") as YAMLSeq;
     seq.add(meta.createNode(versionEntry));
     meta.set("current", version);
+    if (input.origin) meta.set("origin_url", input.origin);
   }
   mkdirSync(docDir, { recursive: true });
   writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
@@ -205,7 +209,7 @@ export function nextMajor(versions: string[]): string {
  * draft(또는 review) 문서를 정식 버전으로 확정한다. 현재 버전 폴더를 새 정식 버전(v1.0 등)으로 복사하고
  * meta.yaml에 버전을 추가한 뒤 current와 status(approved)를 바꾼다. 기존 버전 폴더는 건드리지 않는다.
  */
-export function release(docsRoot: string, menu: string, doc: string) {
+export function release(docsRoot: string, menu: string, doc: string, note?: string) {
   const docDir = join(docsRoot, menu, doc);
   const metaPath = join(docDir, "meta.yaml");
   if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
@@ -220,7 +224,7 @@ export function release(docsRoot: string, menu: string, doc: string) {
   cpSync(join(docDir, js.current), join(docDir, version), { recursive: true });
 
   (meta.get("versions") as YAMLSeq).add(meta.createNode({
-    version, entry: base.entry, note: `${js.current === "v0.0" ? "draft" : js.current} 버전을 정식 버전으로 확정`, source: "release",
+    version, entry: base.entry, note: note?.trim() || `${js.current === "v0.0" ? "draft" : js.current} 버전을 정식 버전으로 확정`, source: "release",
     created: new Date().toISOString().slice(0, 10),
   }));
   meta.set("current", version);

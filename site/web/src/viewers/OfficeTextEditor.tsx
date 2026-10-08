@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "../components/EmptyState.tsx";
 import type { Segment } from "../lib/textedit.ts";
+import { SheetViewer } from "./SheetViewer.tsx";
 import { EditBar, useTextSession, type TextSession } from "./textedit/session.tsx";
 
 /**
@@ -9,7 +10,7 @@ import { EditBar, useTextSession, type TextSession } from "./textedit/session.ts
  * 오른쪽 미리보기는 서버가 바뀐 조각을 반영해 돌려준 파일(text-preview, 저장하지 않음)로 그린다.
  */
 
-type Format = "docx" | "pptx";
+type Format = "docx" | "pptx" | "xlsx";
 
 /** 조각 group("document · 표 1 2행 1열 · 문단 5")을 영역(앞부분)과 문단 번호로 나눈다 */
 function splitGroup(group: string) {
@@ -42,18 +43,20 @@ function SegField({ seg, s, register, onFocus }: {
       suppressContentEditableWarning
       spellCheck={false}
       data-seg={seg.id}
-      className={`rounded-sm px-px outline-1 outline-transparent outline-dashed hover:outline-accent/60 focus:bg-accent-soft focus:outline-2 focus:outline-accent focus:outline-solid
+      className={`rounded-sm px-px outline-1 ${seg.multiline ? "whitespace-pre-wrap" : ""} outline-transparent outline-dashed hover:outline-accent/60 focus:bg-accent-soft focus:outline-2 focus:outline-accent focus:outline-solid
         data-[changed]:bg-med-soft data-[changed]:shadow-[inset_0_-2px_0_var(--med)]
         ${fmt.includes("b") ? "font-bold" : ""} ${fmt.includes("i") ? "italic" : ""} ${fmt.includes("u") ? "underline" : ""}`}
       onFocus={() => onFocus(seg)}
       onInput={(e) => {
         let text = e.currentTarget.textContent ?? "";
-        if (/[\r\n]/.test(text)) { text = text.replace(/\r?\n/g, " "); e.currentTarget.textContent = text; }
+        if (!seg.multiline && /[\r\n]/.test(text)) { text = text.replace(/\r?\n/g, " "); e.currentTarget.textContent = text; }
+        // 줄 끝에서 Enter를 치면 브라우저가 커서 자리용 줄바꿈을 하나 더 둔다. 화면은 두고(커서가 튀지 않게) 저장할 값에서만 뗀다
+        if (seg.multiline && !seg.text.endsWith("\n")) text = text.replace(/\n$/, "");
         e.currentTarget.toggleAttribute("data-changed", text !== seg.text);
         s.change(seg.id, text);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") e.preventDefault();
+        if (e.key === "Enter" && !seg.multiline) e.preventDefault();
         if (e.key === "Escape") { e.preventDefault(); s.set(seg.id, seg.text); e.currentTarget.blur(); }
       }}
     />
@@ -130,6 +133,18 @@ function DocxPreview({ blob }: { blob: Blob | null }) {
   return <div ref={box} className="docx-host h-full overflow-y-auto" />;
 }
 
+/** XLSX 미리보기: 바뀐 내용을 반영한 파일을 기존 엑셀 뷰어(시트 탭 + 표)로 보여 준다 */
+function SheetPreview({ blob }: { blob: Blob | null }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    if (!blob) return;
+    const u = URL.createObjectURL(blob);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [blob]);
+  return url ? <SheetViewer url={url} /> : <EmptyState title="불러오는 중…" />;
+}
+
 /** PPTX 미리보기: 서버가 LibreOffice로 변환한 PDF를 브라우저 내장 PDF 뷰어로 연다 */
 function PdfPreview({ blob, page }: { blob: Blob | null; page: number }) {
   const [url, setUrl] = useState("");
@@ -168,7 +183,7 @@ export function OfficeTextEditor({ menu, doc, version, format, onExit }: {
       el.toggleAttribute("data-changed", changed);
     },
   });
-  const preview = usePreviewFile(menu, doc, version, s, format === "docx" ? 400 : 1000, format === "pptx");
+  const preview = usePreviewFile(menu, doc, version, s, format === "pptx" ? 1000 : 400, format === "pptx");
 
   if (s.error) return <EmptyState title="텍스트를 불러올 수 없습니다" body={String(s.error)} />;
   if (!s.segments) return <EmptyState title="불러오는 중…" />;
@@ -188,8 +203,10 @@ export function OfficeTextEditor({ menu, doc, version, format, onExit }: {
 
   return (
     <div className="grid h-full grid-rows-[auto_auto_minmax(0,1fr)]">
-      <EditBar s={s} hint="문단별 텍스트를 고치면 오른쪽 미리보기에 반영됩니다 · 서식이 다른 부분은 칸이 나뉩니다 · Esc는 되돌리기"
-        notice={format === "pptx" ? "미리보기는 LibreOffice로 변환해 1~2초 늦게 갱신됩니다." : "줄·문단을 추가하거나 서식을 바꿀 수는 없습니다."} />
+      <EditBar s={s} hint={`${format === "xlsx" ? "셀" : format === "pptx" ? "슬라이드" : "문단"}별 텍스트를 고치면 오른쪽 미리보기에 반영됩니다 · 서식이 다른 부분은 칸이 나뉩니다 · Esc는 되돌리기`}
+        notice={format === "pptx" ? "미리보기는 LibreOffice로 변환해 1~2초 늦게 갱신됩니다."
+          : format === "xlsx" ? "문자 셀만 고칠 수 있습니다(숫자·수식 셀 제외). 같은 글자를 쓰는 다른 셀은 바뀌지 않습니다."
+            : "줄·문단을 추가하거나 서식을 바꿀 수는 없습니다."} />
       <div className="flex gap-1 border-b border-line bg-surface px-4 py-1 lg:hidden">
         {tabBtn("text", "텍스트")}{tabBtn("preview", "미리보기")}
       </div>
@@ -211,7 +228,9 @@ export function OfficeTextEditor({ menu, doc, version, format, onExit }: {
         </div>
         <div className={`relative min-h-0 bg-bg ${tab === "preview" ? "block" : "hidden"} lg:block`}>
           {preview.loading && <span className="absolute top-2 right-3 z-10 rounded-full bg-surface px-2 text-[11px] text-muted shadow">미리보기 갱신 중…</span>}
-          {format === "docx" ? <DocxPreview blob={preview.blob} /> : <PdfPreview blob={preview.blob} page={page} />}
+          {format === "docx" ? <DocxPreview blob={preview.blob} />
+            : format === "xlsx" ? <SheetPreview blob={preview.blob} />
+              : <PdfPreview blob={preview.blob} page={page} />}
         </div>
       </div>
     </div>

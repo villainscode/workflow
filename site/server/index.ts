@@ -20,14 +20,16 @@ import {
 import { convert, convertData, type Target } from "./convert.ts";
 
 const SITE_ROOT = resolve(import.meta.dirname, "..");
-const REPO_ROOT = resolve(SITE_ROOT, "..");
-const DOCS_ROOT = join(REPO_ROOT, "docs");
+// 테스트는 WORKFLOW_DOCS_ROOT·WORKFLOW_DATA_DIR로 임시 폴더를 넘겨 실제 docs/와 색인을 건드리지 않는다
+const DOCS_ROOT = resolve(process.env.WORKFLOW_DOCS_ROOT ?? join(SITE_ROOT, "../docs"));
+const REPO_ROOT = resolve(DOCS_ROOT, "..");
+const DATA_DIR = resolve(process.env.WORKFLOW_DATA_DIR ?? join(SITE_ROOT, "data"));
 const PORT = Number(process.env.PORT ?? 5174);
 const MAX_UPLOAD = 200 * 1024 * 1024;
-const CACHE_DIR = join(SITE_ROOT, "data/cache");
+const CACHE_DIR = join(DATA_DIR, "cache");
 
-mkdirSync(join(SITE_ROOT, "data"), { recursive: true });
-const sqlite = new Database(join(SITE_ROOT, "data/index.db"));
+mkdirSync(DATA_DIR, { recursive: true });
+const sqlite = new Database(join(DATA_DIR, "index.db"));
 sqlite.pragma("journal_mode = WAL");
 const db = drizzle(sqlite);
 
@@ -115,7 +117,7 @@ app.post("/api/upload", async (req) => {
 
   const result = upload(DOCS_ROOT, {
     menu: fields.menu, doc: fields.doc || undefined, title: fields.title, slug: fields.slug,
-    version: fields.version, note: fields.note, entry: fields.entry || undefined, files,
+    version: fields.version, note: fields.note, entry: fields.entry || undefined, origin: fields.origin || undefined, files,
   });
   reindex("upload");
   return result;
@@ -174,7 +176,8 @@ app.post<DocParams & { Querystring: { to?: string }; Body: { baseVersion: string
 app.post<DocParams & { Body: { baseVersion: string; changes: Change[]; note?: string } }>("/api/docs/:menu/:doc/text-edit", async (req) =>
   done("text-edit", saveTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
 
-app.post<DocParams>("/api/docs/:menu/:doc/release", async (req) => done("release", release(DOCS_ROOT, req.params.menu, req.params.doc)));
+app.post<DocParams & { Body: { note?: string } | undefined }>("/api/docs/:menu/:doc/release", async (req) =>
+  done("release", release(DOCS_ROOT, req.params.menu, req.params.doc, req.body?.note)));
 app.delete<DocParams>("/api/docs/:menu/:doc", async (req) => done("trash", trashDoc(DOCS_ROOT, req.params.menu, req.params.doc)));
 
 app.get("/api/trash", async () => listTrash(DOCS_ROOT));

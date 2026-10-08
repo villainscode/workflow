@@ -21,7 +21,7 @@ function htmlFiles(dir: string): string[] {
   });
 }
 
-const targets = [...htmlFiles(DOCS), join(ROOT, "scripts/fixtures/sample.docx"), join(ROOT, "scripts/fixtures/sample-rich.docx"), join(ROOT, "scripts/fixtures/sample.pptx"), join(ROOT, "scripts/fixtures/sample-slides.pptx")];
+const targets = [...htmlFiles(DOCS), join(ROOT, "scripts/fixtures/sample.docx"), join(ROOT, "scripts/fixtures/sample-rich.docx"), join(ROOT, "scripts/fixtures/sample.pptx"), join(ROOT, "scripts/fixtures/sample-slides.pptx"), join(ROOT, "scripts/fixtures/sample.xlsx"), join(ROOT, "scripts/fixtures/sample-shared.xlsx")];
 const work = mkdtempSync(join(tmpdir(), "textedit-"));
 
 for (const file of targets) {
@@ -61,6 +61,20 @@ for (const file of targets) {
       execFileSync("soffice", [`-env:UserInstallation=file://${work}/lo`, "--headless", "--convert-to", "pdf", "--outdir", work, out], { stdio: "ignore", timeout: 120_000 });
       ok(existsSync(join(work, "edited.pdf")), "고친 파일을 LibreOffice가 정상으로 엶(PDF 변환 성공)");
     } catch { console.log("  - LibreOffice 없음: 열기 검사 생략"); }
+  }
+
+  // 엑셀: 여러 셀이 함께 쓰는 글자를 한 셀에서만 고치면 다른 셀은 그대로여야 한다
+  if (format === "xlsx") {
+    const shared = segs.filter((s) => s.text === "완료");
+    const r2 = adapter.apply(data, [{ id: shared[0].id, hash: shared[0].hash, text: "끝남" }]);
+    const after2 = adapter.extract(r2.data);
+    ok(shared.length >= 2 && after2[shared[0].id].text === "끝남" && shared.slice(1).every((s) => after2[s.id].text === "완료"),
+      `같은 글자 셀 ${shared.length}곳 중 고친 셀만 바뀜 (${shared.map((s) => s.group).join(", ")})`);
+    const mr = segs.find((s) => s.multiline);
+    if (mr) {
+      const r3 = adapter.apply(data, [{ id: mr.id, hash: mr.hash, text: "첫 줄\n둘째 줄 (수정)" }]);
+      ok(adapter.extract(r3.data)[mr.id].text === "첫 줄\n둘째 줄 (수정)", "줄바꿈이 있던 셀은 줄바꿈 유지");
+    }
   }
 
   // 3) 거부해야 하는 경우
