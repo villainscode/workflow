@@ -1,0 +1,22 @@
+# ─── 업무 문서 사이트 Markdown 편집기 이미지 업로드 (Cloudflare Worker + R2) ───
+# MarkFlow 에디터의 apps/worker에서 가져왔다. 배포 전에 아래 값을 본인 계정에 맞게 바꾼다(README.md).
+
+name = "workflow-r2-uploader"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Cloudflare 계정 ID (대시보드 오른쪽 사이드바)
+# account_id = "YOUR_ACCOUNT_ID"
+
+# ── R2 버킷 바인딩 ────────────────────────────────────────────────────────────
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "workflow-images"       # 직접 만든 R2 버킷 이름
+
+# ── 환경 변수 ────────────────────────────────────────────────────────────────
+[vars]
+# R2 버킷 공개 주소: 커스텀 도메인(https://images.example.com) 또는 r2.dev 주소(https://pub-xxxxxxxx.r2.dev)
+PUBLIC_URL = "https://pub-xxxxxxxx.r2.dev"
+
+# 업로드를 허락할 사이트 주소(쉼표 구분, * 불가). 사이트를 여는 주소를 모두 넣는다
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"

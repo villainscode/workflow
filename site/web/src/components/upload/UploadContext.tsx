@@ -7,6 +7,7 @@ export interface UploadPreset {
   category?: string;
   menu?: string;     // 메뉴별 + 버튼, 메뉴에 끌어다 놓기
   doc?: string;      // 문서 화면의 "새 버전"
+  parent?: string;   // 사이드바 문서 메뉴의 "하위 문서 추가": 새 문서를 이 문서 아래에
   files?: UploadFile[];
 }
 

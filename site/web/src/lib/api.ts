@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
 export interface DocSummary {
-  slug: string; menuSlug: string; title: string; kind: string; status: string; currentVersion: string;
+  /** parent: 하위 문서면 상위 문서 slug(같은 메뉴) */
+  slug: string; menuSlug: string; parent: string | null; title: string; kind: string; status: string; currentVersion: string;
 }
+/** documents는 메뉴 안 문서 전체(하위 문서 포함, 순서대로). 트리는 parent로 짠다 */
 export interface MenuNode { slug: string; name: string; documents: DocSummary[]; menus: MenuNode[] }
 export interface Category { key: string; name: string; menus: MenuNode[] }
 export interface Tree { categories: Category[]; warnings: string[] }
@@ -10,7 +12,7 @@ export interface Tree { categories: Category[]; warnings: string[] }
 export interface VersionFile { id: number; path: string; mime: string; size: number; sha256: string; isEntry: boolean; url: string }
 export interface DocVersion { id: number; version: string; note: string | null; source: string | null; createdAt: string | null; files: VersionFile[] }
 export interface DocDetail {
-  id: number; menuSlug: string; slug: string; title: string; kind: string; type: string | null; sdlc: string | null;
+  id: number; menuSlug: string; slug: string; parentSlug: string | null; title: string; kind: string; type: string | null; sdlc: string | null;
   status: string; currentVersion: string; notionUrl: string | null; gdriveUrl: string | null; originUrl: string | null; versions: DocVersion[];
 }
 
@@ -35,7 +37,7 @@ export const useDoc = (menu: string, doc: string) =>
 
 export interface UploadFile { file: File; path: string }
 export interface UploadRequest {
-  menu: string; doc?: string; title?: string; slug?: string; version?: string; note?: string; entry?: string;
+  menu: string; doc?: string; parent?: string; title?: string; slug?: string; version?: string; note?: string; entry?: string;
   files: UploadFile[];
 }
 export interface UploadResult { menu: string; doc: string; version: string; category: string; created: boolean }

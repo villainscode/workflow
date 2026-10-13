@@ -126,6 +126,9 @@ function RenameInput({ cat, onDone }: { cat: Category; onDone: () => void }) {
       onFocus={(e) => e.target.select()}
       onChange={(e) => setName(e.target.value)}
       onKeyDown={(e) => {
+        // 한글 조합 중 Enter(isComposing)는 건너뛴다. 맥 크롬은 조합이 끝난 뒤 Enter keydown을 한 번 더 보내는데,
+        // 조합 중 Enter로 확인 창을 열면 그 두 번째 Enter가 확인 창의 "취소"를 눌러 버린다
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return;
         // Enter 기본 동작을 막아야 확인 창의 버튼이 같은 키 입력을 받아 바로 실행되지 않는다
         if (e.key === "Enter") { e.preventDefault(); void finish(true); }
         if (e.key === "Escape") { e.preventDefault(); void finish(false); }

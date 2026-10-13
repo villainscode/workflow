@@ -85,7 +85,10 @@ export function DocView() {
   return (
     <div className="grid h-full grid-rows-[auto_auto_minmax(0,1fr)]">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
-        <h1 className="min-w-0 flex-1 truncate text-base font-bold" title={data.title}>{data.title}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-[2em] leading-tight font-bold" title={data.title}>{data.title}</h1>
+        {version.createdAt && (
+          <span className="font-mono text-xs text-muted" data-tip={`${versionLabel(version.version)} 작성일`}>{version.createdAt}</span>
+        )}
         <select
           className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs"
           value={version.version}
@@ -152,12 +155,6 @@ export function DocView() {
         </div>
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
         {savedNotice && <p className="basis-full rounded-md bg-ok-soft px-3 py-1 text-xs text-ok">{savedNotice}</p>}
-        {version.note && (
-          <details className="basis-full text-xs text-muted">
-            <summary className="cursor-pointer">{versionLabel(version.version)} 변경 메모{version.createdAt ? ` · ${version.createdAt}` : ""}</summary>
-            <p className="mt-1 max-w-3xl leading-relaxed">{version.note}</p>
-          </details>
-        )}
       </div>
       <div>
         {data.originUrl && (

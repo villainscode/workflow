@@ -53,7 +53,7 @@ describe("조회", () => {
 });
 
 describe("업로드", () => {
-  test("TC-UP-01 새 문서: v0.0(draft)·kind·출처를 meta.yaml에 쓰고 목록에 보인다", async () => {
+  test("TC-UP-01 새 문서: v0.0(draft)·kind·출처·작성 시각(로컬 yyyy-MM-dd HH:mm:ss)을 meta.yaml에 쓰고 목록에 보인다", async () => {
     const r = await upload(U, { menu: "notes", title: "새 HTML 문서", origin: "https://claude.ai/artifact/abc" }, [["New Doc.html", "<h1>안녕</h1>"]]);
     assert.equal(r.status, 200);
     assert.deepEqual(r.body, { menu: "notes", doc: "new-doc", version: "v0.0", category: "sdlc", created: true });
@@ -63,6 +63,8 @@ describe("업로드", () => {
     assert.equal(m.current, "v0.0");
     assert.equal(m.origin_url, "https://claude.ai/artifact/abc");
     assert.equal(m.versions[0].source, "upload");
+    assert.match(String(m.versions[0].created), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    assert.equal((await doc("notes", "new-doc")).versions[0].createdAt, String(m.versions[0].created));
     assert.ok(existsSync(join(ws.docs, "notes/new-doc/v0.0/New Doc.html")));
     assert.equal((await doc("notes", "new-doc")).originUrl, "https://claude.ai/artifact/abc");
   });
@@ -318,12 +320,18 @@ describe("관리: 메뉴·대분류·문서", () => {
     assert.equal(meta("notes", "minutes").category, "sdlc");
   });
 
-  test("TC-MNG-04 메뉴 삭제: 문서·하위 메뉴가 있으면 409, 비어 있으면 삭제", async () => {
-    assert.equal((await call(U, "DELETE", "/api/menus/notes")).status, 409);
-    assert.equal((await call(U, "DELETE", "/api/menus/agent-guide")).status, 409);
-    assert.equal((await call(U, "DELETE", "/api/menus/sub-menu")).status, 200);
-    assert.equal((await call(U, "DELETE", "/api/menus/agent-guide")).status, 200);
-    assert.doesNotMatch(readText(join(ws.docs, "_site/menus.yaml")), /agent-guide/);
+  test("TC-MNG-04 메뉴(폴더) 삭제: 안의 문서(하위 문서 포함)와 하위 메뉴 문서를 휴지통으로 옮기고 메뉴를 뺀다", async () => {
+    await upload(U, { menu: "sub-menu", title: "지울 문서", slug: "del-a" }, [["a.md", "# a"]]);
+    await upload(U, { menu: "sub-menu", title: "지울 하위 문서", slug: "del-b", parent: "del-a" }, [["b.md", "# b"]]);
+    const r = await call(U, "DELETE", "/api/menus/agent-guide");
+    assert.deepEqual([r.status, r.body], [200, { trashed: 1 }], "하위 문서는 상위 문서 폴더와 함께 옮겨진다");
+    const yaml = readText(join(ws.docs, "_site/menus.yaml"));
+    assert.doesNotMatch(yaml, /agent-guide|sub-menu/);
+    assert.ok(!existsSync(join(ws.docs, "sub-menu")), "빈 메뉴 폴더도 지움");
+    const item = (await call(U, "GET", "/api/trash")).body.find((x: any) => x.doc === "del-a");
+    assert.ok(existsSync(join(ws.docs, "_trash", item.id, "del-b/meta.yaml")));
+    await call(U, "DELETE", `/api/trash/${item.id}`); // 뒤 휴지통 테스트를 위해 비운다
+    assert.equal((await call(U, "DELETE", "/api/menus/ghost")).status, 404);
   });
 
   test("TC-MNG-05 대분류: 추가·이름 변경·순서·삭제 규칙", async () => {
@@ -519,5 +527,73 @@ describe("파일 무결성", () => {
     const f = d.versions[0].files[0];
     const { createHash } = await import("node:crypto");
     assert.equal(f.sha256, createHash("sha256").update(readFileSync(join(ws.root, f.path))).digest("hex"));
+  });
+});
+
+describe("하위 문서·폴더 트리(9단계)", () => {
+  const tree = async () => (await call(U, "GET", "/api/tree")).body;
+  const menuOf = (t: any, slug: string): any => {
+    const walk = (list: any[]): any => list.map((m) => (m.slug === slug ? m : walk(m.menus))).find(Boolean);
+    return t.categories.map((c: any) => walk(c.menus)).find(Boolean);
+  };
+  const order = async (menu: string, parent: string | null) =>
+    menuOf(await tree(), menu).documents.filter((d: any) => d.parent === parent).map((d: any) => d.slug);
+
+  test("TC-TREE-01 폴더 이름만 주면 slug를 자동으로 만든다(영문은 이름에서, 한글은 folder-…, 겹치면 -2)", async () => {
+    assert.equal((await call(U, "POST", "/api/menus", { category: "sdlc", name: "Tree A" })).body.slug, "tree-a");
+    assert.equal((await call(U, "POST", "/api/menus", { category: "sdlc", name: "tree a" })).body.slug, "tree-a-2");
+    assert.match((await call(U, "POST", "/api/menus", { category: "sdlc", name: "한글 폴더" })).body.slug, /^folder-[a-z0-9]{1,6}$/);
+  });
+
+  test("TC-TREE-02 하위 문서: 상위 문서 폴더 안에 만들고, 트리에 parent, 주소는 메뉴/문서 그대로, slug는 메뉴 안에서 하나", async () => {
+    await upload(U, { menu: "tree-a", title: "상위", slug: "top" }, [["top.md", "# 상위"]]);
+    const r = await upload(U, { menu: "tree-a", title: "하위", slug: "child", parent: "top" }, [["child.md", "# 하위"]]);
+    assert.equal(r.body.doc, "child");
+    assert.ok(existsSync(join(ws.docs, "tree-a/top/child/v0.0/child.md")));
+    const child = menuOf(await tree(), "tree-a").documents.find((d: any) => d.slug === "child");
+    assert.equal(child.parent, "top");
+    const detail = await doc("tree-a", "child");
+    assert.equal(detail.versions[0].files[0].url, "/files/tree-a/top/child/v0.0/child.md");
+    assert.equal((await call(U, "GET", detail.versions[0].files[0].url)).status, 200);
+    // 손자 문서, 같은 slug는 메뉴 최상위에 만들어도 -2
+    await upload(U, { menu: "tree-a", title: "손자", slug: "grand", parent: "child" }, [["g.md", "# 손자"]]);
+    assert.ok(existsSync(join(ws.docs, "tree-a/top/child/grand/meta.yaml")));
+    assert.equal((await upload(U, { menu: "tree-a", title: "겹침", slug: "child" }, [["c.md", "# c"]])).body.doc, "child-2");
+    // 하위 문서도 편집 저장·새 버전이 된다
+    const saved = await call(U, "POST", "/api/docs/tree-a/grand/edit", { baseVersion: "v0.0", content: "# 손자 수정" });
+    assert.equal(saved.body.version, "v0.1");
+    assert.ok(existsSync(join(ws.docs, "tree-a/top/child/grand/v0.1/g.md")));
+    assert.equal((await upload(U, { menu: "tree-a", title: "x", parent: "ghost" }, [["x.md", "# x"]])).status, 404, "없는 상위 문서");
+  });
+
+  test("TC-TREE-03 문서 옮기기: 다른 문서 아래로, 최상위로, 자기 하위로는 400", async () => {
+    let r = await call(U, "POST", "/api/docs/tree-a/child-2/move", { menu: "tree-a", parent: "top" });
+    assert.deepEqual(r.body, { menu: "tree-a", doc: "child-2", category: "sdlc" });
+    assert.ok(existsSync(join(ws.docs, "tree-a/top/child-2/meta.yaml")));
+    assert.equal((await call(U, "POST", "/api/docs/tree-a/top/move", { menu: "tree-a", parent: "grand" })).status, 400);
+    assert.equal((await call(U, "POST", "/api/docs/tree-a/top/move", { menu: "tree-a", parent: "top" })).status, 400);
+    r = await call(U, "POST", "/api/docs/tree-a/child-2/move", { menu: "tree-a", parent: null });
+    assert.ok(existsSync(join(ws.docs, "tree-a/child-2/meta.yaml")));
+  });
+
+  test("TC-TREE-04 같은 자리 안 순서: index로 옮기면 meta.yaml order를 다시 쓰고 트리가 그 순서", async () => {
+    assert.deepEqual(await order("tree-a", null), ["top", "child-2"], "옮긴 문서는 그 자리 맨 뒤");
+    await call(U, "POST", "/api/docs/tree-a/child-2/move", { menu: "tree-a", parent: null, index: 0 });
+    assert.deepEqual(await order("tree-a", null), ["child-2", "top"]);
+    assert.equal(parse(readText(join(ws.docs, "tree-a/child-2/meta.yaml"))).order, 0);
+    assert.equal(parse(readText(join(ws.docs, "tree-a/top/meta.yaml"))).order, 1);
+  });
+
+  test("TC-TREE-05 하위 문서째 다른 메뉴로: 하위 문서 meta.yaml도 바뀌고, 하위 slug가 겹치면 409", async () => {
+    await upload(U, { menu: "tree-a-2", title: "겹칠 손자", slug: "grand" }, [["g.md", "# g"]]);
+    assert.equal((await call(U, "POST", "/api/docs/tree-a/top/move", { menu: "tree-a-2" })).status, 409, "하위 문서 grand가 겹침");
+    // 옮기는 문서 자신의 slug가 겹치면 -2를 붙인다
+    const r = await call(U, "POST", "/api/docs/tree-a-2/grand/move", { menu: "tree-a", parent: "child-2" });
+    assert.deepEqual(r.body, { menu: "tree-a", doc: "grand-2", category: "sdlc" });
+    assert.ok(existsSync(join(ws.docs, "tree-a/child-2/grand-2/meta.yaml")));
+    await call(U, "POST", "/api/menus/tree-a-2/move", { category: "agent" });
+    assert.equal((await call(U, "POST", "/api/docs/tree-a/top/move", { menu: "tree-a-2" })).status, 200);
+    const m = parse(readText(join(ws.docs, "tree-a-2/top/child/grand/meta.yaml")));
+    assert.deepEqual([m.menu, m.category], ["tree-a-2", "agent"], "하위 문서의 메뉴·대분류도 맞춘다");
   });
 });

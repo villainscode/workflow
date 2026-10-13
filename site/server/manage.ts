@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { parseDocument } from "yaml";
 import { loadSite, saveSite, type CategoryNode, type MenuNode, type Site } from "./sitefiles.ts";
 import { StoreError, slugify } from "./store.ts";
+import { childDocNames, descendantSlugs, docSlugsIn, findDocDir, listDocDirs } from "./docpath.ts";
 
 /**
  * 메뉴·대분류·문서 관리. 원본(categories.yaml, menus.yaml, meta.yaml, 폴더)을 고치고, 색인은 호출한 쪽에서 다시 만든다.
  * 메뉴 slug는 docs/ 바로 아래 폴더 이름이므로, 메뉴를 옮기거나 하위로 넣어도 폴더는 그대로다.
+ * 문서는 메뉴 폴더 바로 아래나 다른 문서 폴더 안(하위 문서)에 있다(docpath.ts).
  */
 
 type MenusFile = Pick<Site, "categories">;
@@ -37,15 +39,22 @@ function locate(data: MenusFile, slug: string): { list: MenuNode[]; index: numbe
 const contains = (node: MenuNode, slug: string): boolean =>
   node.slug === slug || (node.menus ?? []).some((m) => contains(m, slug));
 
-function menuHasDocs(docsRoot: string, slug: string): boolean {
-  const dir = join(docsRoot, slug);
-  return existsSync(dir) && readdirSync(dir, { withFileTypes: true }).some((e) => e.isDirectory() && !e.name.startsWith("."));
+/**
+ * 이름만 받았을 때의 메뉴 slug. 영문·숫자가 있으면 그걸로, 없으면(한글 이름 등) folder-<짧은 난수>.
+ * 이미 쓰는 slug면 뒤에 -2, -3 …을 붙인다
+ */
+function autoMenuSlug(docsRoot: string, data: MenusFile, name: string): string {
+  let base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!base || base === "doc") base = `folder-${Math.random().toString(36).slice(2, 8)}`;
+  let s = base;
+  for (let i = 2; locate(data, s) || existsSync(join(docsRoot, s)); i++) s = `${base}-${i}`;
+  return s;
 }
 
 export function addMenu(docsRoot: string, category: string, name: string, slug?: string, parent?: string) {
   const data: MenusFile = loadSite(docsRoot);
-  const s = slug?.trim() || slugify(name);
   if (!name.trim()) throw new StoreError(400, "메뉴 이름을 입력하세요");
+  const s = slug?.trim() || autoMenuSlug(docsRoot, data, name);
   if (!SLUG_RE.test(s) || s === "doc" || s.startsWith("_")) throw new StoreError(400, "메뉴 slug를 영문 소문자, 숫자, 하이픈으로 입력하세요");
   if (locate(data, s) || existsSync(join(docsRoot, s))) throw new StoreError(409, `메뉴 slug ${s}이(가) 이미 있습니다`);
 
@@ -101,17 +110,27 @@ export function moveMenu(docsRoot: string, slug: string, to: { category: string;
   updateDocCategories(docsRoot, data);
 }
 
+/**
+ * 메뉴(폴더) 삭제. 안의 문서(하위 문서 포함)와 하위 메뉴의 문서를 모두 휴지통으로 옮기고 메뉴를 menus.yaml에서 뺀다.
+ * 문서는 휴지통에서 복원할 수 있다(원래 메뉴가 없으므로 복원할 메뉴를 고른다)
+ */
 export function deleteMenu(docsRoot: string, slug: string) {
   const data: MenusFile = loadSite(docsRoot);
   const at = locate(data, slug);
   if (!at) throw new StoreError(404, `메뉴 ${slug}이(가) 없습니다`);
-  if (at.list[at.index].menus?.length) throw new StoreError(409, "하위 메뉴가 있는 메뉴는 지울 수 없습니다. 하위 메뉴를 먼저 옮기거나 지우세요");
-  if (menuHasDocs(docsRoot, slug)) throw new StoreError(409, "문서가 있는 메뉴는 지울 수 없습니다. 문서를 먼저 옮기거나 휴지통으로 보내세요");
+  const slugs: string[] = [];
+  const collect = (m: MenuNode) => { slugs.push(m.slug); (m.menus ?? []).forEach(collect); };
+  collect(at.list[at.index]);
+
+  const trashed = slugs.flatMap((m) => childDocNames(join(docsRoot, m)).map((d) => trashDoc(docsRoot, m, d).id));
   at.list.splice(at.index, 1);
   saveSite(docsRoot, data);
   // 숨김 파일(.DS_Store 등)만 남은 폴더일 때만 지운다. 다른 파일이 있으면 폴더는 그대로 둔다
-  const dir = join(docsRoot, slug);
-  if (existsSync(dir) && readdirSync(dir).every((n) => n.startsWith("."))) rmSync(dir, { recursive: true, force: true });
+  for (const m of slugs) {
+    const dir = join(docsRoot, m);
+    if (existsSync(dir) && readdirSync(dir).every((n) => n.startsWith("."))) rmSync(dir, { recursive: true, force: true });
+  }
+  return { trashed: trashed.length };
 }
 
 // ---------- 대분류 ----------
@@ -158,11 +177,9 @@ function updateDocCategories(docsRoot: string, data: MenusFile) {
   const walk = (list: MenuNode[] = [], key: string) => list.forEach((m) => { owner.set(m.slug, key); walk(m.menus, key); });
   data.categories.forEach((c) => walk(c.menus, c.key));
   for (const [menu, category] of owner) {
-    const dir = join(docsRoot, menu);
-    if (!existsSync(dir)) continue;
-    for (const d of readdirSync(dir, { withFileTypes: true })) {
-      const metaPath = join(dir, d.name, "meta.yaml");
-      if (!d.isDirectory() || !existsSync(metaPath)) continue;
+    for (const d of listDocDirs(docsRoot, menu)) {
+      const metaPath = join(d.dir, "meta.yaml");
+      if (!existsSync(metaPath)) continue;
       const meta = parseDocument(readFileSync(metaPath, "utf8"));
       if (meta.get("category") !== category) {
         meta.set("category", category);
@@ -176,10 +193,45 @@ function updateDocCategories(docsRoot: string, data: MenusFile) {
 
 const STATUSES = new Set(["draft", "review", "approved"]);
 
-function docMetaPath(docsRoot: string, menu: string, doc: string) {
-  const p = join(docsRoot, menu, doc, "meta.yaml");
-  if (!existsSync(p)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
-  return p;
+function findDoc(docsRoot: string, menu: string, doc: string) {
+  const found = findDocDir(docsRoot, menu, doc);
+  if (!found) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  return found;
+}
+const docMetaPath = (docsRoot: string, menu: string, doc: string) => join(findDoc(docsRoot, menu, doc).dir, "meta.yaml");
+
+function setMeta(metaPath: string, values: Record<string, unknown>) {
+  const meta = parseDocument(readFileSync(metaPath, "utf8"));
+  if (Object.entries(values).every(([k, v]) => meta.get(k) === v)) return;
+  for (const [k, v] of Object.entries(values)) meta.set(k, v);
+  writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
+}
+
+/** 문서와 그 하위 문서들의 meta.yaml menu·category를 맞춘다 */
+function setMenuOfTree(dir: string, menu: string, category: string) {
+  setMeta(join(dir, "meta.yaml"), { menu, category });
+  for (const n of childDocNames(dir)) setMenuOfTree(join(dir, n), menu, category);
+}
+
+/**
+ * 한 자리(메뉴 폴더 또는 상위 문서 폴더) 안 문서 순서를 meta.yaml order(0, 1, 2 …)로 다시 쓴다.
+ * slug를 주면 그 문서를 index 자리(없으면 맨 뒤)에 둔다
+ */
+function reorderIn(dir: string, slug?: string, index?: number) {
+  const items = childDocNames(dir).map((n) => {
+    const meta = parseDocument(readFileSync(join(dir, n, "meta.yaml"), "utf8"));
+    const order = meta.get("order");
+    return { n, order: typeof order === "number" ? order : null, title: String(meta.get("title") ?? n) };
+  });
+  // 트리 API(SQLite ORDER BY)와 같은 순서: order 있는 문서가 먼저, 없는 문서는 제목순(코드 값 순서 = SQLite BINARY)
+  items.sort((a, b) => (a.order === null ? 1 : 0) - (b.order === null ? 1 : 0) || (a.order ?? 0) - (b.order ?? 0) ||
+    (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
+  const names = items.map((x) => x.n);
+  if (slug) {
+    names.splice(names.indexOf(slug), 1);
+    names.splice(index === undefined ? names.length : Math.max(0, Math.min(index, names.length)), 0, slug);
+  }
+  names.forEach((n, i) => setMeta(join(dir, n, "meta.yaml"), { order: i }));
 }
 
 export function updateDoc(docsRoot: string, menu: string, doc: string, change: { title?: string; status?: string; origin?: string | null }) {
@@ -202,22 +254,40 @@ export function updateDoc(docsRoot: string, menu: string, doc: string, change: {
   writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
 }
 
-/** 문서 폴더를 다른 메뉴 폴더로 옮긴다. 같은 slug가 있으면 뒤에 숫자를 붙인다 */
-export function moveDoc(docsRoot: string, menu: string, doc: string, toMenu: string) {
-  const metaPath = docMetaPath(docsRoot, menu, doc);
-  if (menu === toMenu) return { menu, doc };
+/**
+ * 문서를 옮긴다. to.menu(다른 메뉴 가능), to.parent(상위 문서 slug, 없으면 메뉴 최상위), to.index(그 자리 안 순서, 없으면 맨 뒤).
+ * 하위 문서는 함께 옮겨진다. 다른 메뉴로 갈 때 같은 slug가 있으면 옮기는 문서는 뒤에 숫자를 붙이고, 하위 문서가 겹치면 거부한다.
+ */
+export function moveDoc(docsRoot: string, menu: string, doc: string, to: { menu?: string; parent?: string | null; index?: number }) {
+  const from = findDoc(docsRoot, menu, doc);
+  const toMenu = to.menu || menu;
   const data: MenusFile = loadSite(docsRoot);
   const target = locate(data, toMenu);
   if (!target) throw new StoreError(404, `메뉴 ${toMenu}이(가) 없습니다`);
 
+  let parentDir = join(docsRoot, toMenu);
+  if (to.parent) {
+    const p = findDocDir(docsRoot, toMenu, to.parent);
+    if (!p) throw new StoreError(404, `상위 문서 ${toMenu}/${to.parent}이(가) 없습니다`);
+    if (p.dir === from.dir || p.dir.startsWith(from.dir + sep)) throw new StoreError(400, "문서를 자기 자신이나 하위 문서 아래로 옮길 수 없습니다");
+    parentDir = p.dir;
+  }
+
   let slug = doc;
-  for (let i = 2; existsSync(join(docsRoot, toMenu, slug)); i++) slug = `${doc}-${i}`;
-  const meta = parseDocument(readFileSync(metaPath, "utf8"));
-  meta.set("menu", toMenu);
-  meta.set("category", target.category.key);
-  writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
-  mkdirSync(join(docsRoot, toMenu), { recursive: true });
-  renameSync(join(docsRoot, menu, doc), join(docsRoot, toMenu, slug));
+  if (dirname(from.dir) !== parentDir) {
+    if (toMenu !== menu) {
+      const used = docSlugsIn(docsRoot, toMenu);
+      const clash = descendantSlugs(from.dir).filter((d) => used.has(d));
+      if (clash.length) throw new StoreError(409, `옮길 메뉴에 같은 slug의 문서가 있습니다: ${clash.join(", ")}`);
+      for (let i = 2; used.has(slug); i++) slug = `${doc}-${i}`;
+    }
+    mkdirSync(parentDir, { recursive: true });
+    const oldParent = dirname(from.dir);
+    renameSync(from.dir, join(parentDir, slug));
+    if (toMenu !== menu) setMenuOfTree(join(parentDir, slug), toMenu, target.category.key);
+    reorderIn(oldParent);
+  }
+  reorderIn(parentDir, slug, to.index);
   return { menu: toMenu, doc: slug, category: target.category.key };
 }
 
@@ -233,11 +303,12 @@ const stamp = () => {
 const TRASH_RE = /^(\d{14})--([a-z0-9-]+)--([a-z0-9-]+)$/;
 
 export function trashDoc(docsRoot: string, menu: string, doc: string) {
-  docMetaPath(docsRoot, menu, doc);
+  const found = findDoc(docsRoot, menu, doc);
   const dir = join(docsRoot, TRASH);
   mkdirSync(dir, { recursive: true });
   const id = `${stamp()}--${menu}--${doc}`;
-  renameSync(join(docsRoot, menu, doc), join(dir, id));
+  // 하위 문서도 함께 옮겨진다
+  renameSync(found.dir, join(dir, id));
   return { id };
 }
 
@@ -263,15 +334,13 @@ export function restoreDoc(docsRoot: string, id: string, toMenu?: string) {
   const target = locate(data, menu);
   if (!target) throw new StoreError(409, `원래 메뉴(${menu})가 없습니다. 복원할 메뉴를 고르세요`);
 
+  // 메뉴 최상위로 복원한다(하위 문서였어도). slug는 메뉴 안에서 하나뿐이어야 한다
+  const used = docSlugsIn(docsRoot, menu);
+  const clash = descendantSlugs(src).filter((d) => used.has(d));
+  if (clash.length) throw new StoreError(409, `복원할 메뉴에 같은 slug의 문서가 있습니다: ${clash.join(", ")}`);
   let slug = m[3];
-  for (let i = 2; existsSync(join(docsRoot, menu, slug)); i++) slug = `${m[3]}-${i}`;
-  const metaPath = join(src, "meta.yaml");
-  if (existsSync(metaPath)) {
-    const meta = parseDocument(readFileSync(metaPath, "utf8"));
-    meta.set("menu", menu);
-    meta.set("category", target.category.key);
-    writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
-  }
+  for (let i = 2; used.has(slug) || existsSync(join(docsRoot, menu, slug)); i++) slug = `${m[3]}-${i}`;
+  if (existsSync(join(src, "meta.yaml"))) setMenuOfTree(src, menu, target.category.key);
   mkdirSync(join(docsRoot, menu), { recursive: true });
   renameSync(src, join(docsRoot, menu, slug));
   return { menu, doc: slug, category: target.category.key };

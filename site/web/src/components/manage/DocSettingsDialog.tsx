@@ -32,11 +32,11 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
       if (title !== doc.title || status !== doc.status || originChanged) {
         await manage.updateDoc(doc.menuSlug, doc.slug, { title, status, ...(originChanged ? { origin: origin.trim() } : {}) });
       }
-      return menu !== doc.menuSlug ? manage.moveDoc(doc.menuSlug, doc.slug, menu) : { menu: doc.menuSlug, doc: doc.slug, category: "" };
+      return menu !== doc.menuSlug ? manage.moveDoc(doc.menuSlug, doc.slug, { menu }) : { menu: doc.menuSlug, doc: doc.slug, category: "" };
     }, {
       title: "문서 정보를 저장할까요?", confirmText: "저장", details: changes,
       tone: menu !== doc.menuSlug ? "warning" : "default",
-      message: menu !== doc.menuSlug ? "문서 폴더가 새 메뉴 폴더로 옮겨집니다." : undefined,
+      message: menu !== doc.menuSlug ? "문서 폴더가 새 메뉴 폴더 바로 아래로 옮겨집니다. 하위 문서도 함께 옮겨집니다." : undefined,
     });
     if (!ok) return;
     onClose();

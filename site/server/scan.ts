@@ -6,10 +6,11 @@ import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { sql } from "drizzle-orm";
 import { topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { loadSite, type MenuNode } from "./sitefiles.ts";
+import { listDocDirs } from "./docpath.ts";
 
 interface MetaFile {
   title: string; category: string; menu: string; kind: string; type?: string; sdlc?: string;
-  status?: string; current: string; notion_url?: string | null; gdrive_url?: string | null; origin_url?: string | null;
+  status?: string; order?: number; current: string; notion_url?: string | null; gdrive_url?: string | null; origin_url?: string | null;
   versions: { version: string; entry: string; note?: string; source?: string; created?: string | Date }[];
 }
 
@@ -75,10 +76,13 @@ export function scanDocs(db: BetterSQLite3Database, docsRoot: string, repoRoot: 
       if (!menuDir.isDirectory() || menuDir.name.startsWith("_") || menuDir.name.startsWith(".")) continue;
       if (!known.has(menuDir.name)) { warnings.push(`docs/${menuDir.name}: menus.yaml에 없는 메뉴`); continue; }
 
-      for (const docDir of readdirSync(join(docsRoot, menuDir.name), { withFileTypes: true })) {
-        if (!docDir.isDirectory() || docDir.name.startsWith(".")) continue;
-        const base = join(docsRoot, menuDir.name, docDir.name);
+      // 하위 문서(문서 폴더 안의 문서 폴더)까지. slug는 메뉴 안에서 하나뿐이어야 한다
+      const seen = new Set<string>();
+      for (const docDir of listDocDirs(docsRoot, menuDir.name)) {
+        const base = docDir.dir;
         const metaPath = join(base, "meta.yaml");
+        if (seen.has(docDir.slug)) { warnings.push(`${relative(repoRoot, base)}: 같은 메뉴에 문서 slug ${docDir.slug}이(가) 이미 있음`); continue; }
+        seen.add(docDir.slug);
         if (!existsSync(metaPath)) { warnings.push(`${relative(repoRoot, base)}: meta.yaml 없음`); continue; }
 
         let meta: MetaFile;
@@ -87,7 +91,8 @@ export function scanDocs(db: BetterSQLite3Database, docsRoot: string, repoRoot: 
         if (meta.menu !== menuDir.name) warnings.push(`${relative(repoRoot, metaPath)}: menu(${meta.menu})가 폴더(${menuDir.name})와 다름`);
 
         const doc = tx.insert(documents).values({
-          menuSlug: menuDir.name, slug: docDir.name, title: meta.title, kind: meta.kind, type: meta.type ?? null,
+          menuSlug: menuDir.name, slug: docDir.slug, parentSlug: docDir.parent,
+          sort: typeof meta.order === "number" ? meta.order : null, title: meta.title, kind: meta.kind, type: meta.type ?? null,
           sdlc: meta.sdlc ?? null, status: meta.status ?? "draft", currentVersion: meta.current,
           notionUrl: meta.notion_url ?? null, gdriveUrl: meta.gdrive_url ?? null, originUrl: meta.origin_url ?? null,
         }).returning({ id: documents.id }).get();

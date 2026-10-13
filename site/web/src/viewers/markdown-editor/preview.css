@@ -1,0 +1,150 @@
+/* MarkFlow 미리보기 본문 스타일(preview-content.css). 색은 MarkFlow의 --mf-* 대신 사이트 토큰(styles.css)을 쓴다. */
+@import "katex/dist/katex.min.css";
+
+.mf-preview {
+  /* 너비 제한 없음: 미리보기 칸의 좌우 여백을 뺀 전체 너비를 쓴다 */
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.mf-preview > :first-child { margin-top: 0; }
+
+.mf-preview h1, .mf-preview h2, .mf-preview h3, .mf-preview h4, .mf-preview h5, .mf-preview h6 {
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.25;
+}
+.mf-preview h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 2px solid var(--line); }
+.mf-preview h2 { font-size: 1.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--line); }
+.mf-preview h3 { font-size: 1.25em; }
+.mf-preview h4 { font-size: 1.1em; }
+.mf-preview p { margin: 0.75em 0; }
+
+.mf-preview a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.mf-preview :not(pre) > code {
+  background: var(--sunken);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+/* 내부 가로 스크롤 대신 줄바꿈(사이트 규칙) */
+.mf-preview pre {
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1em 1.25em;
+  margin: 1em 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mf-preview pre code { font-family: var(--font-mono); font-size: 0.85em; line-height: 1.65; }
+
+.mf-preview blockquote {
+  border-left: 4px solid var(--line);
+  padding: 0.25em 0 0.25em 1em;
+  margin: 1em 0;
+  color: var(--muted);
+  font-style: italic;
+}
+.mf-preview blockquote > p { margin: 0; }
+
+.mf-preview ul { padding-left: 1.5em; margin: 0.75em 0; list-style-type: disc; }
+.mf-preview ol { padding-left: 1.5em; margin: 0.75em 0; list-style-type: decimal; }
+.mf-preview ul.contains-task-list { list-style-type: none; padding-left: 0; }
+.mf-preview li { margin: 0.25em 0; }
+.mf-preview input[type="checkbox"] { margin-right: 0.4em; accent-color: var(--accent); }
+
+.mf-preview table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 1em 0; font-size: 0.9em; }
+.mf-preview th {
+  background: var(--sunken);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--line);
+}
+.mf-preview td { padding: 0.4em 0.75em; border: 1px solid var(--line); vertical-align: top; }
+.mf-preview tr:hover td { background: var(--bg); }
+
+.mf-preview hr { border: none; border-top: 2px solid var(--line); margin: 2em 0; }
+.mf-preview img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.5em 0; }
+.mf-preview del { opacity: 0.5; }
+
+/* GitHub 방식 HTML 요소 */
+.mf-preview details { border: 1px solid var(--line); border-radius: 6px; padding: 0.5em 0.75em; margin: 0.75em 0; }
+.mf-preview details > summary { cursor: pointer; font-weight: 600; padding: 0.25em 0; }
+.mf-preview details[open] > summary { margin-bottom: 0.5em; }
+.mf-preview kbd {
+  display: inline-block;
+  padding: 0.15em 0.4em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.mf-preview mark { background: var(--med-soft); color: inherit; padding: 0.1em 0.3em; border-radius: 3px; }
+.mf-preview sup { vertical-align: super; font-size: 0.8em; }
+.mf-preview sub { vertical-align: sub; font-size: 0.8em; }
+.mf-preview abbr[title] { text-decoration: underline dotted; cursor: help; }
+.mf-preview ins { text-decoration: underline; text-decoration-color: var(--ok); }
+.mf-preview figure { margin: 1em 0; text-align: center; }
+.mf-preview figcaption { font-size: 0.875em; color: var(--muted); margin-top: 0.5em; }
+.mf-preview dl { margin: 0.75em 0; }
+.mf-preview dt { font-weight: 700; margin-top: 0.5em; }
+.mf-preview dd { margin-left: 1.5em; margin-bottom: 0.25em; }
+.mf-preview samp { font-family: var(--font-mono); font-size: 0.875em; }
+.mf-preview var { font-style: italic; font-weight: 500; }
+.mf-preview .katex-display { overflow-x: auto; overflow-y: hidden; }
+
+/* Mermaid 다이어그램(사이트에서 더한 것) */
+.mf-preview .mf-mermaid { display: flex; justify-content: center; margin: 1em 0; }
+.mf-preview .mf-mermaid svg { max-width: 100%; height: auto; }
+.mf-preview .mf-mermaid-error,
+.mf-preview .mf-parse-error {
+  margin: 0.5em 0;
+  border-radius: 6px;
+  background: var(--high-soft);
+  color: var(--high);
+  padding: 0.5em 0.75em;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* highlight.js 코드 색(GitHub 색 기준). 다크 모드는 사이트 다크 모드를 따른다 */
+.mf-preview {
+  --hl-keyword: #cf222e; --hl-string: #0a3069; --hl-number: #0550ae; --hl-title: #8250df;
+  --hl-comment: #6e7781; --hl-attr: #0550ae; --hl-built: #953800; --hl-meta: #116329;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mf-preview {
+    --hl-keyword: #ff7b72; --hl-string: #a5d6ff; --hl-number: #79c0ff; --hl-title: #d2a8ff;
+    --hl-comment: #8b949e; --hl-attr: #79c0ff; --hl-built: #ffa657; --hl-meta: #7ee787;
+  }
+}
+:root[data-theme="dark"] .mf-preview {
+  --hl-keyword: #ff7b72; --hl-string: #a5d6ff; --hl-number: #79c0ff; --hl-title: #d2a8ff;
+  --hl-comment: #8b949e; --hl-attr: #79c0ff; --hl-built: #ffa657; --hl-meta: #7ee787;
+}
+.mf-preview .hljs-keyword, .mf-preview .hljs-doctag, .mf-preview .hljs-template-tag, .mf-preview .hljs-type,
+.mf-preview .hljs-variable.language_, .mf-preview .hljs-selector-tag { color: var(--hl-keyword); }
+.mf-preview .hljs-title, .mf-preview .hljs-title.class_, .mf-preview .hljs-title.function_ { color: var(--hl-title); }
+.mf-preview .hljs-attr, .mf-preview .hljs-attribute, .mf-preview .hljs-literal, .mf-preview .hljs-meta,
+.mf-preview .hljs-number, .mf-preview .hljs-operator, .mf-preview .hljs-variable, .mf-preview .hljs-selector-attr,
+.mf-preview .hljs-selector-class, .mf-preview .hljs-selector-id { color: var(--hl-number); }
+.mf-preview .hljs-regexp, .mf-preview .hljs-string, .mf-preview .hljs-meta .hljs-string { color: var(--hl-string); }
+.mf-preview .hljs-built_in, .mf-preview .hljs-symbol { color: var(--hl-built); }
+.mf-preview .hljs-comment, .mf-preview .hljs-code, .mf-preview .hljs-formula { color: var(--hl-comment); }
+.mf-preview .hljs-name, .mf-preview .hljs-quote, .mf-preview .hljs-selector-pseudo, .mf-preview .hljs-tag { color: var(--hl-meta); }
+.mf-preview .hljs-section { color: var(--hl-attr); font-weight: 700; }
+.mf-preview .hljs-bullet { color: var(--hl-built); }
+.mf-preview .hljs-emphasis { font-style: italic; }
+.mf-preview .hljs-strong { font-weight: 700; }
+.mf-preview .hljs-addition { color: var(--ok); background: var(--ok-soft); }
+.mf-preview .hljs-deletion { color: var(--crit); background: var(--crit-soft); }

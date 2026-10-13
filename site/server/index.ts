@@ -5,7 +5,7 @@ import fastifyStatic from "@fastify/static";
 import fastifyMultipart from "@fastify/multipart";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { watch } from "chokidar";
 import type { ServerResponse } from "node:http";
 import { parse as parseYaml } from "yaml";
@@ -13,6 +13,7 @@ import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from 
 import { scanDocs } from "./scan.ts";
 import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
 import { mimeOf } from "./scan.ts";
+import { findDocDir } from "./docpath.ts";
 import type { Change } from "./textedit/index.ts";
 import {
   addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc,
@@ -56,8 +57,9 @@ const agentOf = (req: { headers: Record<string, unknown> }) =>
 
 /** 문서 하나에 대한 변경 알림 내용: 대분류·제목은 meta.yaml에서 읽는다 */
 function docEvent(req: { headers: Record<string, unknown> }, r: { menu: string; doc: string; version?: string }, segs?: number[]) {
-  const metaPath = join(DOCS_ROOT, r.menu, r.doc, "meta.yaml");
-  const meta = existsSync(metaPath) ? (parseYaml(readFileSync(metaPath, "utf8")) as { title?: string; category?: string }) : {};
+  const found = findDocDir(DOCS_ROOT, r.menu, r.doc);
+  const metaPath = found ? join(found.dir, "meta.yaml") : "";
+  const meta = found ? (parseYaml(readFileSync(metaPath, "utf8")) as { title?: string; category?: string }) : {};
   return { by: agentOf(req), category: meta.category, menu: r.menu, doc: r.doc, title: meta.title, version: r.version, segs };
 }
 
@@ -78,16 +80,19 @@ app.get("/api/tree", async () => {
   const menuRows = db.select().from(menus).orderBy(asc(menus.sort)).all();
   const docRows = db
     .select({
-      slug: documents.slug, menuSlug: documents.menuSlug, title: documents.title,
+      slug: documents.slug, menuSlug: documents.menuSlug, parent: documents.parentSlug, title: documents.title,
       kind: documents.kind, status: documents.status, currentVersion: documents.currentVersion,
     })
-    .from(documents).where(isNull(documents.deletedAt)).orderBy(asc(documents.title)).all();
+    // 같은 자리 안에서 order가 있는 문서가 먼저(그 순서대로), 없는 문서는 제목순으로 뒤에
+    .from(documents).where(isNull(documents.deletedAt))
+    .orderBy(sql`${documents.sort} IS NULL`, asc(documents.sort), asc(documents.title)).all();
 
   const build = (category: string, parent: string | null): unknown[] =>
     menuRows
       .filter((m) => m.categoryKey === category && m.parentSlug === parent)
       .map((m) => ({
         slug: m.slug, name: m.name,
+        // 메뉴 안 문서 전체(하위 문서 포함). 하위 문서는 parent에 상위 문서 slug가 있다
         documents: docRows.filter((d) => d.menuSlug === m.slug),
         menus: build(category, m.slug),
       }));
@@ -115,7 +120,7 @@ app.get<{ Params: { menu: string; doc: string } }>("/api/docs/:menu/:doc", async
 });
 
 /**
- * 업로드. multipart 필드: menu, doc?, title?, slug?, version?, note?, entry?, paths(JSON 배열, 파일 순서와 같은 상대 경로)
+ * 업로드. multipart 필드: menu, doc?, parent?(새 하위 문서의 상위 문서), title?, slug?, version?, note?, entry?, paths(JSON 배열, 파일 순서와 같은 상대 경로)
  * 그리고 files(여러 개). 폴더째 올릴 때는 paths로 하위 경로를 넘긴다.
  */
 app.post("/api/upload", async (req) => {
@@ -129,7 +134,7 @@ app.post("/api/upload", async (req) => {
   const files: IncomingFile[] = raw.map((f, i) => ({ path: paths[i] || f.name, data: f.data }));
 
   const result = upload(DOCS_ROOT, {
-    menu: fields.menu, doc: fields.doc || undefined, title: fields.title, slug: fields.slug,
+    menu: fields.menu, doc: fields.doc || undefined, parent: fields.parent || undefined, title: fields.title, slug: fields.slug,
     version: fields.version, note: fields.note, entry: fields.entry || undefined, origin: fields.origin || undefined, files,
   });
   reindex("upload", docEvent(req, result));
@@ -167,8 +172,9 @@ app.delete<{ Params: { key: string } }>("/api/categories/:key", async (req) =>
 
 app.patch<DocParams & { Body: { title?: string; status?: string; origin?: string | null } }>("/api/docs/:menu/:doc", async (req) =>
   done("doc", updateDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
-app.post<DocParams & { Body: { menu: string } }>("/api/docs/:menu/:doc/move", async (req) =>
-  done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body.menu)));
+// 다른 메뉴로, 다른 문서 아래(parent)로, 같은 자리 안 순서(index) 바꾸기
+app.post<DocParams & { Body: { menu: string; parent?: string | null; index?: number } }>("/api/docs/:menu/:doc/move", async (req) =>
+  done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
 // 텍스트 편집(2.0): 조각 목록과 저장
 app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/segments", async (req) =>
   readSegments(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v));
@@ -203,8 +209,7 @@ app.post<DocParams & { Body: { note?: string } | undefined }>("/api/docs/:menu/:
 // 열린 사이트 화면을 문서·버전·조각으로 옮긴다(3.4 focus_in_site). 받은 화면 수를 돌려준다
 app.post<{ Body: { menu: string; doc: string; version?: string; seg?: string } }>("/api/focus", async (req, reply) => {
   const { menu, doc, version, seg } = req.body ?? {};
-  const metaPath = join(DOCS_ROOT, menu ?? "", doc ?? "", "meta.yaml");
-  if (!/^[a-z0-9-]+$/.test(menu ?? "") || !/^[a-z0-9-]+$/.test(doc ?? "") || !existsSync(metaPath)) return reply.code(404).send({ error: "문서를 찾을 수 없습니다" });
+  if (!findDocDir(DOCS_ROOT, menu ?? "", doc ?? "")) return reply.code(404).send({ error: "문서를 찾을 수 없습니다" });
   if (seg && !/^[\d,-]+$/.test(seg)) return reply.code(400).send({ error: "seg는 12, 12-15, 3,10-12 형식입니다" });
   broadcast({ type: "focus", ...docEvent(req, { menu, doc, version }), seg });
   return { clients: clients.size };

@@ -68,7 +68,7 @@ function ConfirmDialog({ options, onAnswer }: { options: ConfirmOptions; onAnswe
           <span className={`grid size-10 shrink-0 place-items-center rounded-full ${tone.iconClass}`}>
             <Icon size={22} aria-hidden />
           </span>
-          <div className="grid min-w-0 gap-1.5 pt-1">
+          <div className="grid min-w-0 flex-1 gap-1.5 pt-1">
             <h2 id="confirm-title" className="text-base font-bold">{options.title}</h2>
             {options.message && <div className="text-sm text-muted">{options.message}</div>}
             {options.details && options.details.length > 0 && (

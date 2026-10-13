@@ -8,6 +8,7 @@ import {
   createMenu, nextVersion, versionLabel, uploadFiles, useDoc, useTree, type MenuNode, type UploadFile,
 } from "../../lib/api.ts";
 import { commonRoot, filesFromDrop, filesFromInput, formatSize, guessEntry, slugify } from "../../lib/files.ts";
+import { flattenDocs } from "../../lib/docTree.ts";
 import type { UploadPreset } from "./UploadContext.tsx";
 
 const NEW_MENU = "__new__";
@@ -34,6 +35,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
   // files: 파일 올리기, markdown: 빈 Markdown 문서를 만들어 바로 편집
   const [kind, setKind] = useState<"files" | "markdown">("files");
   const [doc, setDoc] = useState(preset.doc ?? "");
+  const [parent, setParent] = useState(preset.parent ?? "");
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [version, setVersion] = useState("");
@@ -79,11 +81,12 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
     if (mode === "existing" && !doc) return setError("새 버전을 올릴 문서를 고르세요");
     const menuName = menu === NEW_MENU ? `${newMenuName.trim()} (새 메뉴)` : menuOptions.find((x) => x.menu.slug === menu)?.menu.name ?? menu;
     const docName = mode === "existing" ? menuDocs.find((d) => d.slug === doc)?.title ?? doc : `${title.trim()} (새 문서)`;
+    const parentName = mode === "new" && parent ? menuDocs.find((d) => d.slug === parent)?.title ?? parent : "";
     const ok = await confirm({
       title: isMd ? "새 Markdown 문서를 만들까요?" : mode === "existing" ? "새 버전을 올릴까요?" : "문서를 업로드할까요?",
       confirmText: isMd ? "만들기" : "업로드",
       details: [
-        `메뉴: ${menuName}`, `문서: ${docName}`, `버전: ${versionLabel(version || suggested)}`,
+        `메뉴: ${menuName}`, ...(parentName ? [`상위 문서: ${parentName}`] : []), `문서: ${docName}`, `버전: ${versionLabel(version || suggested)}`,
         ...(isMd ? [] : [`파일: ${files.length}개${files.length > 1 ? ` (대표 파일 ${entry || autoEntry})` : ` (${relPaths[0]})`}`]),
       ],
     });
@@ -98,12 +101,13 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
       const mdName = `${slug || slugify(title) || "doc"}.md`;
       const result = await uploadFiles(isMd
         ? {
-          menu: menuSlug, title, slug: slug || undefined, version: version || undefined, note: note || "새 문서",
+          menu: menuSlug, parent: parent || undefined, title, slug: slug || undefined, version: version || undefined, note: note || "새 문서",
           files: [{ file: new File([`# ${title.trim()}\n\n`], mdName, { type: "text/markdown" }), path: mdName }],
         }
         : {
           menu: menuSlug,
           doc: mode === "existing" ? doc : undefined,
+          parent: mode === "new" && parent ? parent : undefined,
           title: mode === "new" ? title : undefined,
           slug: mode === "new" ? slug || undefined : undefined,
           version: version || undefined,
@@ -114,7 +118,8 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
       await qc.invalidateQueries({ queryKey: ["tree"] });
       await qc.invalidateQueries({ queryKey: ["doc", result.menu, result.doc] });
       onClose();
-      navigate(`/${result.category}/${result.menu}/${result.doc}`);
+      // 새 Markdown 문서는 편집 창을 열고 커서를 둔다(MarkdownViewer)
+      navigate(`/${result.category}/${result.menu}/${result.doc}`, isMd ? { state: { edit: true } } : undefined);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -157,7 +162,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           </label>
           <label className={label}>메뉴
             <select className={field} value={menu} disabled={!!preset.menu || !!preset.doc}
-              onChange={(e) => { setMenu(e.target.value); setDoc(""); if (e.target.value === NEW_MENU) setMode("new"); }}>
+              onChange={(e) => { setMenu(e.target.value); setDoc(""); setParent(""); if (e.target.value === NEW_MENU) setMode("new"); }}>
               {menuOptions.map(({ menu: m, depth }) => (
                 <option key={m.slug} value={m.slug}>{"  ".repeat(depth) + m.name}</option>
               ))}
@@ -178,7 +183,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
         </div>
 
         {menu !== NEW_MENU && kind === "files" && (
-          <fieldset className="flex gap-4 text-sm" disabled={!!preset.doc}>
+          <fieldset className="flex gap-4 text-sm" disabled={!!preset.doc || !!preset.parent}>
             <label className="flex items-center gap-1.5">
               <input type="radio" checked={mode === "new"} onChange={() => setMode("new")} /> 새 문서
             </label>
@@ -195,6 +200,14 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
               <label className={`${label} sm:col-span-2`}>제목
                 <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 로그인 시퀀스 다이어그램" />
               </label>
+              {menu !== NEW_MENU && menuDocs.length > 0 && (
+                <label className={`${label} sm:col-span-2`}>위치
+                  <select className={field} value={parent} disabled={!!preset.parent} onChange={(e) => setParent(e.target.value)}>
+                    <option value="">메뉴 바로 아래</option>
+                    {flattenDocs(menuDocs).map(({ doc: d, depth }) => <option key={d.slug} value={d.slug}>{"　".repeat(depth)}{d.title} 아래 (하위 문서)</option>)}
+                  </select>
+                </label>
+              )}
               <label className={label}>문서 slug (영문, 폴더 이름)
                 <input className={field} value={slug} onChange={(e) => setSlug(e.target.value)}
                   placeholder={kind === "markdown" ? slugify(title) || "doc" : autoSlug} />
@@ -203,7 +216,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
           ) : (
             <label className={label}>문서
               <select className={field} value={doc} disabled={!!preset.doc} onChange={(e) => setDoc(e.target.value)}>
-                {menuDocs.map((d) => <option key={d.slug} value={d.slug}>{d.title} ({versionLabel(d.currentVersion)})</option>)}
+                {flattenDocs(menuDocs).map(({ doc: d, depth }) => <option key={d.slug} value={d.slug}>{"　".repeat(depth)}{d.title} ({versionLabel(d.currentVersion)})</option>)}
               </select>
             </label>
           )}

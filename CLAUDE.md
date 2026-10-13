@@ -31,11 +31,13 @@ docs/
         exports/            # 파생 산출물: .svg .png .pdf .pptx .xlsx (필요할 때)
       v0.1/                 # 첫 수정. 이후 수정마다 v0.2, v0.3 …
       v1.0/                 # 정식 확정
+      <하위 문서 slug>/     # 하위 문서(9단계): meta.yaml과 버전 폴더를 가진 문서 폴더가 상위 문서 폴더 안에 들어간다
 ```
 
 - **원본은 파일이다.** `categories.yaml`, `menus.yaml`, 문서별 `meta.yaml`, 버전 폴더의 파일이 원본이고 git으로 추적한다. 사이트의 SQLite(`site/data/`)는 이 파일들을 스캔해 다시 만드는 색인이라 git에 넣지 않는다. 문서를 추가하거나 옮길 때는 yaml을 함께 고친다.
 - **버전 규칙**: 최초 작성·업로드는 `v0.0`이고 화면에는 **draft**로 표시한다(`versionLabel()`). 수정할 때마다 `v0.1`, `v0.2` …로 올라가고, 정식 확정하면 `v1.0`(이후 `v2.0`)이 된다. `v0.x`는 드래프트, `v1.0` 이상은 확정이다. 내용을 바꿀 때는 그 문서의 이전 버전 폴더를 복사해 새 버전을 만들고, `meta.yaml`의 `versions`에 메모(`note`)와 함께 추가하고 `current`를 바꾼다. **Notion에 등록했거나 커밋된 버전 폴더는 수정하지 않는다.** 오타 같은 사소한 수정과 구조 이전만 예외로 한다.
-- **slug**: 메뉴 slug는 리포 전체에서 하나만 존재한다. 메뉴의 대분류 소속과 상하 관계는 `menus.yaml`(`menus: { <대분류 key>: [트리] }`)에서 정하므로 폴더 경로에 넣지 않는다.
+- **slug**: 메뉴 slug는 리포 전체에서 하나만 존재한다. 메뉴의 대분류 소속과 상하 관계는 `menus.yaml`(`menus: { <대분류 key>: [트리] }`)에서 정하므로 폴더 경로에 넣지 않는다. 사이트에서 이름만 주고 만든 메뉴는 slug가 자동이다(영문이 없으면 `folder-<난수>`, D-35).
+- **하위 문서**(D-34): 문서 폴더 안에서 버전 폴더(`vN.N`)가 아니고 `meta.yaml`이 있는 폴더가 하위 문서다(`docs/<메뉴>/<상위>/<하위>/`). 문서 slug는 메뉴 안에서 깊이와 상관없이 하나뿐이라 주소는 `대분류/메뉴/문서` 그대로이고, 서버는 `server/docpath.ts`의 `findDocDir`로 실제 폴더를 찾는다. 같은 자리 안 문서 순서는 `meta.yaml`의 `order`이고, 없으면 제목순으로 뒤에 온다.
 - **원본과 파생**: 다이어그램의 원본은 `diagrams/`의 `.drawio`·`.mmd` 파일이다. `exports/`와 HTML에 넣은 SVG는 원본에서 다시 만들 수 있는 파생물이므로, 원본을 고친 뒤 다시 export한다.
 
 ```yaml
@@ -53,7 +55,8 @@ versions:
     entry: review-gate.html
     note: 변경 메모
     source: upload        # upload | edit | text-edit | scan | release
-    created: 2026-10-06
+    created: 2026-10-13 14:05:33   # 작성 시각(로컬). 2026-10-13 이전 버전은 날짜만 있다. 문서 화면 제목 오른쪽에 보인다
+order: 0                  # 같은 자리 안 순서(사이드바에서 끌어 놓으면 생긴다). 없으면 제목순
 notion_url:               # 등록 후 채운다
 gdrive_url:
 ```
@@ -79,14 +82,14 @@ npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(p
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없이 저장하면 바이트 동일 등)
-npm test           # 단위·텍스트 편집·API·MCP 자동 테스트(node:test)
+npm test           # 단위·Markdown 편집기·텍스트 편집·API·MCP 자동 테스트(node:test)
 npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘 다
 ```
 
 - **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·5173). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
 
 - **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
-- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장), `POST /api/focus`(열린 화면 이동, 3.4). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
+- **API**: `GET /api/tree`(대분류 → 메뉴 → 문서. 메뉴의 `documents`는 하위 문서까지 모두 담고 하위 문서는 `parent`가 있다), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart, 새 하위 문서는 `parent`), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장), `POST /api/focus`(열린 화면 이동, 3.4). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`는 `{ menu, parent?, index? }`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **확인 창** (`components/confirm/ConfirmProvider.tsx`, `useConfirm()`): 저장·수정·삭제·다운로드·업로드·이동·복원·휴지통 이동은 공통 확인 창을 거쳐 실행한다. 브라우저 `confirm()`은 쓰지 않는다.
   - 관리 작업은 `useAction().run(작업, 확인옵션)`으로 넘기면 확인 후 실행된다. 무엇이 바뀌는지는 `details`에 적는다.
@@ -116,7 +119,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - 저장·임시 보관·편집 막대는 `viewers/textedit/session.tsx`의 `useTextSession`과 `EditBar`를 HTML·DOCX 편집기가 함께 쓴다.
   - 어댑터를 고쳤다면 `npm run check:textedit`로 확인한다(검사용 샘플은 `site/scripts/fixtures/`).
 - **workflow-docs MCP** (`site/mcp/server.ts`, `.mcp.json`으로 등록, 3.0): 사이트 REST API를 감싼 stdio MCP 서버다.
-  - 도구: `list_documents`, `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename), `upload_version`, `create_menu`, `release_document`, `focus_in_site`.
+  - 도구: `list_documents`(하위 문서는 들여 씀), `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename·parent), `upload_version`, `create_menu`, `release_document`, `focus_in_site`.
   - 모든 요청에 `X-Workflow-Agent: claude-code` 헤더를 붙인다. 서버는 이 헤더가 있으면 변경 알림(SSE)에 `by: claude-code`를 담는다.
   - 문서는 사이트 주소(`?v=`, `&seg=`), `대분류/메뉴/문서`, `대분류 > 메뉴 > 제목`, 제목으로 지정한다.
   - 삭제·휴지통 도구는 두지 않는다(D-24). 쓰기 도구는 변경 메모 앞에 "Claude Code:"를 붙인다(D-26). 외부에서 가져온 문서는 `meta.yaml`의 `origin_url`에 출처를 남긴다.
@@ -127,6 +130,10 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
 - **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다. 정식 문서에 업로드나 편집으로 새 버전이 생기면(v1.0 → v1.1) 상태는 approved 그대로 둔다(D-15). 업로드·저장 코드는 status를 건드리지 않는다.
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
 - **아이콘**: 사이트의 기능 버튼은 Lucide(`lucide-react`) 아이콘으로 만들고 `components/IconButton.tsx`를 쓴다. 아이콘만 있는 버튼은 `label`이 aria-label과 툴팁이 된다. **툴팁은 브라우저 `title`이 아니라 공통 툴팁(`components/Tooltip.tsx`)을 쓴다**: 요소에 `data-tip="설명"`(세로 손잡이처럼 오른쪽에 띄울 때는 `data-tip-side="right"`)을 붙이면, `main.tsx`에 한 번 둔 `TooltipLayer`가 마우스를 올리거나 키보드로 포커스할 때 띄운다. Popover API로 최상위 층에 띄우므로 `showModal` 대화상자와 전체 화면 위에서도 보인다. 툴팁이 있는 요소 안에 또 툴팁을 두지 않는다(안쪽이 이긴다. 예: 상태 배지 버튼 안 `StatusBadge noTip`). 대화상자의 확인·취소처럼 실수하면 안 되는 버튼과 휴지통의 복원·영구 삭제는 아이콘과 글자를 함께 둔다(`text` prop). 유니코드 기호(✕ ☰ ▾ 등)를 아이콘으로 쓰지 않는다.
+- **좌측 폴더 트리** (`components/Sidebar.tsx`, `components/sidebar/ContextMenu.tsx`, 계획은 `REQUIREMENT.md` 5.3): MarkFlow 사이드바 방식. 폴더(메뉴) → 하위 폴더 → 문서 → 하위 문서. 폴더 아이콘은 열림·닫힘, 접힌 항목은 localStorage `workflow:sidebar-collapsed`, 지금 연 문서의 상위는 늘 펼친다.
+  - 오른쪽 클릭이나 줄의 ⋯로 메뉴: 폴더는 새 문서·하위 폴더 추가·이름 바꾸기·위로·아래로·다른 위치로 옮기기(`MoveMenuDialog`)·폴더 삭제, 문서는 하위 문서 추가(업로드 창 `parent` 고정)·이름 바꾸기·위로·아래로·상위 문서 밖으로 꺼내기·휴지통으로. 이름 입력은 그 자리 입력칸(Enter 확인 창, Esc·바깥 클릭 취소).
+  - 끌어서 놓기(D-36): 줄 위쪽 28% 앞, 아래쪽 28% 뒤, 가운데 안. 같은 자리 순서는 확인 없이, 다른 자리로 옮기기는 확인 창(warning). 자기 자신·하위로는 놓을 수 없다. 링크(`NavLink draggable={false}`)가 아니라 줄(`data-row`)이 끌기를 받는다. 바깥 파일을 폴더에 놓으면 업로드 창.
+  - 폴더 삭제(`DeleteMenuDialog`, D-13 개정): 폴더 이름을 입력해야 버튼이 켜지고(이 창이 확인 창을 대신한다), 안의 문서는 하위 폴더 것까지 휴지통으로 간다. 문서 휴지통은 하위 문서째 옮기고, 복원은 메뉴 바로 아래로 한다.
 - **사이드바** (`components/SidebarResizer.tsx`): 너비는 CSS 변수 `--sidebar-w`로 정한다(200~560px, 기본 272). 손잡이는 `setPointerCapture`로 끌기를 받는다. 덮개 방식으로 바꾸면 iframe 위에서 이벤트를 뺏기거나 더블클릭이 깨진다. 접으면 20px 띠가 된다. 너비와 접힘 상태는 localStorage(`workflow:sidebar-*`)에 둔다. 휴지통은 사이드바 하단 footer에 고정이다.
 - **정적 파일**: 로고(`logo.svg`)와 파비콘(`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`)은 `web/public/`에 있다. 헤더 로고를 누르면 `/`로 간다.
 - **react-grab** (개발 모드 전용, devDependency): `web/src/main.tsx`에서 `import.meta.env.DEV`일 때만 불러온다. 화면 요소를 가리키고 ⌘C를 누르면 그 요소의 컴포넌트와 소스 위치가 복사되어, 코딩 에이전트에 붙여 넣고 수정을 요청할 수 있다. 운영 빌드에는 포함되지 않는다.
@@ -147,12 +154,14 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - PDF는 브라우저 내장 뷰어로 연다. Chrome은 sandbox iframe에서 PDF를 열지 않아 sandbox를 걸지 않는다.
   - DOCX는 `docx-preview`로 렌더링하고, PDF 변환으로 볼 수도 있다.
   - XLSX·CSV는 SheetJS로 읽는다. SheetJS는 npm 레지스트리 버전이 오래되어 공식 CDN tgz로 설치했다. CSV는 UTF-8 텍스트로 읽는다.
-- **Markdown 편집** (`viewers/MarkdownViewer.tsx`, `store.ts`의 `saveEdit`): 화면은 CodeMirror 편집기와 미리보기를 나란히 둔다.
-  - 미리보기는 react-markdown + GFM이고, 코드는 Shiki, `mermaid` 코드 블록은 다이어그램으로 그린다. 상대 경로 이미지·링크는 버전 폴더 기준으로 푼다.
-  - 저장은 기준 버전의 파일을 모두 복사하고 대표 `.md`만 바꿔 새 버전(`source: edit`)으로 쓴다. 그사이 최신 버전이 바뀌었으면 409로 거부한다.
-  - 저장 전 내용은 localStorage(`workflow:draft:<메뉴>/<문서>@<버전>`)에 임시 보관하고, 다시 열면 복원을 제안한다.
-  - 이전 버전은 읽기 전용이다.
-  - 새 Markdown 문서는 업로드 대화상자의 "새 Markdown 문서" 탭에서 `# 제목` 한 줄짜리 `.md`를 업로드하는 방식으로 만든다.
+- **Markdown 편집** (`viewers/MarkdownViewer.tsx`, `viewers/markdown-editor/`, `store.ts`의 `saveEdit`, 계획은 `REQUIREMENT.md` 5.2): MarkFlow 에디터(`~/project/markflow/packages/editor`) 소스를 복사해 고쳐 쓴다(D-30). 원본을 다시 가져올 때는 5.2의 "바꾼 점"을 다시 적용한다.
+  - 화면: 서식 툴바(`Toolbar.tsx`, 제목 1~6·굵게·목록·코드 블록·링크·표·수식 등, IconButton) + 보기 방식(편집만·나란히·미리보기만) + 오른쪽 저장 영역(`MarkdownViewer`가 `toolbarEnd`로 넘김), 편집 창(`EditorPane.tsx`, CodeMirror 6, 사이트 다크 모드를 따름)과 미리보기, 상태 표시줄(줄·글자·커서), Markdown 복사. 커서 위쪽 가장 가까운 제목으로 미리보기를 옮긴다.
+  - 미리보기(`MarkdownPreview.tsx` + `markdown-editor/parseMarkdown.ts`, D-31): unified(remark-gfm·remark-breaks·remark-math → rehype-highlight·rehype-katex·rehype-raw·rehype-sanitize). 줄바꿈 한 번이 `<br>`, 수식은 KaTeX, 허용 목록 밖 HTML은 지운다. 사이트에서 더한 것: 상대 경로 이미지·링크를 버전 폴더 기준으로 풀기, `#` 링크는 같은 탭(나머지는 새 탭), `mermaid` 블록은 화면에서 다이어그램으로. 편집기·이전 버전·프레젠테이션이 같은 엔진을 쓴다. 스타일은 `markdown-editor/preview.css`(`.mf-preview`, 사이트 토큰).
+  - 이미지(D-32): 툴바 "이미지 올리기", 편집 창 끌어 놓기·붙여넣기 → Cloudflare Worker(`site/cloudflare/r2-uploader`, 배포는 그 README) `POST /upload` → R2 공개 주소를 `![이름](주소)`로 넣는다. Worker 주소는 localStorage `mf-cf-worker-url`, 설정 창(`UploadSettingsDialog.tsx`)에서 테스트 업로드가 성공해야 저장된다. 이미지는 리포 밖에 있고 문서에는 주소만 남는다.
+  - `[[`(D-33): 사이트 문서 목록(`useTree`)에서 제목·메뉴로 후보를 고르고, 고르면 `[제목](/대분류/메뉴/문서)` 일반 링크가 들어간다.
+  - 저장은 기준 버전의 파일을 모두 복사하고 대표 `.md`만 바꿔 새 버전(`source: edit`)으로 쓴다. 그사이 최신 버전이 바뀌었으면 409로 거부한다. 저장 전 내용은 localStorage(`workflow:draft:<메뉴>/<문서>@<버전>`)에 임시 보관하고, 다시 열면 복원을 제안한다. 저장하지 않고 떠나면 경고한다(beforeunload).
+  - 이전 버전은 읽기 전용이다(서식 툴바 없음, 편집 창 고칠 수 없음).
+  - 새 Markdown 문서는 업로드 대화상자의 "새 Markdown 문서" 탭에서 `# 제목` 한 줄짜리 `.md`를 업로드하는 방식으로 만들고, 만들면 편집 창이 열려 커서가 문서 끝에 있다(라우터 state `edit`).
 - **버전 비교**: 텍스트 형식(md, html, yaml 등)이고 버전이 2개 이상이면 문서 상단에 "비교" 선택이 생긴다(`?cmp=<버전>`). `viewers/DiffViewer.tsx`가 jsdiff로 줄 단위 비교를 보여준다.
 - **상단 메뉴(대분류)** (D-17, D-18): 원본은 `categories.yaml`이고 색인 테이블은 좌측 `menu`와 분리된 `top_menu`다. 관리는 헤더(`components/header/TopMenuBar.tsx`)에서 한다.
   - ＋로 추가(이름·key), 선택된 탭의 ⋯로 이름 변경(탭 자리 입력, 더블클릭으로도)·왼쪽/오른쪽 이동·삭제를 한다. 탭에 마우스를 올리면 나오는 핸들(⋮⋮)을 잡아 끌면 순서가 바뀐다. 커서가 놓을 탭의 왼쪽·오른쪽 절반 중 어디에 있느냐에 따라 그쪽에 표시선이 나오고, 순서가 바뀌지 않는 자리에는 표시선을 내지 않는다.
@@ -160,16 +169,16 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - ⋯ 메뉴와 ＋ 팝오버는 탭 줄이 가로로 넘쳐도 잘리지 않도록 화면 기준(fixed)으로 띄운다.
   - `categories.yaml`에 없는 key의 트리가 `menus.yaml`에 있으면 저장할 때 지우지 않고 남기고, 색인 경고로 알린다.
 - **관리** (`server/manage.ts`): 메뉴를 옮기거나 하위로 넣어도 `menus.yaml`만 바뀌고 폴더(`docs/<메뉴 slug>/`)는 그대로다.
-  - 다른 대분류로 옮기면 그 메뉴 문서들의 `meta.yaml` category를 맞춘다.
-  - 문서를 다른 메뉴로 옮기면 문서 폴더를 새 메뉴 폴더로 옮긴다.
-  - 메뉴·대분류는 비어 있을 때만 지운다.
+  - 다른 대분류로 옮기면 그 메뉴 문서들(하위 문서 포함)의 `meta.yaml` category를 맞춘다.
+  - 문서를 옮기면(`moveDoc`) 문서 폴더를 새 자리(메뉴 폴더 또는 상위 문서 폴더)로 옮기고, 다른 메뉴면 하위 문서까지 menu·category를 맞춘다. 옮기는 문서 slug가 그 메뉴에 있으면 `-2`, 하위 문서 slug가 겹치면 409. 옮긴 뒤 두 자리의 `order`를 다시 쓴다(`reorderIn`, 정렬은 트리 API와 같은 order → 제목 코드값 순).
+  - 대분류는 비어 있을 때만 지운다. 메뉴 삭제는 안의 문서를 휴지통으로 보낸 뒤 지운다.
   - `categories.yaml`·`menus.yaml` 맨 위 `#` 주석은 yaml 라이브러리가 첫 키에 붙여 버리므로, 원문에서 떼어 두었다가 저장할 때 다시 붙인다. 내용이 같으면 파일을 다시 쓰지 않는다.
 - **휴지통**: 문서 폴더를 `docs/_trash/<로컬 시각 yyyyMMddHHmmss>--<메뉴>--<문서>/`로 옮긴다. 스캔은 `_`로 시작하는 폴더를 건너뛴다. 복원할 때 원래 메뉴가 없으면 메뉴를 고르게 한다.
 - **검색**: 색인할 때 각 문서 최신 버전의 대표 파일 본문을 FTS5 trigram 테이블 `search`에 넣는다. HTML은 script·style·svg를 빼고 글자만 넣는다. 질의는 trigram 색인 위의 `LIKE '%q%'`라서 한국어 두 글자 단어와 조사가 붙은 말도 찾는다. 제목에 맞은 문서를 먼저 보여준다.
 - **조회 재시도**: 404(옮겨지거나 지워진 문서)는 재시도하지 않는다. 관리 작업 뒤 목록 새로고침은 기다리지 않는다. 기다리면 옛 주소의 404 재시도 때문에 화면 이동이 늦어진다.
 - **업로드 진입점**: 모두 `upload/UploadContext.tsx`의 `useOpenUpload()`로 연다.
   - 상단 "업로드" 버튼
-  - 메뉴별 `+` 버튼
+  - 폴더 줄의 `+`(새 문서)·폴더 메뉴 "새 문서", 문서 메뉴 "하위 문서 추가"(`parent`)
   - 메뉴에 파일 끌어다 놓기
   - 문서 화면의 "새 버전"
 - 화면 확인: headless Chrome `--screenshot`은 iframe 내용을 그리기 전에 찍혀 빈 화면이 나올 수 있다. 사이트 화면은 Mermaid CLI와 함께 전역 설치된 puppeteer(`$(npm root -g)/@mermaid-js/mermaid-cli/node_modules/puppeteer`)로 찍는다. SSE 연결이 계속 열려 있어 `networkidle0`은 끝나지 않으므로 `domcontentloaded` 후 요소를 기다린다.

@@ -18,7 +18,7 @@ const ROOT = process.env.WORKFLOW_ROOT ?? process.cwd();
 
 // ---------- 사이트 API ----------
 
-interface DocSummary { slug: string; menuSlug: string; title: string; kind: string; status: string; currentVersion: string }
+interface DocSummary { slug: string; menuSlug: string; parent: string | null; title: string; kind: string; status: string; currentVersion: string }
 interface MenuNode { slug: string; name: string; documents: DocSummary[]; menus: MenuNode[] }
 interface Category { key: string; name: string; menus: MenuNode[] }
 interface Tree { categories: Category[]; warnings: string[] }
@@ -183,7 +183,12 @@ server.registerTool("list_documents", {
   const lines: string[] = [];
   const walk = (c: Category, list: MenuNode[], depth: number) => list.forEach((m) => {
     lines.push(`${"  ".repeat(depth)}- 메뉴 ${m.name} (slug: ${m.slug})`);
-    m.documents.forEach((d) => lines.push(`${"  ".repeat(depth + 1)}• ${d.title} — ${versionLabel(d.currentVersion)} · ${d.status} · ${d.kind} · ${docUrl(c.key, m.slug, d.slug)}`));
+    // 하위 문서는 상위 문서 아래에 한 칸 더 들여 쓴다
+    const docs = (parent: string | null, d0: number): void => m.documents.filter((d) => d.parent === parent).forEach((d) => {
+      lines.push(`${"  ".repeat(d0)}• ${d.title} — ${versionLabel(d.currentVersion)} · ${d.status} · ${d.kind} · ${docUrl(c.key, m.slug, d.slug)}`);
+      docs(d.slug, d0 + 1);
+    });
+    docs(null, depth + 1);
     walk(c, m.menus, depth + 1);
   });
   cats.forEach((c) => { lines.push(`## ${c.name} (key: ${c.key})`); if (!c.menus.length) lines.push("  (메뉴 없음)"); walk(c, c.menus, 1); });
@@ -320,16 +325,17 @@ server.registerTool("upload_document", {
     title: z.string().describe("문서 제목"),
     files: z.array(z.string()).min(1).describe("파일·폴더 경로(리포 루트 기준 상대 경로 또는 절대 경로)"),
     slug: z.string().optional().describe("문서 slug(영문 소문자·숫자·하이픈). 없으면 파일 이름에서 만든다"),
+    parent: z.string().optional().describe("하위 문서로 만들 때 상위 문서 slug(같은 메뉴)"),
     entry: z.string().optional().describe("파일이 여러 개일 때 사이트에서 열 대표 파일(업로드 목록 기준 상대 경로)"),
     note: z.string().optional(),
     origin: z.string().optional().describe("외부에서 가져온 경우 출처 주소(예: https://claude.ai/artifact/…)"),
     filename: z.string().optional().describe("파일 1개일 때 저장할 파일 이름(예: platform-env.html). 아티팩트처럼 임시 이름인 파일에 쓴다"),
   },
   annotations: { readOnlyHint: false, destructiveHint: false },
-}, safe(async ({ menu, title, files, slug, entry, note, origin, filename }) => {
+}, safe(async ({ menu, title, files, slug, parent, entry, note, origin, filename }) => {
   const m = findMenu(await api<Tree>("/api/tree"), menu);
   const list = collectFiles(files, filename);
-  const res = await uploadFiles({ menu: m.menu.slug, title, slug, entry, origin, note: withPrefix(note, origin ? `외부에서 가져옴: ${origin}` : "새 문서 등록") }, list);
+  const res = await uploadFiles({ menu: m.menu.slug, title, slug, parent, entry, origin, note: withPrefix(note, origin ? `외부에서 가져옴: ${origin}` : "새 문서 등록") }, list);
   return `새 문서 "${title}"를 ${m.category.name} › ${m.path.join(" › ")}에 ${versionLabel(res.version)}로 등록했습니다(파일 ${list.length}개).\n${docUrl(res.category, res.menu, res.doc)}`;
 }));
 

@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync
 import { dirname, extname, join, normalize, relative, isAbsolute } from "node:path";
 import { unzipSync } from "fflate";
 import { loadSite, type MenuNode } from "./sitefiles.ts";
+import { docSlugsIn, findDocDir } from "./docpath.ts";
 import { adapterFor, EditError, type Change } from "./textedit/index.ts";
 import { wrapForEdit } from "./textedit/html.ts";
 import { wrapSvgForEdit } from "./textedit/svg.ts";
@@ -16,9 +17,17 @@ export class StoreError extends Error {
 
 export interface IncomingFile { path: string; data: Uint8Array }
 
+/** 문서 폴더(하위 문서면 상위 문서 폴더 안). 없으면 404 */
+export function docDir(docsRoot: string, menu: string, doc: string): string {
+  const found = findDocDir(docsRoot, menu, doc);
+  if (!found) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  return found.dir;
+}
+
 export interface UploadInput {
   menu: string;
   doc?: string;          // 기존 문서 slug. 없으면 새 문서
+  parent?: string;       // 새 문서를 이 문서(같은 메뉴)의 하위 문서로 만든다
   title?: string;        // 새 문서 제목
   slug?: string;         // 새 문서 slug (없으면 파일 이름에서 만든다)
   version?: string;      // 없으면 다음 버전을 자동으로 정한다
@@ -36,6 +45,12 @@ const KIND: Record<string, string> = {
   html: "html", htm: "html", svg: "image", png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image",
   pdf: "pdf", pptx: "pptx", docx: "docx", xlsx: "xlsx", csv: "xlsx", md: "markdown", drawio: "drawio",
 };
+
+/** 버전 작성 시각(로컬) yyyy-MM-dd HH:mm:ss. meta.yaml versions[].created에 쓴다(예전 버전은 날짜만 있다) */
+export function nowStamp(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 
 export const slugify = (s: string) =>
   s.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "doc";
@@ -112,31 +127,34 @@ export function upload(docsRoot: string, input: UploadInput) {
   // 대상 문서 정하기
   let docSlug: string;
   let isNew = false;
+  let dir: string;
   if (input.doc) {
     docSlug = input.doc;
-    if (!existsSync(join(docsRoot, input.menu, docSlug, "meta.yaml"))) throw new StoreError(404, `문서 ${input.menu}/${docSlug}이(가) 없습니다`);
+    dir = docDir(docsRoot, input.menu, docSlug);
   } else {
     if (!input.title?.trim()) throw new StoreError(400, "새 문서에는 제목이 필요합니다");
     const base = input.slug?.trim() || slugify(entry.split("/").pop()!);
     if (!SLUG_RE.test(base)) throw new StoreError(400, `slug는 영문 소문자, 숫자, 하이픈만 쓸 수 있습니다: ${base}`);
+    // slug는 메뉴 안에서(하위 문서까지) 하나뿐이어야 한다
+    const used = docSlugsIn(docsRoot, input.menu);
     docSlug = base;
-    for (let i = 2; existsSync(join(docsRoot, input.menu, docSlug)); i++) docSlug = `${base}-${i}`;
+    for (let i = 2; used.has(docSlug); i++) docSlug = `${base}-${i}`;
+    dir = join(input.parent ? docDir(docsRoot, input.menu, input.parent) : join(docsRoot, input.menu), docSlug);
     isNew = true;
   }
-  const docDir = join(docsRoot, input.menu, docSlug);
-  const metaPath = join(docDir, "meta.yaml");
+  const metaPath = join(dir, "meta.yaml");
   let meta: Document = isNew ? new Document({}) : parseDocument(readFileSync(metaPath, "utf8"));
   const existing = isNew ? [] : ((meta.toJS().versions ?? []) as { version: string; entry: string }[]);
 
   // 버전 정하기와 중복 확인
   const version = input.version?.trim() || nextVersion(existing.map((v) => v.version));
   if (!VERSION_RE.test(version)) throw new StoreError(400, `버전은 v<숫자>.<숫자> 형식이어야 합니다: ${version}`);
-  if (existing.some((v) => v.version === version) || existsSync(join(docDir, version))) {
+  if (existing.some((v) => v.version === version) || existsSync(join(dir, version))) {
     throw new StoreError(409, `${version} 버전이 이미 있습니다`);
   }
   if (!isNew) {
     const current = meta.get("current") as string;
-    const curDir = join(docDir, current);
+    const curDir = join(dir, current);
     if (existsSync(curDir)) {
       const curFiles = listFiles(curDir);
       const same = curFiles.length === files.length && files.every((f) =>
@@ -147,15 +165,15 @@ export function upload(docsRoot: string, input: UploadInput) {
 
   // 1) 파일 쓰기
   for (const f of files) {
-    const target = join(docDir, version, f.path);
-    if (relative(join(docDir, version), target).startsWith("..")) throw new StoreError(400, `잘못된 경로: ${f.path}`);
+    const target = join(dir, version, f.path);
+    if (relative(join(dir, version), target).startsWith("..")) throw new StoreError(400, `잘못된 경로: ${f.path}`);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, f.data);
   }
 
   // 2) meta.yaml 쓰기 (기존 주석과 순서는 유지)
   const versionEntry = {
-    version, entry, note: input.note?.trim() || null, source: input.source ?? "upload", created: new Date().toISOString().slice(0, 10),
+    version, entry, note: input.note?.trim() || null, source: input.source ?? "upload", created: nowStamp(),
   };
   if (isNew) {
     const ext = extname(entry).slice(1).toLowerCase();
@@ -170,7 +188,7 @@ export function upload(docsRoot: string, input: UploadInput) {
     meta.set("current", version);
     if (input.origin) meta.set("origin_url", input.origin);
   }
-  mkdirSync(docDir, { recursive: true });
+  mkdirSync(dir, { recursive: true });
   writeFileSync(metaPath, meta.toString({ lineWidth: 0, nullStr: "" }));
 
   return { menu: input.menu, doc: docSlug, version, category, created: isNew };
@@ -182,9 +200,8 @@ export function upload(docsRoot: string, input: UploadInput) {
  */
 export function saveEdit(docsRoot: string, menu: string, doc: string,
   input: { baseVersion: string; content: string; note?: string; version?: string }) {
-  const docDir = join(docsRoot, menu, doc);
-  const metaPath = join(docDir, "meta.yaml");
-  if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  const docDir_ = docDir(docsRoot, menu, doc);
+  const metaPath = join(docDir_, "meta.yaml");
   const meta = parseDocument(readFileSync(metaPath, "utf8")).toJS() as { current: string; versions: { version: string; entry: string }[] };
   if (meta.current !== input.baseVersion) {
     throw new StoreError(409, `편집하는 동안 새 버전(${meta.current})이 생겼습니다. 새로고침해서 최신 내용을 확인하세요`);
@@ -193,7 +210,7 @@ export function saveEdit(docsRoot: string, menu: string, doc: string,
   if (!base) throw new StoreError(404, `${input.baseVersion} 버전이 없습니다`);
   if (!/\.md$/i.test(base.entry)) throw new StoreError(400, "Markdown 문서만 사이트에서 편집할 수 있습니다");
 
-  const baseDir = join(docDir, input.baseVersion);
+  const baseDir = join(docDir_, input.baseVersion);
   const files: IncomingFile[] = listFiles(baseDir).map((p) => ({
     path: p, data: p === base.entry ? new TextEncoder().encode(input.content) : readFileSync(join(baseDir, p)),
   }));
@@ -211,22 +228,21 @@ export function nextMajor(versions: string[]): string {
  * meta.yaml에 버전을 추가한 뒤 current와 status(approved)를 바꾼다. 기존 버전 폴더는 건드리지 않는다.
  */
 export function release(docsRoot: string, menu: string, doc: string, note?: string) {
-  const docDir = join(docsRoot, menu, doc);
-  const metaPath = join(docDir, "meta.yaml");
-  if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  const docDir_ = docDir(docsRoot, menu, doc);
+  const metaPath = join(docDir_, "meta.yaml");
   const meta = parseDocument(readFileSync(metaPath, "utf8"));
   const js = meta.toJS() as { current: string; status?: string; versions: { version: string; entry: string }[] };
   if (js.status === "approved") throw new StoreError(409, "이미 정식 버전입니다");
   const base = js.versions.find((v) => v.version === js.current);
-  if (!base || !existsSync(join(docDir, js.current))) throw new StoreError(404, `현재 버전(${js.current}) 폴더가 없습니다`);
+  if (!base || !existsSync(join(docDir_, js.current))) throw new StoreError(404, `현재 버전(${js.current}) 폴더가 없습니다`);
 
   const version = nextMajor(js.versions.map((v) => v.version));
-  if (existsSync(join(docDir, version))) throw new StoreError(409, `${version} 폴더가 이미 있습니다`);
-  cpSync(join(docDir, js.current), join(docDir, version), { recursive: true });
+  if (existsSync(join(docDir_, version))) throw new StoreError(409, `${version} 폴더가 이미 있습니다`);
+  cpSync(join(docDir_, js.current), join(docDir_, version), { recursive: true });
 
   (meta.get("versions") as YAMLSeq).add(meta.createNode({
     version, entry: base.entry, note: note?.trim() || `${js.current === "v0.0" ? "draft" : js.current} 버전을 정식 버전으로 확정`, source: "release",
-    created: new Date().toISOString().slice(0, 10),
+    created: nowStamp(),
   }));
   meta.set("current", version);
   meta.set("status", "approved");
@@ -237,14 +253,13 @@ export function release(docsRoot: string, menu: string, doc: string, note?: stri
 // ---------- 텍스트 편집(2.0): HTML·DOCX·PPTX의 태그 안 글자만 고친다 ----------
 
 function versionEntry(docsRoot: string, menu: string, doc: string, version?: string) {
-  const docDir = join(docsRoot, menu, doc);
-  const metaPath = join(docDir, "meta.yaml");
-  if (!existsSync(metaPath)) throw new StoreError(404, `문서 ${menu}/${doc}이(가) 없습니다`);
+  const docDir_ = docDir(docsRoot, menu, doc);
+  const metaPath = join(docDir_, "meta.yaml");
   const meta = parseDocument(readFileSync(metaPath, "utf8")).toJS() as { current: string; versions: { version: string; entry: string }[] };
   const v = version || meta.current;
   const found = meta.versions.find((x) => x.version === v);
   if (!found) throw new StoreError(404, `${v} 버전이 없습니다`);
-  return { docDir, current: meta.current, version: v, entry: found.entry, path: join(docDir, v, found.entry) };
+  return { docDir: docDir_, current: meta.current, version: v, entry: found.entry, path: join(docDir_, v, found.entry) };
 }
 
 /** HTML·SVG 편집 화면용 사본(조각마다 data-seg로 감싼 문서). SVG는 XML 그대로 돌려준다 */
@@ -254,7 +269,7 @@ export function htmlEditView(docsRoot: string, menu: string, doc: string, versio
   if (format === "svg") return { type: "svg", body: wrapSvgForEdit(readFileSync(v.path)) };
   if (format !== "html") throw new StoreError(400, "HTML·SVG 문서만 그 자리 편집을 지원합니다");
   const dir = v.entry.includes("/") ? v.entry.slice(0, v.entry.lastIndexOf("/") + 1) : "";
-  return { type: "html", body: wrapForEdit(readFileSync(v.path), `/files/${menu}/${doc}/${v.version}/${dir}`) };
+  return { type: "html", body: wrapForEdit(readFileSync(v.path), `/files/${relative(docsRoot, v.docDir)}/${v.version}/${dir}`) };
 }
 
 /** 대표 파일의 텍스트 조각 목록. 지원하지 않는 형식이면 400 */

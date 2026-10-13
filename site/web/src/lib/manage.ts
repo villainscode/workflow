@@ -18,7 +18,8 @@ export const manage = {
   renameMenu: (slug: string, name: string) => call("PATCH", `/api/menus/${slug}`, { name }),
   moveMenu: (slug: string, to: { category: string; parent?: string | null; index?: number }) =>
     call("POST", `/api/menus/${slug}/move`, to),
-  deleteMenu: (slug: string) => call("DELETE", `/api/menus/${slug}`),
+  /** 안의 문서는 모두 휴지통으로 간다 */
+  deleteMenu: (slug: string) => call<{ trashed: number }>("DELETE", `/api/menus/${slug}`),
 
   addCategory: (name: string, key?: string) => call<{ key: string }>("POST", "/api/categories", { name, key: key || undefined }),
   updateCategory: (key: string, change: { name?: string; index?: number }) => call("PATCH", `/api/categories/${key}`, change),
@@ -26,8 +27,9 @@ export const manage = {
 
   updateDoc: (menu: string, doc: string, change: { title?: string; status?: string; origin?: string }) =>
     call("PATCH", `/api/docs/${menu}/${doc}`, change),
-  moveDoc: (menu: string, doc: string, to: string) =>
-    call<{ menu: string; doc: string; category: string }>("POST", `/api/docs/${menu}/${doc}/move`, { menu: to }),
+  /** to.parent: 상위 문서 slug(null이면 메뉴 바로 아래), to.index: 그 자리 안 순서(없으면 맨 뒤) */
+  moveDoc: (menu: string, doc: string, to: { menu: string; parent?: string | null; index?: number }) =>
+    call<{ menu: string; doc: string; category: string }>("POST", `/api/docs/${menu}/${doc}/move`, to),
   release: (menu: string, doc: string) =>
     call<{ menu: string; doc: string; from: string; version: string }>("POST", `/api/docs/${menu}/${doc}/release`),
   trashDoc: (menu: string, doc: string) => call<{ id: string }>("DELETE", `/api/docs/${menu}/${doc}`),

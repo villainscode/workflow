@@ -1,80 +1,71 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import Markdown, { defaultUrlTransform } from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { useDark } from "../lib/useDark.ts";
+import { parseMarkdown } from "./markdown-editor/parseMarkdown.ts";
+import "./markdown-editor/preview.css";
 
-function CodeBlock({ code, lang }: { code: string; lang: string }) {
-  const { data } = useQuery({
-    queryKey: ["shiki", lang, code],
-    queryFn: async () => {
-      const { codeToHtml, bundledLanguages } = await import("shiki");
-      return codeToHtml(code, {
-        lang: lang in bundledLanguages ? lang : "text",
-        themes: { light: "github-light", dark: "github-dark" },
-        defaultColor: "light",
-      });
-    },
-    staleTime: Infinity,
-  });
-  return data
-    ? <div className="my-3 rounded-md border border-line bg-surface p-3" dangerouslySetInnerHTML={{ __html: data }} />
-    : <pre className="my-3 rounded-md border border-line bg-surface p-3 text-[13px] whitespace-pre-wrap">{code}</pre>;
+export interface MarkdownPreviewHandle {
+  /** 편집 위치의 제목으로 미리보기를 옮긴다(MarkFlow의 제목 기준 스크롤 맞춤) */
+  scrollToHeading: (text: string) => void;
 }
 
-function Mermaid({ code }: { code: string }) {
-  const id = "m" + useId().replace(/[^a-zA-Z0-9]/g, "");
-  const dark = useDark();
-  const ref = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { default: mermaid } = await import("mermaid");
-        mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default", securityLevel: "strict" });
-        const { svg } = await mermaid.render(id, code);
-        if (!cancelled && ref.current) { ref.current.innerHTML = svg; setError(""); }
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
+let mermaidSeq = 0;
+
+/** mermaid 코드 블록을 다이어그램으로 바꾼다. 실패하면 블록 아래에 오류를 보여 준다 */
+async function renderMermaid(root: HTMLElement, dark: boolean, cancelled: () => boolean) {
+  const blocks = [...root.querySelectorAll<HTMLElement>("pre > code.language-mermaid")];
+  if (!blocks.length) return;
+  const { default: mermaid } = await import("mermaid");
+  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default", securityLevel: "strict" });
+  for (const code of blocks) {
+    if (cancelled()) return;
+    const pre = code.parentElement!;
+    const box = document.createElement("div");
+    box.className = "mf-mermaid";
+    try {
+      const { svg } = await mermaid.render(`mf-mermaid-${++mermaidSeq}`, code.textContent ?? "");
+      if (cancelled()) return;
+      box.innerHTML = svg;
+      pre.replaceWith(box);
+    } catch (e) {
+      if (cancelled()) return;
+      box.className = "mf-mermaid-error";
+      box.textContent = `Mermaid 오류: ${(e as Error).message}`;
+      pre.after(box);
+    }
+  }
+}
+
+/**
+ * Markdown 미리보기(MarkFlow 엔진). 상대 경로 이미지·링크는 문서 버전 폴더(baseUrl) 기준으로 푼다.
+ * 편집기·보기 화면·프레젠테이션이 함께 쓴다.
+ */
+export const MarkdownPreview = forwardRef<MarkdownPreviewHandle, { source: string; baseUrl: string }>(
+  function MarkdownPreview({ source, baseUrl }, ref) {
+    const dark = useDark();
+    const box = useRef<HTMLDivElement>(null);
+    const html = useMemo(() => parseMarkdown(source, baseUrl), [source, baseUrl]);
+
+    useEffect(() => {
+      const el = box.current;
+      if (!el) return;
+      let off = false;
+      void renderMermaid(el, dark, () => off);
+      return () => { off = true; };
+    }, [html, dark]);
+
+    const scrollToHeading = useCallback((text: string) => {
+      const target = text.trim().toLowerCase();
+      for (const h of box.current?.querySelectorAll("h1, h2, h3, h4, h5, h6") ?? []) {
+        if ((h.textContent ?? "").trim().toLowerCase() === target) {
+          h.scrollIntoView({ block: "start", behavior: "smooth" });
+          return;
+        }
       }
-    })();
-    return () => { cancelled = true; };
-  }, [code, dark, id]);
-  return (
-    <div className="my-3">
-      <div ref={ref} className="flex justify-center [&_svg]:h-auto [&_svg]:max-w-full" />
-      {error && <pre className="rounded-md bg-high-soft p-2 text-xs whitespace-pre-wrap text-high">Mermaid 오류: {error}</pre>}
-    </div>
-  );
-}
+    }, []);
+    useImperativeHandle(ref, () => ({ scrollToHeading }), [scrollToHeading]);
 
-/** Markdown 미리보기. 상대 경로 이미지·링크는 문서 버전 폴더(baseUrl) 기준으로 푼다. */
-export function MarkdownPreview({ source, baseUrl }: { source: string; baseUrl: string }) {
-  const resolveUrl = (url: string) => {
-    const safe = defaultUrlTransform(url);
-    if (!safe || /^([a-z]+:|\/|#)/i.test(safe)) return safe;
-    return new URL(safe, location.origin + baseUrl).pathname;
-  };
-  return (
-    <article className="md-body">
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        urlTransform={resolveUrl}
-        components={{
-          a: ({ node: _n, ...props }) => <a {...props} target={props.href?.startsWith("#") ? undefined : "_blank"} rel="noreferrer" />,
-          pre: ({ children }) => <>{children}</>,
-          code: ({ node: _n, className, children, ...props }) => {
-            const lang = /language-([\w-]+)/.exec(className ?? "")?.[1];
-            const text = String(children).replace(/\n$/, "");
-            if (lang === "mermaid") return <Mermaid code={text} />;
-            if (lang || text.includes("\n")) return <CodeBlock code={text} lang={lang ?? "text"} />;
-            return <code className={className} {...props}>{children}</code>;
-          },
-        }}
-      >
-        {source}
-      </Markdown>
-    </article>
-  );
-}
+    if (!html) return <p className="text-sm text-muted italic">미리 볼 내용이 없습니다.</p>;
+    // 테마가 바뀌면 다시 그려 mermaid 블록을 원래 코드에서 새 색으로 만든다
+    return <article key={dark ? "dark" : "light"} ref={box} className="mf-preview" dangerouslySetInnerHTML={{ __html: html }} />;
+  },
+);
