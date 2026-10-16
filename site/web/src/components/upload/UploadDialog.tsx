@@ -9,6 +9,7 @@ import {
 } from "../../lib/api.ts";
 import { commonRoot, filesFromDrop, filesFromInput, formatSize, guessEntry, slugify } from "../../lib/files.ts";
 import { flattenDocs } from "../../lib/docTree.ts";
+import { stopComposingEnter } from "../../lib/ime.ts";
 import type { UploadPreset } from "./UploadContext.tsx";
 
 const NEW_MENU = "__new__";
@@ -133,7 +134,7 @@ export function UploadDialog({ preset, onClose }: { preset: UploadPreset; onClos
       onClose={onClose}
       className="m-auto w-[min(640px,calc(100vw-24px))] max-h-[calc(100dvh-24px)] rounded-xl border border-line bg-surface p-0 text-fg backdrop:bg-black/40"
     >
-      <form method="dialog" className="grid gap-4 p-5" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <form method="dialog" className="grid gap-4 p-5" onKeyDown={stopComposingEnter} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">
             {mode === "existing" ? "새 버전 올리기" : kind === "markdown" ? "새 Markdown 문서" : "문서 업로드"}

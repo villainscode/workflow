@@ -29,9 +29,9 @@ npm install
 npm run dev
 ```
 
-- 화면: http://localhost:5173 (Vite)
+- 화면: http://localhost:8000 (Vite, 포트 고정)
 - API: http://127.0.0.1:5174 (Fastify)
-- `npm run dev`는 5173·5174 포트를 쓰던 프로세스를 먼저 종료한 뒤 두 서버를 함께 띄웁니다.
+- `npm run dev`는 8000·5174 포트를 쓰던 개발 서버(node 프로세스)를 먼저 종료한 뒤 두 서버를 함께 띄웁니다. node가 아닌 프로세스가 포트를 쓰고 있으면 종료하지 않고 멈춥니다.
 - 처음 시작하면 `docs/`를 읽어 `site/data/index.db`(SQLite 색인)를 만듭니다. 색인은 git에 넣지 않고, 서버를 켤 때마다 다시 만듭니다.
 - `docs/` 파일이 바뀌면 자동으로 다시 색인해 열린 화면에 반영됩니다.
 

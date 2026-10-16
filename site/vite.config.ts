@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     host: "127.0.0.1",
-    port: Number(process.env.WEB_PORT ?? 5173),
+    port: Number(process.env.WEB_PORT ?? 8000),
     strictPort: true, // 다른 포트로 바꿔 뜨지 않는다. 포트는 predev(scripts/free-ports.mjs)가 비운다
     proxy: { "/api": api, "/files": api },
   },

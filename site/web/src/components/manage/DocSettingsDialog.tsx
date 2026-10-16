@@ -6,6 +6,7 @@ import { manage } from "../../lib/manage.ts";
 import { Modal, ui } from "../Modal.tsx";
 import { useAction } from "./useAction.ts";
 import { flattenMenus } from "./menuTree.ts";
+import { stopComposingEnter } from "../../lib/ime.ts";
 
 /** 문서 제목·상태·메뉴 이동·휴지통 */
 export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: () => void }) {
@@ -54,7 +55,7 @@ export function DocSettingsDialog({ doc, onClose }: { doc: DocDetail; onClose: (
 
   return (
     <Modal title="문서 관리" onClose={onClose}>
-      <form className="grid gap-3" onSubmit={save}>
+      <form className="grid gap-3" onKeyDown={stopComposingEnter} onSubmit={save}>
         <label className={ui.label}>제목<input className={ui.field} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
         <label className={ui.label}>상태
           <select className={ui.field} value={status} onChange={(e) => setStatus(e.target.value)}>

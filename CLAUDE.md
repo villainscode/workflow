@@ -78,7 +78,7 @@ Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더�
 
 ```bash
 cd site
-npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(predev)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173) 실행
+npm run dev        # 8000·5174 포트를 쓰던 node 프로세스(이전 개발 서버)를 먼저 종료(predev, node가 아닌 프로세스면 종료하지 않고 멈춤)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:8000) 실행
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없이 저장하면 바이트 동일 등)
@@ -86,14 +86,14 @@ npm test           # 단위·Markdown 편집기·텍스트 편집·API·MCP 자�
 npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘 다
 ```
 
-- **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·5173). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
+- **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·8000). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
 
 - **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서. 메뉴의 `documents`는 하위 문서까지 모두 담고 하위 문서는 `parent`가 있다), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart, 새 하위 문서는 `parent`), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장), `POST /api/focus`(열린 화면 이동, 3.4). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`는 `{ menu, parent?, index? }`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **확인 창** (`components/confirm/ConfirmProvider.tsx`, `useConfirm()`): 저장·수정·삭제·다운로드·업로드·이동·복원·휴지통 이동은 공통 확인 창을 거쳐 실행한다. 브라우저 `confirm()`은 쓰지 않는다.
   - 관리 작업은 `useAction().run(작업, 확인옵션)`으로 넘기면 확인 후 실행된다. 무엇이 바뀌는지는 `details`에 적는다.
-  - tone은 일반(`default`, 파랑), 이동(`warning`, 주황), 삭제·휴지통(`danger`, 빨강 `--crit`)이다. danger는 기본 포커스가 "취소"다. 포커스는 창이 열리고 60ms 뒤에 준다. 창을 연 Enter 키 입력이 새로 포커스된 버튼으로 이어져 확인 없이 실행되는 것을 막기 위해서다. Enter로 확인 창을 여는 입력칸은 Enter의 기본 동작도 막는다.
+  - tone은 일반(`default`, 파랑), 이동(`warning`, 주황), 삭제·휴지통(`danger`, 빨강 `--crit`)이다. danger는 기본 포커스가 "취소"다. 버튼 포커스는 창이 열리고 60ms 뒤에 주고, 그 전에는 창 자체에 포커스를 두며 Enter·Space를 버린다. 창을 연 Enter나 맥 한글 입력기가 이어 보내는 두 번째 Enter가 버튼(특히 `showModal`이 바로 포커스하는 "취소")을 눌러 버리는 것을 막기 위해서다(TC-UI-33·34). Enter로 확인 창을 여는 입력칸은 Enter의 기본 동작도 막고, 폼은 `lib/ime.ts`의 `stopComposingEnter`로 한글 조합 중 Enter 제출을 막는다.
   - 순서 변경(↑↓)과 보기 전환은 확인하지 않는다.
 - **텍스트 편집 2.0** (`server/textedit/`, 계획은 `REQUIREMENT-2.0.md`): HTML·DOCX·PPTX의 태그 안 글자만 고친다.
   - 형식별 어댑터가 "텍스트 조각"(id, 글자, 해시)을 뽑는다. 저장할 때는 바뀐 조각의 **원본 구간만** 교체한다. 그래서 구조·서식·속성과 나머지 바이트는 그대로다.
@@ -130,6 +130,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
 - **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다. 정식 문서에 업로드나 편집으로 새 버전이 생기면(v1.0 → v1.1) 상태는 approved 그대로 둔다(D-15). 업로드·저장 코드는 status를 건드리지 않는다.
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
 - **아이콘**: 사이트의 기능 버튼은 Lucide(`lucide-react`) 아이콘으로 만들고 `components/IconButton.tsx`를 쓴다. 아이콘만 있는 버튼은 `label`이 aria-label과 툴팁이 된다. **툴팁은 브라우저 `title`이 아니라 공통 툴팁(`components/Tooltip.tsx`)을 쓴다**: 요소에 `data-tip="설명"`(세로 손잡이처럼 오른쪽에 띄울 때는 `data-tip-side="right"`)을 붙이면, `main.tsx`에 한 번 둔 `TooltipLayer`가 마우스를 올리거나 키보드로 포커스할 때 띄운다. Popover API로 최상위 층에 띄우므로 `showModal` 대화상자와 전체 화면 위에서도 보인다. 툴팁이 있는 요소 안에 또 툴팁을 두지 않는다(안쪽이 이긴다. 예: 상태 배지 버튼 안 `StatusBadge noTip`). 대화상자의 확인·취소처럼 실수하면 안 되는 버튼과 휴지통의 복원·영구 삭제는 아이콘과 글자를 함께 둔다(`text` prop). 유니코드 기호(✕ ☰ ▾ 등)를 아이콘으로 쓰지 않는다.
+- **문서 화면 머리** (`components/DocView.tsx`): 제목(h1, 32px)을 누르면 그 자리 입력칸으로 고친다(Enter 확인 창, Esc·바깥 클릭 취소, 한글 조합 중 Enter는 건너뜀). 제목 오른쪽에 보고 있는 버전의 작성일(12px), 버전 선택, 비교, 상태 배지, 기능 버튼.
 - **좌측 폴더 트리** (`components/Sidebar.tsx`, `components/sidebar/ContextMenu.tsx`, 계획은 `REQUIREMENT.md` 5.3): MarkFlow 사이드바 방식. 폴더(메뉴) → 하위 폴더 → 문서 → 하위 문서. 폴더 아이콘은 열림·닫힘, 접힌 항목은 localStorage `workflow:sidebar-collapsed`, 지금 연 문서의 상위는 늘 펼친다.
   - 오른쪽 클릭이나 줄의 ⋯로 메뉴: 폴더는 새 문서·하위 폴더 추가·이름 바꾸기·위로·아래로·다른 위치로 옮기기(`MoveMenuDialog`)·폴더 삭제, 문서는 하위 문서 추가(업로드 창 `parent` 고정)·이름 바꾸기·위로·아래로·상위 문서 밖으로 꺼내기·휴지통으로. 이름 입력은 그 자리 입력칸(Enter 확인 창, Esc·바깥 클릭 취소).
   - 끌어서 놓기(D-36): 줄 위쪽 28% 앞, 아래쪽 28% 뒤, 가운데 안. 같은 자리 순서는 확인 없이, 다른 자리로 옮기기는 확인 창(warning). 자기 자신·하위로는 놓을 수 없다. 링크(`NavLink draggable={false}`)가 아니라 줄(`data-row`)이 끌기를 받는다. 바깥 파일을 폴더에 놓으면 업로드 창.

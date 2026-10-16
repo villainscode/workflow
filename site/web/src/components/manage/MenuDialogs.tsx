@@ -4,6 +4,7 @@ import { manage } from "../../lib/manage.ts";
 import { Modal, ui } from "../Modal.tsx";
 import { useAction } from "./useAction.ts";
 import { contains, flattenMenus } from "./menuTree.ts";
+import { stopComposingEnter } from "../../lib/ime.ts";
 
 /** 메뉴를 다른 대분류나 다른 메뉴 아래로 옮긴다. 폴더 경로는 바뀌지 않는다. */
 export function MoveMenuDialog({ menu, onClose }: { menu: MenuNode; onClose: () => void }) {
@@ -15,7 +16,7 @@ export function MoveMenuDialog({ menu, onClose }: { menu: MenuNode; onClose: () 
 
   return (
     <Modal title={`'${menu.name}' 옮기기`} onClose={onClose}>
-      <form className="grid gap-3" onSubmit={async (e) => {
+      <form className="grid gap-3" onKeyDown={stopComposingEnter} onSubmit={async (e) => {
         e.preventDefault();
         const [kind, value] = target.split(":");
         const parent = kind === "m" ? flat.find((f) => f.menu.slug === value) : undefined;
@@ -62,7 +63,7 @@ export function DeleteMenuDialog({ menu, onClose, onDeleted }: { menu: MenuNode;
   const { docs, menus } = count(menu);
   return (
     <Modal title="폴더 삭제" onClose={onClose}>
-      <form className="grid gap-3" onSubmit={async (e) => {
+      <form className="grid gap-3" onKeyDown={stopComposingEnter} onSubmit={async (e) => {
         e.preventDefault();
         if (typed !== menu.name) return;
         const ok = await run(() => manage.deleteMenu(menu.slug));

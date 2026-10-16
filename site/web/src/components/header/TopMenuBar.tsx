@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useParams } from "react-router";
 import { ChevronLeft, ChevronRight, Ellipsis, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Category } from "../../lib/api.ts";
 import { slugify } from "../../lib/files.ts";
+import { stopComposingEnter } from "../../lib/ime.ts";
 import { manage } from "../../lib/manage.ts";
 import { useAction } from "../manage/useAction.ts";
 import { IconButton } from "../IconButton.tsx";
@@ -83,7 +84,7 @@ function AddPopover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => v
   const finalKey = key.trim() || slugify(name);
   return (
     <Floating anchor={anchor} onClose={onClose}>
-      <form className="grid gap-2 p-1.5" onSubmit={async (e) => {
+      <form className="grid gap-2 p-1.5" onKeyDown={stopComposingEnter} onSubmit={async (e) => {
         e.preventDefault();
         const r = await run(() => manage.addCategory(name, key), {
           title: "대분류를 추가할까요?", confirmText: "추가", details: [`이름: ${name.trim()}`, `key: ${finalKey}`],

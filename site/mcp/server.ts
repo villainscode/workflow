@@ -12,7 +12,7 @@ import { z } from "zod";
  */
 
 const API = (process.env.WORKFLOW_API ?? "http://127.0.0.1:5174").replace(/\/$/, "");
-const WEB = (process.env.WORKFLOW_WEB ?? "http://localhost:5173").replace(/\/$/, "");
+const WEB = (process.env.WORKFLOW_WEB ?? "http://localhost:8000").replace(/\/$/, "");
 // 상대 경로 파일은 리포 루트(Claude Code가 이 서버를 띄우는 위치) 기준으로 읽는다
 const ROOT = process.env.WORKFLOW_ROOT ?? process.cwd();
 
@@ -170,7 +170,7 @@ const safe = <A>(fn: (a: A) => Promise<string>) => async (a: A) => {
   try { return text(await fn(a)); }
   catch (e) { return { ...text(e instanceof ToolError ? e.message : `오류: ${(e as Error).message}`), isError: true }; }
 };
-const REF = z.string().describe("문서 지정: 사이트 주소(예: http://localhost:5173/sdlc/code-review-automation/review-modes?v=v1.0&seg=12), \"대분류/메뉴/문서\", \"SDLC > 메뉴 > 문서 제목\", 또는 문서 제목");
+const REF = z.string().describe("문서 지정: 사이트 주소(예: http://localhost:8000/sdlc/code-review-automation/review-modes?v=v1.0&seg=12), \"대분류/메뉴/문서\", \"SDLC > 메뉴 > 문서 제목\", 또는 문서 제목");
 
 server.registerTool("list_documents", {
   title: "문서 목록",

@@ -8,7 +8,7 @@ MarkFlow 에디터의 `apps/worker`를 가져왔다. 이미지를 R2 버킷에 �
 ## 배포
 
 1. **R2 버킷 만들기**: Cloudflare 대시보드 → R2 Object Storage → Create bucket(예: `workflow-images`). Settings → Public access를 켜고 공개 주소(`https://pub-xxxxxxxx.r2.dev`)를 확인한다.
-2. **`wrangler.toml` 고치기**: `account_id`, `bucket_name`, `PUBLIC_URL`, `ALLOWED_ORIGINS`(사이트를 여는 주소. 기본 `http://localhost:5173,http://127.0.0.1:5173`).
+2. **`wrangler.toml` 고치기**: `account_id`, `bucket_name`, `PUBLIC_URL`, `ALLOWED_ORIGINS`(사이트를 여는 주소. 기본 `http://localhost:8000,http://127.0.0.1:8000`).
 3. **배포**
    ```bash
    cd site/cloudflare/r2-uploader
