@@ -19,4 +19,4 @@ bucket_name = "markflow-images"       # 직접 만든 R2 버킷 이름
 PUBLIC_URL = "https://pub-1ae817f8a4814599bf1a8a838b4e5e15.r2.dev"
 
 # 업로드를 허락할 사이트 주소(쉼표 구분, * 불가). 사이트를 여는 주소를 모두 넣는다
-ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+ALLOWED_ORIGINS = "http://localhost:8000,http://127.0.0.1:8000"

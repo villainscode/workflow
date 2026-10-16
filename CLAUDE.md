@@ -78,7 +78,7 @@ Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더�
 
 ```bash
 cd site
-npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(predev)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173) 실행
+npm run dev        # 8000·5174 포트를 쓰던 node 프로세스(이전 개발 서버)를 먼저 종료(predev, node가 아닌 프로세스면 종료하지 않고 멈춤)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:8000) 실행
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없이 저장하면 바이트 동일 등)
@@ -86,7 +86,7 @@ npm test           # 단위·Markdown 편집기·텍스트 편집·API·MCP 자�
 npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘 다
 ```
 
-- **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·5173). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
+- **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·8000). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
 
 - **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서. 메뉴의 `documents`는 하위 문서까지 모두 담고 하위 문서는 `parent`가 있다), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart, 새 하위 문서는 `parent`), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장), `POST /api/focus`(열린 화면 이동, 3.4). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`는 `{ menu, parent?, index? }`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.

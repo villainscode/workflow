@@ -17,7 +17,7 @@ npm run check:textedit   # 실제 docs/의 HTML 문서 전체로 어댑터 왕�
 ```
 
 - **실제 `docs/`와 실행 중인 사이트를 건드리지 않는다.** 테스트마다 임시 폴더(`$TMPDIR/workflow-test-*`)에 `docs/`와 색인을 만들고, 빈 포트로 API 서버(와 화면 테스트는 Vite)를 따로 띄운 뒤 끝나면 지운다.
-  - 서버는 `WORKFLOW_DOCS_ROOT`(docs 위치), `WORKFLOW_DATA_DIR`(색인·변환 캐시 위치), `PORT`를 받는다. Vite는 `WEB_PORT`를 받는다. 값을 주지 않으면 원래대로 리포의 `docs/`, `site/data/`, 5174·5173을 쓴다.
+  - 서버는 `WORKFLOW_DOCS_ROOT`(docs 위치), `WORKFLOW_DATA_DIR`(색인·변환 캐시 위치), `PORT`를 받는다. Vite는 `WEB_PORT`를 받는다. 값을 주지 않으면 원래대로 리포의 `docs/`, `site/data/`, 5174·8000을 쓴다.
 - 테스트 도구는 Node 내장 `node:test`다(추가 의존성 없음). 화면 테스트는 Mermaid CLI와 함께 전역 설치된 puppeteer를 쓰고, 없으면 건너뛴다.
 - LibreOffice(`soffice`)가 없으면 PDF 변환 케이스(TC-TE-06, TC-TEAPI-04, TC-CONV-02)는 건너뛴다.
 - 같은 파일 안의 케이스는 순서대로 실행되고, 앞 케이스가 만든 문서를 이어서 쓴다(예: TC-UP-01이 만든 문서를 TC-UP-07이 수정). 하나만 돌릴 때는 `--test-name-pattern`을 쓰되, 앞 케이스에 기대는 케이스는 함께 돌린다.
