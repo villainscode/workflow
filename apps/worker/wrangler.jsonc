@@ -23,7 +23,7 @@
   "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Live"] }, { "tag": "v2", "new_sqlite_classes": ["Converter"] }],
   // PPTX·DOCX·XLSX → PDF(LibreOffice, Workers Paid 전용). 이미지는 apps/converter
-  "containers": [{ "class_name": "Converter", "image": "../converter/Dockerfile", "max_instances": 2, "instance_type": "standard-1" }],
+  "containers": [{ "class_name": "Converter", "scheduling_policy": "durable_object", "images": { "base": { "dockerfile": "../converter/Dockerfile" } } }],
   // 원격 MCP OAuth(클라이언트·코드·토큰)
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "00000000000000000000000000000000" }],
   "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs" }],
@@ -44,20 +44,20 @@
     "staging": {
       "name": "workflow-app-staging",
       "workers_dev": true,
-      "d1_databases": [{ "binding": "DB", "database_name": "workflow-staging", "database_id": "REPLACE_STAGING_D1_ID", "migrations_dir": "migrations" }],
+      "d1_databases": [{ "binding": "DB", "database_name": "workflow-staging", "database_id": "f11fb8fc-07ff-404f-b07d-4640264c357b", "migrations_dir": "migrations" }],
       "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
-      "containers": [{ "class_name": "Converter", "image": "../converter/Dockerfile", "max_instances": 1, "instance_type": "standard-1" }],
-      "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_STAGING_KV_ID" }],
+      "containers": [{ "class_name": "Converter", "scheduling_policy": "durable_object", "images": { "base": { "dockerfile": "../converter/Dockerfile" } } }],
+      "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "560faab4f7444de98522f5faa43b53aa" }],
       "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs-staging" }],
       "ratelimits": [
         { "name": "LIMIT_AUTH", "namespace_id": "4011", "simple": { "limit": 20, "period": 60 } },
         { "name": "LIMIT_WRITE", "namespace_id": "4012", "simple": { "limit": 120, "period": 60 } }
       ],
       "vars": {
-        "APP_ORIGIN": "https://workflow-app-staging.REPLACE_SUBDOMAIN.workers.dev",
+        "APP_ORIGIN": "https://workflow-app-staging.villainscode.workers.dev",
         "FILES_ORIGIN": "",
-        "GOOGLE_CLIENT_ID": "REPLACE_GOOGLE_CLIENT_ID",
-        "SUPERADMIN_EMAILS": "REPLACE_SUPERADMIN_EMAILS"
+        "GOOGLE_CLIENT_ID": "",
+        "SUPERADMIN_EMAILS": "villainscode@gmail.com"
       }
     },
     "production": {
@@ -68,10 +68,10 @@
         { "pattern": "workflow.simplite.net", "custom_domain": true },
         { "pattern": "workflow-files.simplite.net", "custom_domain": true }
       ],
-      "d1_databases": [{ "binding": "DB", "database_name": "workflow", "database_id": "REPLACE_PRODUCTION_D1_ID", "migrations_dir": "migrations" }],
+      "d1_databases": [{ "binding": "DB", "database_name": "workflow", "database_id": "8a7c5f2c-dd8a-4c4c-959c-c1706471f2de", "migrations_dir": "migrations" }],
       "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
-      "containers": [{ "class_name": "Converter", "image": "../converter/Dockerfile", "max_instances": 2, "instance_type": "standard-1" }],
-      "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_PRODUCTION_KV_ID" }],
+      "containers": [{ "class_name": "Converter", "scheduling_policy": "durable_object", "images": { "base": { "dockerfile": "../converter/Dockerfile" } } }],
+      "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "cf0123eb317844e495240aa43c65f729" }],
       "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs" }],
       "ratelimits": [
         { "name": "LIMIT_AUTH", "namespace_id": "4021", "simple": { "limit": 20, "period": 60 } },
@@ -80,8 +80,8 @@
       "vars": {
         "APP_ORIGIN": "https://workflow.simplite.net",
         "FILES_ORIGIN": "https://workflow-files.simplite.net",
-        "GOOGLE_CLIENT_ID": "REPLACE_GOOGLE_CLIENT_ID",
-        "SUPERADMIN_EMAILS": "REPLACE_SUPERADMIN_EMAILS"
+        "GOOGLE_CLIENT_ID": "",
+        "SUPERADMIN_EMAILS": "villainscode@gmail.com"
       }
     }
   }

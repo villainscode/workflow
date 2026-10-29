@@ -2,3 +2,4 @@
 .wrangler/
 public/
 worker-configuration.d.ts
+.secrets.*
