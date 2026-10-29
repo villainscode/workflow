@@ -1,0 +1,19 @@
+title: OCR 리뷰 게이트 도입 가이드
+category: sdlc
+menu: code-review-automation
+kind: html
+status: draft
+current: v0.1
+versions:
+  - version: v0.0
+    entry: ocr-gate-guide.html
+    note:
+    source: upload
+    created: 2026-10-22 19:25:08
+  - version: v0.1
+    entry: ocr-gate-guide.html
+    note: 텍스트 4곳 수정
+    source: text-edit
+    created: 2026-10-22 19:48:01
+notion_url:
+gdrive_url:

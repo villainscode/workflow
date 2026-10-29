@@ -7,9 +7,24 @@ menus:
       name: 코드 리뷰 자동화
     - slug: onboarding
       name: 온보딩
+    - slug: folder-6atldh
+      name: 소프트웨어버전관리
   agent: []
   image:
     - slug: git
       name: Git관련이미지
     - slug: svg
       name: SVG편집
+  markdown:
+    - slug: claude
+      name: Claude 기본 설정
+    - slug: folder-diqpxo
+      name: 투모로프로젝트
+      menus:
+        - slug: v1-0
+          name: 콘솔v1.0개발
+  project1: []
+  html: []
+  docs:
+    - slug: aws
+      name: AWS

@@ -1,0 +1,19 @@
+title: 02. 백엔드 패키지 구조
+category: markdown
+menu: v1-0
+kind: markdown
+status: draft
+current: v0.1
+versions:
+  - version: v0.0
+    entry: doc.md
+    note: 새 문서
+    source: upload
+    created: 2026-10-13
+  - version: v0.1
+    entry: doc.md
+    note:
+    source: edit
+    created: 2026-10-13
+notion_url:
+gdrive_url:

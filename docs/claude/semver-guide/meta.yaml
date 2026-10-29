@@ -1,0 +1,14 @@
+title: 소프트웨어 버전관리
+category: markdown
+menu: claude
+kind: markdown
+status: draft
+current: v0.0
+versions:
+  - version: v0.0
+    entry: semver-guide.md
+    note:
+    source: upload
+    created: 2026-10-16 17:20:40
+notion_url:
+gdrive_url:
