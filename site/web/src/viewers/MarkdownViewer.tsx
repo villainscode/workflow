@@ -9,6 +9,7 @@ import { clearDraft, loadDraft, saveDraft } from "../lib/draft.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { MarkdownEditor } from "./markdown-editor/MarkdownEditor.tsx";
 import type { EditorLayout, WikiLinkItem } from "./markdown-editor/types.ts";
+import { useCan } from "../lib/me.ts";
 
 /** scripts: HTML 문서의 스크립트 실행 여부. 외부에서 가져온 문서는 처음에 끈다(3.3, D-25) */
 export interface DocContext { menu: string; doc: string; version: string; isCurrent: boolean; scripts?: boolean }
@@ -46,6 +47,7 @@ function useWikiLinkSearch() {
 }
 
 function Editor({ original, file, ctx }: { original: string; file: VersionFile; ctx: DocContext }) {
+  const can = useCan();
   const qc = useQueryClient();
   // 업로드 대화상자의 "새 Markdown 문서"에서 넘어오면 편집 창을 열고 커서를 둔다
   const justCreated = !!(useLocation().state as { edit?: boolean } | null)?.edit && ctx.isCurrent;
@@ -65,7 +67,9 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
       : null);
   const wikiSearch = useWikiLinkSearch();
 
-  const dirty = text !== original;
+  // 방금 저장한 내용. 저장 직후 새 버전을 다시 불러오기 전까지도 "저장하지 않은 변경"·떠날 때 경고가 나오지 않게 한다
+  const [savedText, setSavedText] = useState<string | null>(null);
+  const dirty = text !== original && text !== savedText;
   const baseUrl = file.url.slice(0, file.url.lastIndexOf("/") + 1);
 
   // 작성 중인 내용을 임시 보관하고, 저장하지 않고 떠나려 하면 경고한다
@@ -94,6 +98,7 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
     try {
       const r = await saveMarkdown(ctx.menu, ctx.doc, { baseVersion: ctx.version, content: text, note });
       clearDraft(draftId);
+      setSavedText(text);
       lastSaved = { id: `${ctx.menu}/${ctx.doc}@${r.version}`, at: Date.now() };
       setMessage({ kind: "ok", text: `${versionLabel(r.version)} 버전으로 저장했습니다` });
       await qc.invalidateQueries({ queryKey: ["doc", ctx.menu, ctx.doc] });
@@ -135,7 +140,7 @@ function Editor({ original, file, ctx }: { original: string; file: VersionFile; 
   );
 
   return (
-    <MarkdownEditor value={text} onChange={setText} baseUrl={baseUrl} readOnly={!ctx.isCurrent}
+    <MarkdownEditor value={text} onChange={setText} baseUrl={baseUrl} readOnly={!ctx.isCurrent || !can.edit}
       layout={layout} onLayoutChange={setLayout} autoFocus={justCreated}
       toolbarEnd={saveForm} notice={notice} onWikiLinkSearch={wikiSearch} />
   );

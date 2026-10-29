@@ -50,7 +50,7 @@ describe("화면", { skip }, () => {
   before(async () => {
     srv = await startServer(ws);
     const webPort = await freePort();
-    vite = spawn(process.execPath, [join(SITE, "node_modules/vite/bin/vite.js")], {
+    vite = spawn(process.execPath, [join(SITE, "../node_modules/vite/bin/vite.js")], {
       cwd: SITE, env: { ...process.env, PORT: String(srv.port), WEB_PORT: String(webPort) }, stdio: "ignore",
     });
     WEB = `http://127.0.0.1:${webPort}`;

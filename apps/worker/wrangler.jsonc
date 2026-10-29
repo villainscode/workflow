@@ -1,0 +1,88 @@
+// 문서 탐색 워크플로우 앱 Worker. 계획·진행: REQUIREMENT-4.0.md, 배포 절차: README.md
+// 한 Worker가 앱(workflow.simplite.net)과 사용자 콘텐츠(workflow-files.simplite.net) 두 도메인을 받는다. 호스트로 나눈다(src/app.ts)
+// 맨 위 설정은 로컬(wrangler dev·테스트)용이다. 배포는 env.staging(workers.dev) · env.production(simplite.net)
+// 바인딩·vars는 환경마다 따로 적어야 한다(wrangler가 상속하지 않는다).
+// 비밀값(wrangler secret put --env …): SIGNING_KEY(콘텐츠 주소·내부 호출 서명), ADMIN_TOKEN(가져오기 API), GOOGLE_CLIENT_SECRET. 로컬은 .dev.vars
+{
+  "name": "workflow-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // API·콘텐츠·MCP·OAuth 경로는 정적 파일보다 Worker가 먼저 받는다
+    "run_worker_first": ["/api/*", "/c/*", "/i/*", "/mcp", "/mcp/*", "/authorize", "/oauth/*", "/.well-known/*"]
+  },
+  // 매일 새벽 3시(UTC 18시) 정리: 지난 세션·초대, 아무도 안 쓰는 blob(src/cleanup.ts)
+  "triggers": { "crons": ["0 18 * * *"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "workflow", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+  // 실시간 반영(src/live.ts)과 변환 컨테이너(src/convert.ts). 무료 요금제는 SQLite 백엔드 DO만 쓸 수 있다
+  "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Live"] }, { "tag": "v2", "new_sqlite_classes": ["Converter"] }],
+  // PPTX·DOCX·XLSX → PDF(LibreOffice, Workers Paid 전용). 이미지는 apps/converter
+  "containers": [{ "class_name": "Converter", "image": "../converter/Dockerfile", "max_instances": 2, "instance_type": "standard-1" }],
+  // 원격 MCP OAuth(클라이언트·코드·토큰)
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "00000000000000000000000000000000" }],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs" }],
+  // 요청 수 제한(src/app.ts): 로그인 IP당 분당 20, 쓰기 IP당 분당 120
+  "ratelimits": [
+    { "name": "LIMIT_AUTH", "namespace_id": "4001", "simple": { "limit": 20, "period": 60 } },
+    { "name": "LIMIT_WRITE", "namespace_id": "4002", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "vars": {
+    // 앱 주소(원격 MCP OAuth 자원 주소). 사용자 콘텐츠 도메인은 비워 두면 앱과 같은 출처의 /c/
+    "APP_ORIGIN": "http://127.0.0.1:8787",
+    "FILES_ORIGIN": "",
+    "GOOGLE_CLIENT_ID": "",
+    "SUPERADMIN_EMAILS": ""
+  },
+  "env": {
+    // 검증용. workers.dev 주소 하나라 콘텐츠도 같은 출처에서 준다(운영과 달리 도메인 분리 없음)
+    "staging": {
+      "name": "workflow-app-staging",
+      "workers_dev": true,
+      "d1_databases": [{ "binding": "DB", "database_name": "workflow-staging", "database_id": "REPLACE_STAGING_D1_ID", "migrations_dir": "migrations" }],
+      "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
+      "containers": [{ "class_name": "Converter", "image": "../converter/Dockerfile", "max_instances": 1, "instance_type": "standard-1" }],
+      "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_STAGING_KV_ID" }],
+      "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs-staging" }],
+      "ratelimits": [
+        { "name": "LIMIT_AUTH", "namespace_id": "4011", "simple": { "limit": 20, "period": 60 } },
+        { "name": "LIMIT_WRITE", "namespace_id": "4012", "simple": { "limit": 120, "period": 60 } }
+      ],
+      "vars": {
+        "APP_ORIGIN": "https://workflow-app-staging.REPLACE_SUBDOMAIN.workers.dev",
+        "FILES_ORIGIN": "",
+        "GOOGLE_CLIENT_ID": "REPLACE_GOOGLE_CLIENT_ID",
+        "SUPERADMIN_EMAILS": "REPLACE_SUPERADMIN_EMAILS"
+      }
+    },
+    "production": {
+      "name": "workflow-app",
+      "workers_dev": false,
+      // simplite.net 영역이 이 Cloudflare 계정에 있어야 한다. 두 주소 모두 Universal SSL(*.simplite.net 한 단계)로 덮인다
+      "routes": [
+        { "pattern": "workflow.simplite.net", "custom_domain": true },
+        { "pattern": "workflow-files.simplite.net", "custom_domain": true }
+      ],
+      "d1_databases": [{ "binding": "DB", "database_name": "workflow", "database_id": "REPLACE_PRODUCTION_D1_ID", "migrations_dir": "migrations" }],
+      "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
+      "containers": [{ "class_name": "Converter", "image": "../converter/Dockerfile", "max_instances": 2, "instance_type": "standard-1" }],
+      "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_PRODUCTION_KV_ID" }],
+      "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs" }],
+      "ratelimits": [
+        { "name": "LIMIT_AUTH", "namespace_id": "4021", "simple": { "limit": 20, "period": 60 } },
+        { "name": "LIMIT_WRITE", "namespace_id": "4022", "simple": { "limit": 120, "period": 60 } }
+      ],
+      "vars": {
+        "APP_ORIGIN": "https://workflow.simplite.net",
+        "FILES_ORIGIN": "https://workflow-files.simplite.net",
+        "GOOGLE_CLIENT_ID": "REPLACE_GOOGLE_CLIENT_ID",
+        "SUPERADMIN_EMAILS": "REPLACE_SUPERADMIN_EMAILS"
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@workflow/core",
+  "private": true,
+  "type": "module",
+  "description": "문서 탐색 워크플로우 공통 로직(런타임 무관): 텍스트 편집 어댑터, 버전 규칙, slug, 조각 참조, 검색 본문",
+  "exports": {
+    "./textedit": "./src/textedit/index.ts",
+    "./textedit/*": "./src/textedit/*.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": { "typecheck": "tsc" },
+  "dependencies": {
+    "@noble/hashes": "^2.0.0",
+    "fflate": "^0.8.3",
+    "htmlparser2": "^12.0.0",
+    "parse5": "^8.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

@@ -20,6 +20,8 @@ import { SegmentRefList } from "../viewers/SegmentRefList.tsx";
 import { parseSeg } from "../lib/seg.ts";
 import { manage } from "../lib/manage.ts";
 import { useAction } from "./manage/useAction.ts";
+import { useCan } from "../lib/me.ts";
+import { StatusBadge } from "./StatusBadge.tsx";
 
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|svg|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
@@ -31,6 +33,7 @@ export function DocView() {
   const [params, setParams] = useSearchParams();
   const { data, error, isLoading } = useDoc(menu, doc);
   const openUpload = useOpenUpload();
+  const can = useCan();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const confirm = useConfirm();
   // 프레젠테이션 모드: 문서 영역(stage)만 브라우저 전체 화면으로 띄운다. Esc로 나가도 이벤트로 상태를 맞춘다
@@ -87,7 +90,8 @@ export function DocView() {
   return (
     <div className="grid h-full grid-rows-[auto_auto_minmax(0,1fr)]">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
-        <DocTitle key={data.title} menu={menu} doc={doc} title={data.title} />
+        {can.edit ? <DocTitle key={data.title} menu={menu} doc={doc} title={data.title} />
+          : <h1 className="min-w-0 flex-1 text-[2em] leading-tight font-bold">{data.title}</h1>}
         {version.createdAt && (
           <span className="font-mono text-xs text-muted" data-tip={`${versionLabel(version.version)} 작성일`}>{version.createdAt}</span>
         )}
@@ -116,7 +120,7 @@ export function DocView() {
             ))}
           </select>
         )}
-        <ReleaseBadge doc={data} />
+        {can.edit ? <ReleaseBadge doc={data} /> : <StatusBadge status={data.status} />}
         <div className="flex items-center gap-0.5">
           {entry && (
             <IconButton icon={Download} label="다운로드" onClick={async () => {
@@ -132,8 +136,8 @@ export function DocView() {
               a.click();
             }} />
           )}
-          <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />
-          {entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+          {can.edit && <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />}
+          {can.edit && entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setTextEditing(true); }} />
           )}
@@ -143,7 +147,7 @@ export function DocView() {
           )}
           <IconButton icon={Presentation} label="프레젠테이션 (전체 화면)" disabled={!entry}
             onClick={() => void stage.current?.requestFullscreen()} />
-          <IconButton icon={Settings2} label="문서 관리" onClick={() => setSettingsOpen(true)} />
+          {can.edit && <IconButton icon={Settings2} label="문서 관리" onClick={() => setSettingsOpen(true)} />}
           {data.notionUrl && (
             <a className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-sunken hover:text-fg" href={data.notionUrl} target="_blank" rel="noreferrer" data-tip="Notion에서 열기">
               Notion <ExternalLink size={16} aria-hidden />

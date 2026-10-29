@@ -3,6 +3,7 @@ import { EmptyState } from "../components/EmptyState.tsx";
 import type { Segment } from "../lib/textedit.ts";
 import { SheetViewer } from "./SheetViewer.tsx";
 import { EditBar, useTextSession, type TextSession } from "./textedit/session.tsx";
+import { API } from "../lib/base.ts";
 
 /**
  * DOCX·PPTX 텍스트 편집(2.0, REQUIREMENT-2.0 2.3·2.4).
@@ -75,7 +76,7 @@ function usePreviewFile(menu: string, doc: string, version: string, s: TextSessi
       setLoading(true);
       try {
         const changes = [...s.changes].map(([id, text]) => ({ id, hash: s.segs.get(id)!.hash, text }));
-        const res = await fetch(`/api/docs/${menu}/${doc}/text-preview${toPdf ? "?to=pdf" : ""}`, {
+        const res = await fetch(`${API}/docs/${menu}/${doc}/text-preview${toPdf ? "?to=pdf" : ""}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseVersion: version, changes }),
         });
         if (res.ok && !cancelled) setBlob(await res.blob());

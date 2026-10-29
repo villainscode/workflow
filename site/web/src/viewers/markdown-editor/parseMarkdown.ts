@@ -18,6 +18,7 @@ import rehypeStringify from "rehype-stringify";
 import { deepmerge } from "deepmerge-ts";
 import type { Root, Element } from "hast";
 import { visit } from "unist-util-visit";
+import { BASENAME } from "../../lib/base.ts";
 
 const ABSOLUTE = /^([a-z][a-z0-9+.-]*:|\/|#)/i;
 
@@ -30,8 +31,10 @@ function rehypeResolveUrls() {
       const key = node.tagName === "img" ? "src" : node.tagName === "a" ? "href" : null;
       const value = key && node.properties?.[key];
       if (typeof value !== "string" || !value || ABSOLUTE.test(value)) return;
-      const url = new URL(value, "http://x" + baseUrl);
-      node.properties[key!] = url.pathname + url.search + url.hash;
+      // Cloudflare(4.0)는 파일 주소가 콘텐츠 도메인의 전체 주소(https://…/c/<토큰>/…)라 그대로 둔다
+      const full = /^https?:\/\//i.test(baseUrl);
+      const url = new URL(value, full ? baseUrl : "http://x" + baseUrl);
+      node.properties[key!] = full ? url.href : url.pathname + url.search + url.hash;
     });
   };
 }
@@ -41,7 +44,10 @@ function rehypeExternalLinks() {
   return (tree: Root) => {
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "a" || !node.properties) return;
-      if (String(node.properties.href ?? "").startsWith("#")) return;
+      const href = String(node.properties.href ?? "");
+      if (href.startsWith("#")) return;
+      // 사이트 문서 링크(/대분류/메뉴/문서, `[[`로 넣은 것)는 Cloudflare에서 워크스페이스 주소 아래로 연다. 문서에는 워크스페이스 없이 저장한다
+      if (BASENAME && /^\/(?!\/)/.test(href) && !href.startsWith(BASENAME + "/")) node.properties.href = BASENAME + href;
       node.properties.target = "_blank";
       node.properties.rel = ["noopener", "noreferrer"];
     });

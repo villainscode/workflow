@@ -55,5 +55,4 @@ export function commonRoot(files: UploadFile[]): string {
   return tops.size === 1 && !tops.has("") ? [...tops][0] + "/" : "";
 }
 
-export const slugify = (s: string) =>
-  s.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+export { slugify } from "@workflow/core/slug";

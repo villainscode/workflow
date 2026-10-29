@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, extname, join, normalize, relative, isAbsolute } from "node:path";
-import { unzipSync } from "fflate";
+import { dirname, extname, join, relative } from "node:path";
 import { loadSite, type MenuNode } from "./sitefiles.ts";
 import { docSlugsIn, findDocDir } from "./docpath.ts";
-import { adapterFor, EditError, type Change } from "./textedit/index.ts";
-import { wrapForEdit } from "./textedit/html.ts";
-import { wrapSvgForEdit } from "./textedit/svg.ts";
+import { adapterFor, EditError, type Change } from "@workflow/core/textedit";
+import { wrapForEdit } from "@workflow/core/textedit/html";
+import { wrapSvgForEdit } from "@workflow/core/textedit/svg";
+import { nextMajor, nextVersion, VERSION_RE } from "@workflow/core/versions";
+import { slugify as baseSlug } from "@workflow/core/slug";
+import { kindOf, normalizeFiles, nowStamp as coreNowStamp, pickEntry as corePickEntry, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
 import { Document, parseDocument, YAMLSeq } from "yaml";
 
 /** docs/에 파일과 yaml을 쓰는 작업. 원본(파일)을 먼저 쓰고, 색인은 호출한 쪽에서 다시 만든다. */
@@ -15,7 +17,7 @@ export class StoreError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-export interface IncomingFile { path: string; data: Uint8Array }
+export type { IncomingFile };
 
 /** 문서 폴더(하위 문서면 상위 문서 폴더 안). 없으면 404 */
 export function docDir(docsRoot: string, menu: string, doc: string): string {
@@ -39,65 +41,17 @@ export interface UploadInput {
   files: IncomingFile[];
 }
 
-const VERSION_RE = /^v(\d+)\.(\d+)$/;
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const KIND: Record<string, string> = {
-  html: "html", htm: "html", svg: "image", png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image",
-  pdf: "pdf", pptx: "pptx", docx: "docx", xlsx: "xlsx", csv: "xlsx", md: "markdown", drawio: "drawio",
-};
-
 /** 버전 작성 시각(로컬) yyyy-MM-dd HH:mm:ss. meta.yaml versions[].created에 쓴다(예전 버전은 날짜만 있다) */
-export function nowStamp(d = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
+export const nowStamp = (d = new Date()) => coreNowStamp(d);
 
-export const slugify = (s: string) =>
-  s.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "doc";
+export const slugify = (s: string) => baseSlug(s) || "doc";
 
-/** 다음 버전 번호. 처음 만들 때는 v0.0(화면에서는 draft), 그 뒤 수정마다 v0.1, v0.2 … */
-export function nextVersion(versions: string[]): string {
-  const nums = versions.map((v) => VERSION_RE.exec(v)).filter(Boolean).map((m) => [Number(m![1]), Number(m![2])]);
-  if (nums.length === 0) return "v0.0";
-  nums.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const [major, minor] = nums[nums.length - 1];
-  return `v${major}.${minor + 1}`;
-}
-
-/** 업로드 경로를 정리한다. 상위 폴더로 나가거나 숨김 파일이면 거부한다. */
-function safeRelPath(p: string): string | null {
-  const n = normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
-  if (!n || isAbsolute(n) || n.startsWith("..") || n.split("/").some((seg) => seg.startsWith("."))) return null;
-  return n;
-}
-
-/** zip 하나만 올리면 풀어서 쓴다. 폴더째 올리면 공통 최상위 폴더 이름은 뗀다. */
-function normalizeFiles(files: IncomingFile[]): IncomingFile[] {
-  let list = files;
-  if (list.length === 1 && extname(list[0].path).toLowerCase() === ".zip") {
-    const entries = unzipSync(list[0].data);
-    list = Object.entries(entries).filter(([p]) => !p.endsWith("/") && !p.startsWith("__MACOSX/"))
-      .map(([path, data]) => ({ path, data }));
-  }
-  const cleaned = list.flatMap((f) => {
-    const p = safeRelPath(f.path);
-    return p ? [{ path: p, data: f.data }] : [];
-  });
-  const tops = new Set(cleaned.map((f) => (f.path.includes("/") ? f.path.split("/")[0] : "")));
-  if (tops.size === 1 && !tops.has("")) {
-    const top = [...tops][0] + "/";
-    return cleaned.map((f) => ({ ...f, path: f.path.slice(top.length) }));
-  }
-  return cleaned;
-}
+export { nextMajor, nextVersion };
 
 function pickEntry(files: IncomingFile[], wanted?: string): string {
-  if (wanted) {
-    if (!files.some((f) => f.path === wanted)) throw new StoreError(400, `대표 파일 ${wanted}이(가) 업로드 목록에 없습니다`);
-    return wanted;
-  }
-  const byDepth = [...files].sort((a, b) => a.path.split("/").length - b.path.split("/").length);
-  return (byDepth.find((f) => /(^|\/)index\.html?$/i.test(f.path)) ?? byDepth.find((f) => /\.html?$/i.test(f.path)) ?? byDepth[0]).path;
+  const entry = corePickEntry(files.map((f) => f.path), wanted);
+  if (!entry) throw new StoreError(400, `대표 파일 ${wanted}이(가) 업로드 목록에 없습니다`);
+  return entry;
 }
 
 const sha = (d: Uint8Array) => createHash("sha256").update(d).digest("hex");
@@ -176,9 +130,8 @@ export function upload(docsRoot: string, input: UploadInput) {
     version, entry, note: input.note?.trim() || null, source: input.source ?? "upload", created: nowStamp(),
   };
   if (isNew) {
-    const ext = extname(entry).slice(1).toLowerCase();
     meta = new Document({
-      title: input.title!.trim(), category, menu: input.menu, kind: KIND[ext] ?? "code", status: "draft",
+      title: input.title!.trim(), category, menu: input.menu, kind: kindOf(entry), status: "draft",
       current: version, versions: [versionEntry], notion_url: null, gdrive_url: null,
       ...(input.origin ? { origin_url: input.origin } : {}),
     });
@@ -215,12 +168,6 @@ export function saveEdit(docsRoot: string, menu: string, doc: string,
     path: p, data: p === base.entry ? new TextEncoder().encode(input.content) : readFileSync(join(baseDir, p)),
   }));
   return upload(docsRoot, { menu, doc, entry: base.entry, note: input.note, version: input.version, source: "edit", files });
-}
-
-/** 다음 정식 버전 번호: 가장 높은 major + 1 (v0.x → v1.0, v1.2 → v2.0) */
-export function nextMajor(versions: string[]): string {
-  const majors = versions.map((v) => VERSION_RE.exec(v)).filter((m) => m !== null).map((m) => Number(m[1]));
-  return `v${(majors.length ? Math.max(...majors) : 0) + 1}.0`;
 }
 
 /**

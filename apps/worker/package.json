@@ -1,0 +1,32 @@
+{
+  "name": "@workflow/worker",
+  "private": true,
+  "type": "module",
+  "description": "문서 탐색 워크플로우 Cloudflare Worker(Hono API + 화면 정적 파일 + 사용자 콘텐츠)",
+  "scripts": {
+    "build:web": "cd ../../site && VITE_CLOUD=1 WEB_OUT=../../apps/worker/public vite build",
+    "dev": "npm run build:web && wrangler d1 migrations apply workflow --local && wrangler dev",
+    "deploy": "npm run build:web && wrangler deploy",
+    "typecheck": "wrangler types >/dev/null && tsc",
+    "test": "wrangler types >/dev/null && vitest run",
+    "test:ui": "node --import tsx --test test-ui/cloud.ui.test.ts"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
+    "@cloudflare/workers-oauth-provider": "^1.2.4",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@workflow/core": "*",
+    "@workflow/mcp-tools": "*",
+    "fflate": "^0.8.3",
+    "hono": "^4.13.14",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.9",
+    "@cloudflare/workers-types": "^5.20261028.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.154.0"
+  }
+}

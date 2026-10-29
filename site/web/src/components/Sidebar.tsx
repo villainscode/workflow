@@ -16,6 +16,7 @@ import { DeleteMenuDialog, MoveMenuDialog } from "./manage/MenuDialogs.tsx";
 import { TrashDialog } from "./manage/TrashDialog.tsx";
 import { contains } from "./manage/menuTree.ts";
 import { ContextMenu, type MenuEntry } from "./sidebar/ContextMenu.tsx";
+import { useCan } from "../lib/me.ts";
 
 /*
  * 좌측 폴더 트리(MarkFlow category-tree 방식). 폴더 = 메뉴(menus.yaml), 폴더 안에 하위 폴더와 문서, 문서 안에 하위 문서.
@@ -84,11 +85,14 @@ interface Ctx {
   editing: Editing;
   setEditing: (e: Editing) => void;
   submitName: (name: string) => Promise<unknown>;
+  /** 편집 권한(4.0 P4). 없으면(viewer) 끌어서 놓기·오른쪽 클릭·⋯ 메뉴를 쓰지 않는다 */
+  canEdit: boolean;
 }
 const TreeCtx = createContext<Ctx | null>(null);
 const useTreeCtx = () => useContext(TreeCtx)!;
 
 export function Sidebar({ category, warnings, onCollapse }: { category: Category; warnings: string[]; onCollapse: () => void }) {
+  const can = useCan();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const openUpload = useOpenUpload();
@@ -194,7 +198,7 @@ export function Sidebar({ category, warnings, onCollapse }: { category: Category
   }
 
   const ctx: Ctx = {
-    category, pathname, collapsed, toggle, drag, target, editing, setEditing,
+    category, pathname, collapsed, toggle, drag, target, editing, setEditing, canEdit: can.edit,
     startDrag(e, row) {
       e.stopPropagation();
       e.dataTransfer.effectAllowed = "move";
@@ -261,7 +265,7 @@ export function Sidebar({ category, warnings, onCollapse }: { category: Category
         { label: "아래로", icon: ArrowDown, disabled: i === siblings.length - 1, onSelect: () => reorder(i + 1) },
         { label: "다른 위치로 옮기기", icon: FolderInput, onSelect: () => setOpen({ kind: "move", menu: m }) },
         "separator",
-        { label: "폴더 삭제", icon: Trash2, danger: true, onSelect: () => setOpen({ kind: "delete", menu: m }) },
+        ...(can.own ? [{ label: "폴더 삭제", icon: Trash2, danger: true, onSelect: () => setOpen({ kind: "delete", menu: m }) } satisfies MenuEntry] : []),
       ];
     }
     const { menu: m, doc } = row;
@@ -311,7 +315,7 @@ export function Sidebar({ category, warnings, onCollapse }: { category: Category
         <div className="flex items-center justify-between px-2">
           <p className="font-mono text-[15px] tracking-widest text-muted uppercase">{category.name}</p>
           <div className="flex items-center gap-1">
-            <IconButton icon={FolderPlus} label="폴더 추가" size={19} className="p-1" onClick={() => setEditing({ kind: "new-folder", parent: null })} />
+            {can.edit && <IconButton icon={FolderPlus} label="폴더 추가" size={19} className="p-1" onClick={() => setEditing({ kind: "new-folder", parent: null })} />}
             <IconButton icon={PanelLeftClose} label="사이드바 접기" size={19} className="hidden p-1 md:inline-flex" onClick={onCollapse} />
           </div>
         </div>
@@ -373,13 +377,13 @@ function TreeRow({ rowKey, row, depth, draggable, className, children }: {
   return (
     <div
       data-row={rowKey}
-      draggable={draggable}
+      draggable={draggable && t.canEdit}
       onDragStart={(e) => t.startDrag(e, row)}
       onDragEnd={t.endDrag}
       onDragOver={(e) => t.dragOver(e, rowKey, row)}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) t.dragLeave(rowKey); }}
       onDrop={(e) => t.drop(e, rowKey, row)}
-      onContextMenu={(e) => { e.preventDefault(); t.openMenu(e.clientX, e.clientY, row); }}
+      onContextMenu={(e) => { if (!t.canEdit) return; e.preventDefault(); t.openMenu(e.clientX, e.clientY, row); }}
       className={`group relative flex items-center gap-1 rounded-md pr-1 ${zone === "inside" ? "bg-accent-soft outline-2 -outline-offset-2 outline-accent" : ""} ${dragging ? "opacity-40" : ""} ${className}`}
       style={{ paddingLeft: 4 + depth * 14 }}
     >
@@ -393,6 +397,7 @@ function TreeRow({ rowKey, row, depth, draggable, className, children }: {
 /** ⋯ 버튼. 마우스가 올라간 줄에서만 보이고(터치 화면은 늘), 키보드 포커스에도 보인다 */
 function MoreButton({ label, row }: { label: string; row: Row }) {
   const t = useTreeCtx();
+  if (!t.canEdit) return null;
   return (
     <IconButton icon={MoreHorizontal} label={label} size={16} className="p-0.5 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
       onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); t.openMenu(r.left, r.bottom + 4, row); }} />

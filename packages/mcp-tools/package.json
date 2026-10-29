@@ -1,0 +1,14 @@
+{
+  "name": "@workflow/mcp-tools",
+  "private": true,
+  "type": "module",
+  "description": "workflow-docs MCP 도구 정의(로컬 stdio 서버와 Cloudflare 원격 MCP가 함께 쓴다)",
+  "exports": { ".": "./src/tools.ts" },
+  "scripts": { "typecheck": "tsc" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@workflow/core": "*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": { "typescript": "^7.0.2" }
+}

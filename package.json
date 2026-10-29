@@ -1,0 +1,10 @@
+{
+  "name": "workflow",
+  "private": true,
+  "description": "문서 탐색 워크플로우 — SDLC 설계 문서 리포와 사이트(로컬 site/, Cloudflare apps/)",
+  "workspaces": ["packages/*", "apps/*", "site"],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
+  }
+}

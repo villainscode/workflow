@@ -24,7 +24,8 @@ export const Toolbar = memo(function Toolbar({ onAction, layout, onLayoutChange,
   onAction: (action: ToolbarAction) => void;
   layout: EditorLayout;
   onLayoutChange: (layout: EditorLayout) => void;
-  onSettingsClick: () => void;
+  /** 없으면 이미지 업로드 설정 버튼을 숨긴다(Cloudflare는 설정이 필요 없다) */
+  onSettingsClick?: () => void;
   onImageUploadClick: () => void;
   /** 이전 버전: 서식 버튼 없이 보기 방식만 */
   readOnly?: boolean;
@@ -60,7 +61,7 @@ export const Toolbar = memo(function Toolbar({ onAction, layout, onLayoutChange,
           {btn("인라인 수식 ($…$)", Sigma, { type: "math-inline" })}
           {btn("수식 블록 ($$…$$)", SquareSigma, { type: "math-block" })}
           <Sep />
-          <IconButton icon={Settings} label="이미지 업로드 설정" size={SIZE} onClick={onSettingsClick} />
+          {onSettingsClick && <IconButton icon={Settings} label="이미지 업로드 설정" size={SIZE} onClick={onSettingsClick} />}
           <Sep />
         </>
       )}

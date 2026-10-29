@@ -12,9 +12,9 @@ import { parse as parseYaml } from "yaml";
 import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
 import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
-import { mimeOf } from "./scan.ts";
+import { mimeOf } from "@workflow/core/mime";
 import { findDocDir } from "./docpath.ts";
-import type { Change } from "./textedit/index.ts";
+import type { Change } from "@workflow/core/textedit";
 import {
   addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc,
   trashDoc, updateCategory, updateDoc,

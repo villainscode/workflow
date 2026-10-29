@@ -7,6 +7,8 @@ import { PdfViewer } from "./PdfViewer.tsx";
 import { DocxViewer } from "./DocxViewer.tsx";
 import { SheetViewer } from "./SheetViewer.tsx";
 import { MarkdownViewer, type DocContext } from "./MarkdownViewer.tsx";
+import { DrawioViewer } from "./DrawioViewer.tsx";
+import { CLOUD } from "../lib/base.ts";
 
 const ext = (p: string) => p.slice(p.lastIndexOf(".") + 1).toLowerCase();
 const IMAGE = new Set(["svg", "png", "jpg", "jpeg", "gif", "webp"]);
@@ -21,7 +23,7 @@ export function Viewer({ file, ctx }: { file: VersionFile; ctx: DocContext }) {
   if (e === "md" || e === "markdown") return <MarkdownViewer file={file} src={src} ctx={ctx} />;
   if (e === "html" || e === "htm") return <HtmlViewer key={String(ctx.scripts ?? true)} url={src} scripts={ctx.scripts ?? true} />;
   if (IMAGE.has(e)) return <ImageViewer url={src} />;
-  if (e === "drawio") return <ImageViewer url={convertSrc(file, "svg")} />;
+  if (e === "drawio") return CLOUD ? <DrawioViewer url={src} /> : <ImageViewer url={convertSrc(file, "svg")} />;
   if (e === "pdf") return <PdfViewer url={src} />;
   if (SLIDES.has(e)) return <PdfViewer url={convertSrc(file, "pdf")} note="LibreOffice로 PDF로 변환해 보여줍니다. 처음 열 때는 변환에 몇 초 걸립니다." />;
   if (e === "docx" || e === "doc" || e === "odt") return <DocxViewer url={src} pdfUrl={convertSrc(file, "pdf")} />;

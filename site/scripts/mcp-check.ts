@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const client = new Client({ name: "mcp-check", version: "0.0.1" });
-await client.connect(new StdioClientTransport({ command: resolve(ROOT, "site/node_modules/.bin/tsx"), args: ["site/mcp/server.ts"], cwd: ROOT, stderr: "ignore" }));
+await client.connect(new StdioClientTransport({ command: resolve(ROOT, "node_modules/.bin/tsx"), args: ["site/mcp/server.ts"], cwd: ROOT, stderr: "ignore" }));
 
 const call = async (name: string, args: Record<string, unknown>) => {
   const r = (await client.callTool({ name, arguments: args })) as { content: { text: string }[]; isError?: boolean };

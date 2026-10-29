@@ -15,6 +15,7 @@ import { MarkdownPreview, type MarkdownPreviewHandle } from "../MarkdownPreview.
 import { Toolbar } from "./Toolbar.tsx";
 import { EditorPane } from "./EditorPane.tsx";
 import { UploadSettingsDialog, getSavedWorkerUrl } from "./UploadSettingsDialog.tsx";
+import { API, CLOUD } from "../../lib/base.ts";
 import { applyToolbarAction } from "./markdownActions.ts";
 import { countWords } from "./wordCount.ts";
 import { createCloudflareUploader } from "./cloudflareUploader.ts";
@@ -58,7 +59,8 @@ export function MarkdownEditor({
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
-  const [workerUrl, setWorkerUrl] = useState(getSavedWorkerUrl);
+  // Cloudflare(4.0)에서는 앱 API가 R2에 바로 올리므로 업로드 서버 설정이 필요 없다
+  const [workerUrl, setWorkerUrl] = useState(() => (CLOUD ? API : getSavedWorkerUrl()));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -101,7 +103,7 @@ export function MarkdownEditor({
     const range = insertAtCursor(view, `![올리는 중 ${file.name}…]()`);
     setUpload({ status: "uploading", fileName: file.name });
     try {
-      const url = await createCloudflareUploader(workerUrl)(file);
+      const url = await createCloudflareUploader(workerUrl, CLOUD ? "/images" : "/upload")(file);
       replaceRange(view, range.from, range.to, `![${file.name}](${url})`);
       setUpload({ status: "idle" });
     } catch (e) {
@@ -160,7 +162,7 @@ export function MarkdownEditor({
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadImage(f); e.target.value = ""; }} />
 
       <Toolbar onAction={handleAction} layout={layout} onLayoutChange={onLayoutChange} readOnly={readOnly}
-        onSettingsClick={openSettings} onImageUploadClick={onUploadClick} end={toolbarEnd} />
+        onSettingsClick={CLOUD ? undefined : openSettings} onImageUploadClick={onUploadClick} end={toolbarEnd} />
 
       <div>{notice}</div>
 

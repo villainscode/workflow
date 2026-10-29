@@ -8,7 +8,7 @@ SDLC(요구사항 → 설계 → 개발 → 리뷰 → 빌드·배포 → 운영
 | `site/` | 업무 문서 사이트(React + Vite 화면, Fastify API, SQLite 색인, workflow-docs MCP) |
 | `REQUIREMENT*.md` | 사이트 요구사항·결정 사항(D-n)·단계별 계획 |
 | `TESTING.md` | 테스트 케이스 목록 |
-| `CLAUDE.md` | 구조와 규칙 상세(Claude Code용 안내이자 개발 문서) |
+| `.claude/` | Claude Code 지침(`CLAUDE.md`), 규칙(`rules/`), 구조·개발 가이드(`guides/`) |
 
 ## 로컬에서 띄우기
 
@@ -24,8 +24,9 @@ SDLC(요구사항 → 설계 → 개발 → 리뷰 → 빌드·배포 → 운영
 
 ```bash
 git clone https://github.com/villainscode/workflow.git
-cd workflow/site
-npm install
+cd workflow
+npm install        # 루트에서 한 번(npm workspaces)
+cd site
 npm run dev
 ```
 
@@ -118,4 +119,4 @@ docs/
   _trash/                   # 휴지통
 ```
 
-원본은 파일(yaml과 버전 폴더)이고 git으로 추적합니다. 사이트에서 한 작업도 이 파일들에 그대로 기록되므로, 사이트에서 바꾼 뒤 커밋하면 됩니다. 상세 규칙은 [`CLAUDE.md`](CLAUDE.md)에 있습니다.
+원본은 파일(yaml과 버전 폴더)이고 git으로 추적합니다. 사이트에서 한 작업도 이 파일들에 그대로 기록되므로, 사이트에서 바꾼 뒤 커밋하면 됩니다. 상세 규칙은 [`.claude/rules/docs-workflow.md`](.claude/rules/docs-workflow.md), 구조는 [`.claude/guides/project-structure.md`](.claude/guides/project-structure.md)에 있습니다.

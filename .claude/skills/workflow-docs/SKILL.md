@@ -8,6 +8,7 @@ description: 업무 문서 사이트(localhost:8000)의 문서를 찾고, 텍스
 사이트 문서는 `docs/` 파일을 직접 고치지 말고 **workflow-docs MCP 도구**로 다룬다. 그래야 버전 규칙(새 버전으로 저장, 기존 버전 불변)과 충돌 검사가 지켜지고 열린 사이트 화면에 바로 반영된다.
 
 ## 먼저 확인
+- 연결은 두 가지다. 로컬 사이트는 리포의 `.mcp.json`(stdio, `cd site && npm run dev` 필요), Cloudflare 「문서 탐색 워크플로우」는 원격 MCP `https://workflow.simplite.net/mcp`(`claude mcp add --transport http workflow-docs https://workflow.simplite.net/mcp`, 처음에 브라우저로 로그인·워크스페이스 동의). 원격의 `upload_document`·`upload_version`은 파일 경로가 아니라 내용(`{path, content, encoding: "utf8"|"base64"}`)을 받으니, 로컬 파일은 읽어서 넘긴다(20MB까지).
 - 도구가 "사이트 서버에 연결할 수 없습니다"를 돌려주면 사용자에게 `cd site && npm run dev` 실행을 부탁한다.
 
 ## 문서 지정

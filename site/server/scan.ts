@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, extname } from "node:path";
+import { join, relative } from "node:path";
 import { parse } from "yaml";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { sql } from "drizzle-orm";
 import { topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { loadSite, type MenuNode } from "./sitefiles.ts";
 import { listDocDirs } from "./docpath.ts";
+import { mimeOf } from "@workflow/core/mime";
+import { isSearchable, searchText as coreSearchText } from "@workflow/core/search-text";
 
 interface MetaFile {
   title: string; category: string; menu: string; kind: string; type?: string; sdlc?: string;
@@ -14,17 +16,7 @@ interface MetaFile {
   versions: { version: string; entry: string; note?: string; source?: string; created?: string | Date }[];
 }
 
-const MIME: Record<string, string> = {
-  ".html": "text/html", ".htm": "text/html", ".md": "text/markdown", ".svg": "image/svg+xml",
-  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
-  ".pdf": "application/pdf",
-  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ".csv": "text/csv", ".json": "application/json", ".yaml": "text/yaml", ".yml": "text/yaml",
-  ".drawio": "application/vnd.jgraph.mxfile", ".mmd": "text/plain",
-};
-export const mimeOf = (p: string) => MIME[extname(p).toLowerCase()] ?? "text/plain";
+export { mimeOf };
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -34,21 +26,8 @@ function walk(dir: string): string[] {
   });
 }
 
-const TEXT_EXT = new Set([".md", ".markdown", ".html", ".htm", ".txt", ".yaml", ".yml", ".csv", ".json", ".mmd"]);
-
-/** 검색용 본문. HTML은 스크립트·스타일을 빼고 글자만 남긴다 */
-function searchText(path: string): string {
-  const ext = extname(path).toLowerCase();
-  if (!TEXT_EXT.has(ext)) return "";
-  const raw = readFileSync(path, "utf8");
-  if (ext !== ".html" && ext !== ".htm") return raw;
-  return raw
-    .replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+/** 검색용 본문(규칙은 core의 searchText) */
+const searchText = (path: string) => (isSearchable(path) ? coreSearchText(path, readFileSync(path, "utf8")) : "");
 
 const asDate = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : v == null ? null : String(v));
 

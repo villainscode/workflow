@@ -11,6 +11,8 @@ import { EmptyState } from "./EmptyState.tsx";
 import { SearchBox } from "./SearchBox.tsx";
 import { TopMenuBar } from "./header/TopMenuBar.tsx";
 import { SidebarResizer, useSidebarWidth } from "./SidebarResizer.tsx";
+import { UserMenu } from "./account/UserMenu.tsx";
+import { CLOUD, useCan } from "../lib/me.ts";
 
 export function Layout() {
   return (
@@ -29,6 +31,7 @@ function Shell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const sidebar = useSidebarWidth();
   const location = useLocation();
+  const can = useCan();
 
   // 문서를 고르면 좁은 화면의 서랍을 닫는다
   useEffect(() => setDrawerOpen(false), [location.pathname]);
@@ -46,7 +49,8 @@ function Shell() {
         </Link>
         <TopMenuBar categories={tree?.categories ?? []} />
         <SearchBox />
-        <IconButton icon={Upload} label="업로드" variant="primary" size={22} className="ml-auto p-2 sm:ml-2" onClick={() => openUpload({ category })} />
+        {can.edit && <IconButton icon={Upload} label="업로드" variant="primary" size={22} className="ml-auto p-2 sm:ml-2" onClick={() => openUpload({ category })} />}
+        {CLOUD && <UserMenu />}
       </header>
 
       {/* 넓은 화면: 사이드바 너비는 --sidebar-w(끌어서 조절). 좁은 화면: 고정 폭 서랍 */}
