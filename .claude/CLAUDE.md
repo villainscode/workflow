@@ -6,7 +6,7 @@
 
 SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루션을 만들기 위한 **설계 단계 문서(드래프트)**를 관리하는 워크 리포지토리다. 대상은 요구사항, 시퀀스 다이어그램, ERD, 시스템 아키텍처, 개발 도구, 코드 리뷰, 빌드·배포, 운영이고, 의사 결정 기록도 여기에 남긴다. 문서 안의 YAML·셸·워크플로 코드는 대상 팀 저장소에 적용할 예시이고, 이 리포에서 실행하는 코드가 아니다.
 
-리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트(`site/`)와, 이를 팀용 서비스로 옮긴 Cloudflare 앱 「문서 탐색 워크플로우」(`apps/worker`, `workflow.simplite.net`)를 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`(1.x), `REQUIREMENT-2.0.md`(2.0: HTML·DOCX·PPTX·XLSX 텍스트 편집), `REQUIREMENT-3.0.md`(3.0: Claude Code 직접 연결), `REQUIREMENT-4.0.md`(4.0: Cloudflare SaaS 전환 설계·단계 계획)에 있다.
+리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트(`site/`)와, 이를 팀용 서비스로 옮긴 Cloudflare 앱 「문서 탐색 워크플로우」(`apps/worker`, `workflow.simplite.net`)를 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `spec/REQUIREMENT.md`(1.x), `spec/REQUIREMENT-2.0.md`(2.0: HTML·DOCX·PPTX·XLSX 텍스트 편집), `spec/REQUIREMENT-3.0.md`(3.0: Claude Code 직접 연결), `spec/REQUIREMENT-4.0.md`(4.0: Cloudflare SaaS 전환 설계·단계 계획)에 있다.
 
 ## 작업 원칙
 
@@ -17,7 +17,7 @@ SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루�
 
 ## 규칙과 가이드
 
-규칙(`.claude/rules/`)은 자동으로 읽힌다. 경로 조건이 있는 규칙은 그 경로의 파일을 열 때 읽힌다. 가이드(`.claude/guides/`)는 해당 영역을 작업하기 전에 직접 읽는다.
+리포 구성과 기술 선택의 정본은 `spec/ARCHITECTURE.md`, 요구사항·결정은 `spec/REQUIREMENT*.md`, 테스트 케이스는 `spec/TESTING.md`다. 규칙(`.claude/rules/`)은 자동으로 읽힌다. 경로 조건이 있는 규칙은 그 경로의 파일을 열 때 읽힌다. 가이드(`.claude/guides/`)는 해당 영역을 작업하기 전에 직접 읽는다.
 
 | 규칙 | 적용 범위 | 내용 |
 |---|---|---|
@@ -25,16 +25,16 @@ SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루�
 | `rules/html-docs.md` | `docs/**/*.html` | HTML 문서 작성 체계, 렌더링 검증·export |
 | `rules/shared-decisions.md` | `docs/**` | 문서끼리 공유하는 결정(브랜치·스프린트·리뷰·게이트), 알려진 불일치 |
 | `rules/site-ui.md` | `site/web/**` | 확인 창, 아이콘·툴팁, 역할별 버튼, API 주소 |
-| `rules/testing.md` | `site/**`, `apps/**`, `packages/**` | TESTING.md 갱신, 재현 테스트, 범위별로 돌릴 테스트 |
+| `rules/testing.md` | `site/**`, `apps/**`, `packages/**` | spec/TESTING.md 갱신, 재현 테스트, 범위별로 돌릴 테스트 |
 | `rules/local-cloud-parity.md` | `site/server`, `site/mcp`, `apps/worker`, `packages` | 로컬·Cloudflare 규칙 맞추기, MCP 원칙, 배포 확인 |
+| `rules/review-lessons.md` | 항상 | 코드 리뷰 게이트에서 반복된 실수(자동 학습, 손으로 고치지 않는다) |
 
 | 가이드 | 읽을 때 |
 |---|---|
-| `guides/project-structure.md` | 리포 배치, `docs/` 구조·meta.yaml, 현재 문서 목록이 필요할 때 |
+| `guides/docs-structure.md` | `docs/` 폴더·meta.yaml 구조, 지금 있는 문서 목록이 필요할 때 |
 | `guides/site-local.md` | 로컬 사이트(`site/`) 서버·API·화면·편집기·MCP를 고칠 때 |
-| `guides/cloudflare-app.md` | Cloudflare 앱(`apps/`, `packages/`)을 고칠 때. 배포·백업은 `apps/worker/README.md` |
-| `guides/artifacts.md` | HTML·다이어그램·PDF·PPT 같은 산출물을 만들 때 |
-| `guides/eval-gate-draft.md` | 이밸 게이트·골든셋 문서를 새로 쓸 때(확정 전 이전 설계) |
+| `guides/cloudflare-app.md` | Cloudflare 앱(`apps/`, `packages/`)을 고칠 때(명령·작업 방법). 배포·백업은 `apps/worker/README.md` |
+| `guides/doc-authoring.md` | HTML·다이어그램·PDF·PPT 같은 산출물을 만들 때, 이밸 게이트·골든셋 문서를 새로 쓸 때(확정 전 이전 설계) |
 
 ---
 

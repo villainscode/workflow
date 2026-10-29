@@ -1,16 +1,8 @@
 # 문서 탐색 워크플로우 — Cloudflare 앱 (`apps/worker`)
 
-업무 문서 사이트(`site/`)를 Cloudflare 위 팀용 서비스로 옮긴 것. 설계·단계 결과는 루트 `REQUIREMENT-4.0.md`, 테스트 케이스는 `TESTING.md` 2.7절.
+업무 문서 사이트(`site/`)를 Cloudflare 위 팀용 서비스로 옮긴 것. 설계·단계 결과는 `spec/REQUIREMENT-4.0.md`, 테스트 케이스는 `spec/TESTING.md` 2.7절.
 
-| 부분 | 위치 | Cloudflare |
-|---|---|---|
-| 화면 | `site/web`(같은 코드, `VITE_CLOUD=1` 빌드) | Workers Static Assets |
-| API·로그인·권한 | `src/app.ts`, `src/auth.ts`, `src/members.ts` | Worker(Hono) + D1 |
-| 문서 파일 | `src/write.ts`, `src/content.ts` | R2(내용 주소) + 콘텐츠 도메인 |
-| 실시간 | `src/live.ts` | Durable Object(WebSocket) |
-| PDF 변환 | `src/convert.ts`, `../converter` | Containers(LibreOffice) |
-| 원격 MCP | `src/mcp.ts`, `src/consent.ts` | OAuthProvider + KV |
-| 정리 | `src/cleanup.ts` | Cron Trigger(매일) |
+구성·파일별 역할·기술 선택은 `spec/ARCHITECTURE.md`. 이 문서는 띄우기·배포·백업 절차만 다룬다.
 
 ## 로컬에서 띄우기
 

@@ -30,6 +30,8 @@ jobs:
           npm run typecheck -w @workflow/mcp-tools
           npm run typecheck -w @workflow/worker
           npm run typecheck -w @workflow/cli
+      - name: 공통 로직 테스트(구조 편집)
+        run: npm test -w @workflow/core
       - name: 로컬 사이트 테스트(단위·API·MCP)
         run: npm test -w site
       - name: Worker 테스트(Workers 런타임)

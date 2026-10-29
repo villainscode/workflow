@@ -1,4 +1,4 @@
-// 문서 탐색 워크플로우 앱 Worker. 계획·진행: REQUIREMENT-4.0.md, 배포 절차: README.md
+// 문서 탐색 워크플로우 앱 Worker. 계획·진행: spec/REQUIREMENT-4.0.md, 배포 절차: README.md
 // 한 Worker가 앱(workflow.simplite.net)과 사용자 콘텐츠(workflow-files.simplite.net) 두 도메인을 받는다. 호스트로 나눈다(src/app.ts)
 // 맨 위 설정은 로컬(wrangler dev·테스트)용이다. 배포는 env.staging(workers.dev) · env.production(simplite.net)
 // 바인딩·vars는 환경마다 따로 적어야 한다(wrangler가 상속하지 않는다).

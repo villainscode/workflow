@@ -12,11 +12,15 @@ import {
   addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc, trashDoc,
   updateCategory, updateDoc,
 } from "./manage.ts";
-import { docDetail, docPath, tree, workspaceBySlug } from "./repo.ts";
+import { docDetail, docPath, findDoc, tree, workspaceBySlug } from "./repo.ts";
 import { search } from "./search.ts";
 import { sha256Hex } from "./blobs.ts";
 import { toPdf } from "./convert.ts";
 import { exportWorkspace } from "./export.ts";
+import { getRevision, listRevisions, publish, restoreRevision, saveRevision, workState } from "./revisions.ts";
+import { assetRow, putAsset } from "./assets.ts";
+import { applyStructOps, readStructure, structEditView, type StructOp } from "./structedit.ts";
+import { StructEditError } from "@workflow/core/structedit/html";
 import { agentOf, liveStub, reasonOf } from "./live.ts";
 
 import { contentToken } from "./token.ts";
@@ -30,7 +34,7 @@ import { editView, previewTextEdit, readSegments, release, saveEdit, saveTextEdi
 export const app = new Hono<AppEnv>();
 
 app.onError((err, c) => {
-  if (err instanceof HttpError) return c.json({ error: err.message }, err.status as 400);
+  if (err instanceof HttpError || err instanceof StructEditError) return c.json({ error: err.message }, err.status as 400);
   console.error(err);
   return c.json({ error: err.message }, 500);
 });
@@ -149,7 +153,7 @@ async function afterChange(c: Context<AppEnv>, reason: string, sub: string) {
   const segs = reason === "text-edit" ? ((await c.req.json<{ changes?: { id: number }[] }>().catch(() => ({}) as { changes?: { id: number }[] })).changes ?? []).map((x) => x.id) : undefined;
   const event = {
     type: "changed", reason, by: agentOf(c), category: (body.category as string | undefined) ?? info?.category, menu, doc, title: info?.title,
-    version: body.version as string | undefined, segs,
+    version: body.version as string | undefined, rev: body.rev as number | undefined, segs,
   };
   await Promise.all([
     liveStub(c.env, c.var.ws.id).broadcast(event),
@@ -173,6 +177,92 @@ ws.post("/focus", async (c) => {
   if (seg && !/^[\d,-]+$/.test(seg)) throw new HttpError(400, "seg는 12, 12-15, 3,10-12 형식입니다");
   const clients = await liveStub(c.env, c.var.ws.id).broadcast({ type: "focus", by: agentOf(c), category: info.category, menu, doc, title: info.title, version, seg });
   return c.json({ clients });
+});
+
+// ---------- 수정본(5.0 M1): 작업본 열기·저장·이력·되돌리기·버전으로 올리기 ----------
+/** 작업본 주소: 수정본이면 /r<번호>/, 아니면 버전 폴더 */
+async function workFileUrl(c: Context<AppEnv>, doc: { id: number; parent_id: number | null; slug: string; menu_slug: string }, folder: string) {
+  const base = await contentBase(c);
+  const dir = await docPath(c.env.DB, doc, doc.menu_slug);
+  return (path: string) => `${base}/${encPath(dir)}/${folder}/${encPath(path)}`;
+}
+
+ws.get("/docs/:menu/:doc/work", async (c) => {
+  const doc = await findDoc(c.env.DB, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
+  const st = await workState(c.env, c.var.ws, doc);
+  const url = await workFileUrl(c, doc, st.fromRevision ? `r${st.rev}` : st.baseVersion);
+  return c.json({ baseVersion: st.baseVersion, rev: st.rev, fromRevision: st.fromRevision, entry: st.manifest.entry,
+    files: st.manifest.files.map((f) => ({ ...f, url: url(f.path) })) });
+});
+
+/** 저장: { baseRev, put: [{ path, text | base64 }], remove?, entry?, summary? } 또는 구조 편집 { baseRev, ops, summary? } → 새 수정본 */
+ws.post("/docs/:menu/:doc/revisions", async (c) => {
+  const b = await c.req.json<{ baseRev: number; put?: { path: string; text?: string; base64?: string }[]; remove?: string[]; entry?: string; summary?: string; ops?: StructOp[] }>();
+  if (typeof b.baseRev !== "number") throw new HttpError(400, "baseRev가 필요합니다");
+  if (b.ops !== undefined) {
+    if (b.put || b.remove || b.entry) throw new HttpError(400, "ops와 파일 교체(put·remove·entry)는 함께 보낼 수 없습니다");
+    return c.json(await applyStructOps(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), {
+      baseRev: b.baseRev, ops: b.ops, summary: b.summary, source: agentOf(c) ? "agent" : "human",
+    }));
+  }
+  const put = (b.put ?? []).map((f) => ({
+    path: f.path,
+    data: f.base64 !== undefined ? Uint8Array.from(atob(f.base64), (ch) => ch.charCodeAt(0)) : new TextEncoder().encode(f.text ?? ""),
+  }));
+  return c.json(await saveRevision(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), {
+    baseRev: b.baseRev, put, remove: b.remove, entry: b.entry, summary: b.summary, source: agentOf(c) ? "agent" : "human",
+  }));
+});
+
+// 구조 편집(5.0 M3·M5): 작업본의 표·그림·블록 목록, HTML 편집 사본(data-eid, 스크립트 없이 sandbox="allow-same-origin"으로 연다)
+ws.get("/docs/:menu/:doc/work/structure", async (c) =>
+  c.json(await readStructure(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"))));
+ws.get("/docs/:menu/:doc/work/edit-view", async (c) => {
+  const view = await structEditView(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"),
+    async (doc, folder, dir) => (await workFileUrl(c, doc, folder))(dir));
+  return c.body(view.body, 200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-workflow-rev": String(view.rev),
+    "content-security-policy": "sandbox allow-same-origin" });
+});
+
+// 작업본 미리보기 PDF(PPTX 구조 편집 화면). 변환 결과는 내용(sha)으로 캐시된다
+ws.get("/docs/:menu/:doc/work/pdf", async (c) => {
+  const doc = await findDoc(c.env.DB, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
+  const st = await workState(c.env, c.var.ws, doc);
+  const f = st.manifest.files.find((x) => x.path === st.manifest.entry)!;
+  const pdf = await toPdf(c.env, c.var.ws.id, null, f.path.slice(f.path.lastIndexOf(".")), f.sha256);
+  return new Response(pdf, { headers: { "content-type": "application/pdf", "cache-control": "no-store" } });
+});
+
+ws.get("/docs/:menu/:doc/revisions", async (c) => {
+  const before = c.req.query("before");
+  return c.json(await listRevisions(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), before ? Number(before) : undefined));
+});
+
+ws.get("/docs/:menu/:doc/revisions/:rev", async (c) => {
+  const r = await getRevision(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), Number(c.req.param("rev")));
+  const url = await workFileUrl(c, r.doc, `r${r.rev}`);
+  return c.json({ rev: r.rev, baseVersion: r.baseVersion, source: r.source, summary: r.summary, createdAt: r.createdAt, entry: r.manifest.entry,
+    files: r.manifest.files.map((f) => ({ ...f, url: url(f.path) })) });
+});
+
+ws.post("/docs/:menu/:doc/revisions/:rev/restore", async (c) => {
+  const { baseRev } = await c.req.json<{ baseRev: number }>();
+  return c.json(await restoreRevision(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), Number(c.req.param("rev")), baseRev));
+});
+
+ws.post("/docs/:menu/:doc/publish", async (c) =>
+  c.json(await publish(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), await c.req.json())));
+
+// ---------- 편집기 이미지 자산(5.0 M1) ----------
+ws.post("/assets", async (c) => {
+  const file = (await c.req.formData()).get("file");
+  if (!file || typeof file === "string") throw new HttpError(400, "file 필드가 없습니다");
+  return c.json(await putAsset(c.env, c.var.ws, c.var.user, file));
+});
+ws.get("/assets/:sha/url", async (c) => {
+  const a = await assetRow(c.env.DB, c.var.ws.id, c.req.param("sha"));
+  if (!a) throw new HttpError(404, "없는 이미지입니다");
+  return c.json({ url: `${await contentBase(c)}/_asset/${a.sha256}`, width: a.width, height: a.height, mime: a.mime });
 });
 
 /** 워크스페이스 내보내기(owner): docs/ 모양 zip. 가져오기 CLI로 다시 넣을 수 있다 */
@@ -270,6 +360,8 @@ ws.get("/docs/:menu/:doc/edit-view", async (c) => {
   });
   return c.body(view.body, 200, {
     "content-type": view.type === "svg" ? "image/svg+xml; charset=utf-8" : "text/html; charset=utf-8", "cache-control": "no-store",
+    // 앱 출처라 주소를 직접 열어도 문서 스크립트가 돌지 않게 한다(화면은 같은 출처로 DOM을 고쳐야 해서 allow-same-origin만)
+    "content-security-policy": "sandbox allow-same-origin",
   });
 });
 

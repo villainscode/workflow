@@ -8,7 +8,10 @@
     "./textedit/*": "./src/textedit/*.ts",
     "./*": "./src/*.ts"
   },
-  "scripts": { "typecheck": "tsc" },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
   "dependencies": {
     "@noble/hashes": "^2.0.0",
     "fflate": "^0.8.3",

@@ -9,6 +9,17 @@ export class Converter extends Container {
   defaultPort = 8080;
   sleepAfter = "5m";
   enableInternet = false;
+
+  // 이 계정은 컨테이너를 scheduling_policy durable_object + images 형식(wrangler.jsonc)으로만 만들 수 있고, 그 형식에서는
+  // start()에 이미지 이름이 있어야 한다. @cloudflare/containers(0.3.7)는 넘기지 않으므로 images.base를 넣어 준다
+  constructor(ctx: DurableObjectState<{}>, env: Cloudflare.Env) {
+    super(ctx, env);
+    const c = ctx.container;
+    if (c) {
+      const start = c.start.bind(c);
+      c.start = (o) => start({ ...o, image: c.images.base } as ContainerStartupOptions);
+    }
+  }
 }
 
 const OFFICE = /\.(pptx?|docx?|odt|odp|xlsx?|ods)$/i;

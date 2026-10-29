@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.6 (2026-10-28). 로컬 사이트: 자동 케이스 153개(실제 테스트 201건: `npm test` 167건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 46건 + Cloudflare 화면 테스트 10건(2.7절), 모두 통과. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.6 (2026-10-28). 로컬 사이트: 자동 케이스 153개(실제 테스트 201건: `npm test` 167건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 59건 + Cloudflare 화면 테스트 12건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집 `npm test -w @workflow/core` 14건 통과). Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -301,11 +301,47 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-08 | 실시간: 다른 곳에서 문서를 올리면 열린 화면 사이드바에 새로 고치지 않아도 나타나고, focus는 열린 화면을 그 문서로 옮긴다 | 4.0 5.6 |
 | TC-CFUI-09 | 콘텐츠 도메인이 따로일 때 Markdown은 fetch(CORS)로 읽혀 그려지고, PPTX는 변환 컨테이너 PDF(200, application/pdf), draw.io는 draw.io 뷰어(viewer.diagrams.net, `#R` 조각)로 열린다 | 4.0 P7 |
 | TC-CFUI-10 | 내보내기 → 가져오기 왕복: 내보낸 zip을 풀어 가져오기 CLI로 새 워크스페이스에 넣으면 트리와 모든 문서의 버전·메모·작성 시각·파일 sha256이 같다. `/`는 마지막에 쓴 워크스페이스로 간다 | 4.0 P8 |
+| TC-CFUI-11 | 구조 편집(HTML): 문단 뒤에 표 넣기 → 칸을 골라 행 넣기 → 되돌리기 → 글자 두 번 눌러 고치기 → 버전으로 저장(source revision). 편집 사본에서 문서 스크립트가 돌지 않고, 저장본에는 스크립트가 원본 그대로 | 5.0 M2·M3 |
+| TC-CFUI-12 | 구조 편집(PPTX): 표 끝에 행 넣기 → 수정본, 미리보기는 작업본 PDF(`…/work/pdf`, 변환 컨테이너), 버전으로 저장 | 5.0 M5 |
 | TC-CFUI-01 | `/`는 워크스페이스로, HTML 문서는 콘텐츠 주소 sandbox iframe(allow-same-origin 없음)으로 열리고 상대 경로 CSS까지 읽힘 | 4.0 5.5 |
 | TC-CFUI-02 | HTML 텍스트 편집 저장 → text-edit 새 버전 | 2.0 |
 | TC-CFUI-03 | 새 Markdown 문서 → 편집기에서 이미지 올리기(설정 창 없음, 앱 API → R2) → 저장하면 새 버전, 이미지 주소가 열림 | D-32 |
 | TC-CFUI-04 | 사이드바 폴더 추가(한글 이름, slug 자동) → 문서 휴지통 → 휴지통 창에서 복원 → 폴더 삭제(이름 입력) | D-13, D-35 |
 | TC-CFUI-05 | 검색창으로 본문 찾기, 상태 배지로 v1.0 확정 | |
+
+### 2.8 5.0 문서 편집기 (`apps/worker/test/revisions.test.ts`, `packages/core/test/structedit-*.test.ts`)
+
+계획은 `spec/REQUIREMENT-5.0.md`. 마일스톤마다 케이스를 더한다.
+
+| ID | 확인 내용 | 근거 |
+|---|---|---|
+| TC-ED-01 | 작업본 열기: 수정본이 없으면 지금 버전 파일(rev 0) | 5.0 5.1 |
+| TC-ED-02 | 저장하면 수정본(rev 1), 안 바꾼 파일은 같은 blob, 작업본 주소 `/r1/`에서 HTML 상대 경로가 풀리고, 버전은 그대로 | 5.0 5.2 |
+| TC-ED-03 | 기준 rev가 다르면 409, 바뀐 것 없으면 수정본을 만들지 않음, 잘못된 경로·없는 대표 파일 400 | 5.0 5.2 |
+| TC-ED-04 | 이력: 최신 먼저, 작성자·출처(human·agent)·메모, 작업본 rev, 예전 수정본 파일 읽기 | 5.0 5.1 |
+| TC-ED-05 | 되돌리기: 예전 수정본 내용으로 새 수정본, 과거는 남음, 기준이 다르면 409, rev 0은 작업본의 기준 버전 파일 | 5.0 5.1 |
+| TC-ED-06 | 버전으로 올리기: R2 복사 없이 새 버전(source revision), 이력에 올린 버전, 같은 내용이면 409, 다른 곳에서 새 버전이 생기면 작업본이 그 버전에서 다시 시작(rev 번호 이어짐) | 5.0 5.1 |
+| TC-ED-07 | viewer는 저장·올리기 403·읽기만, 저장하면 활동 기록 `revision` | 4.0 5.9 |
+| TC-ED-08 | 이미지 자산: PNG → `asset:<sha>`·가로·세로, 같은 이미지는 한 번, 서명 주소로 받음, SVG·이미지 아님 400 | 5.0 4.1·5.4 |
+| TC-ED-09 | 매일 정리: 30일 지난 수정본 삭제(작업본·버전으로 올린 것은 남김), 남은 수정본·자산의 blob은 남김 | D-50 |
+| TC-ED-10 | 수정본 있는 문서 영구 삭제: 그 문서만 쓰던 blob은 지우고, 다른 문서 수정본이 쓰는 blob은 남김 | 5.0 5.2 |
+| TC-ED-11 | HTML 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 `data-eid`만 더한다 (`packages/core/test/structedit-html.test.ts`) | 5.0 4.1 |
+| TC-ED-12 | HTML 표 행 넣기·빼기: 본문 행을 본떠 빈 칸, 넣고 빼면 원본 바이트와 같다 | 5.0 4.1 |
+| TC-ED-13 | HTML 표 열 넣기·빼기와 열 너비: 넣고 빼면 원본과 같고, 너비는 colgroup %(합 100)로만 쓴다 | 5.0 4.1 |
+| TC-ED-14 | HTML 글자 바꾸기: 인라인 마크만 남기고(script·위험한 링크 제거), 블록이 든 요소는 거부 | 5.0 4.1 |
+| TC-ED-15 | HTML 넣기: 표(문서의 표 class를 따름)·그림·문단·제목, 그림 주소는 상대 경로·https만 | 5.0 4.1 |
+| TC-ED-16 | HTML 지우기·옮기기·그림 바꾸기·너비: 바뀐 곳 밖은 그대로, 자기 안으로 옮기기·행 직접 지우기는 거부 | 5.0 4.1 |
+| TC-ED-17 | HTML 병합 칸이 있는 표는 행·열 편집을 거부하고 열 너비만 허용 | 5.0 4.1 |
+| TC-ED-18 | 리포 실제 HTML 문서: 모든 표에서 행·열 넣고 빼기 왕복이 원본과 같고, 열 너비를 바꿔도 그 표 밖 바이트는 그대로 | 5.0 4.1 |
+| TC-ED-19 | OOXML 구조 목록: DOCX 표·그림, PPTX 슬라이드 발표 순서, XLSX 시트 열 너비 (`packages/core/test/structedit-ooxml.test.ts`) | D-47 |
+| TC-ED-20 | DOCX 표 행·열 넣기·빼기·열 너비: 표 전체 너비·칸 서식(tcW·테두리) 유지, 다른 파트 바이트 동일 | D-47 |
+| TC-ED-21 | PPTX 표 행·열: 행을 넣고 빼면 표 틀 높이(cy)가 같이 바뀌고, 새 칸은 txBody를 가진다 | D-47 |
+| TC-ED-22 | 그림 교체: 같은 형식은 미디어만, 다른 형식은 새 파트·관계·Content_Types, 여러 그림이 함께 쓰는 미디어는 고친 그림만 새 파트, 가로 유지·세로는 비율 | D-47 |
+| TC-ED-23 | XLSX 열 너비: 범위 `<col>`을 나눠 그 열만 바꾸고, `<cols>`가 없으면 sheetData 앞에 만든다 | D-47 |
+| TC-ED-24 | OOXML 거부: 병합 칸 표의 행·열(너비는 허용), 마지막 행 빼기, 없는 표 409, 형식 밖 연산·이미지 아님 400, 빈 연산은 원본 그대로 | D-47 |
+| TC-ED-25 | 구조 편집 API: HTML 구조 목록(`GET …/work/structure`), 편집 사본(`…/work/edit-view`: data-eid, 작업본 `<base>`, CSP `sandbox allow-same-origin`, 2.0 편집 사본도 같은 CSP), 연산 저장(`POST …/revisions {ops}`)은 수정본 하나·메모 자동 (`apps/worker/test/structedit.test.ts`) | 5.0 5.4 |
+| TC-ED-26 | HTML 그림 `asset:<sha>` → 대표 파일 옆 `assets/`에 연결·상대 경로, 에이전트 출처, 없는 자산 400·기준 rev 다름 409·없는 요소 409·빈 ops 400·ops와 put 같이 400, Markdown은 400 | 5.0 5.4 |
+| TC-ED-27 | PPTX 구조 목록, 표 행 넣기·그림 교체(asset)를 한 수정본으로, 버전으로 올리면 새 버전 파일에 행·틀 높이·Content_Types 반영, 마지막 행 빼기 400 | D-47 |
 
 ## 3. 수동 확인 케이스
 
@@ -355,3 +391,5 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-14 | 상단 업로드 창의 새 문서 만들기·대분류 추가에서 Enter를 치면 만들어지기도 하고 안 되기도 함 | 확인 창의 `showModal()`이 첫 버튼("취소")에 바로 포커스를 준다. 60ms 뒤 확인 버튼으로 옮기기 전에 한글 입력기의 두 번째 Enter가 오면 "취소"가 눌림. 입력 속도에 따라 결과가 달라짐 | 확인 창(`ConfirmProvider.tsx`)이 처음엔 창 자체에 포커스를 두고 60ms 전의 Enter·Space는 버림. 폼(업로드·대분류 추가·폴더 옮기기·폴더 삭제·문서 관리)은 조합 중 Enter로 제출되지 않게 함(`lib/ime.ts`) | TC-UI-33·34 (수정 전 코드에서 실패 확인) |
 | 2026-10-29 | (Cloudflare) 콘텐츠 도메인을 앱과 나누면 Markdown·코드·표·DOCX 문서가 열리지 않을 것 | 화면이 글자 파일을 `fetch`로 읽는데 콘텐츠 도메인 응답에 CORS 허용이 없었다. 같은 출처로 띄운 테스트에서는 드러나지 않았다 | 콘텐츠 응답에 앱 출처(APP_ORIGIN)만 `Access-Control-Allow-Origin`. 화면 테스트를 운영처럼 출처를 나눠 띄움 | TC-CF-07, TC-CFUI-09 |
 | 2026-10-29 | Markdown 저장 직후 다른 문서로 가면 가끔 "저장하지 않은 변경" 경고로 이동이 막힘 | 저장 뒤 새 버전을 다시 불러올 때까지 편집 내용이 원본과 달라 `dirty`가 참으로 남았다(네트워크가 느릴수록 잘 생김) | 방금 저장한 내용(`savedText`)은 변경으로 보지 않음(`MarkdownViewer.tsx`) | TC-CFUI-03 → 04 연속 실행(수정 전 4번 중 2번 실패, 수정 후 4번 모두 통과) |
+| 2026-10-29 | (Cloudflare) PPTX·DOCX를 PDF로 바꾸지 못함(`Container failed to start`) | 이 계정은 컨테이너를 `scheduling_policy: durable_object` + `images` 형식으로만 만들 수 있어 배포 때 설정을 바꿨는데, 그 형식에서는 `start()`에 이미지 이름이 있어야 한다. `@cloudflare/containers` 0.3.7은 넘기지 않는다(로그: `Container.start() requires an image or container snapshot`) | `Converter`가 `ctx.container.start`에 `images.base`를 넣는다(`apps/worker/src/convert.ts`) | TC-CFUI-09 (수정 전 실패 확인), TC-CFUI-12 |
+| 2026-10-29 | 구조 편집에서 문단을 두 번 눌러도 글자 편집이 켜지지 않을 때가 있음 | 글자를 고칠 수 있는 요소 표시(`data-editable`)를 렌더 뒤 effect에서 칠해서, 편집 사본이 아직 다 읽히기 전이면 빠졌다 | 사본의 `load`에서 칠함(`HtmlStructPane.tsx`) | TC-CFUI-11 |

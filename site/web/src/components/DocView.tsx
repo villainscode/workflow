@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FilePlus2, Link2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Download, ExternalLink, FilePlus2, LayoutPanelTop, Link2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -20,8 +20,12 @@ import { SegmentRefList } from "../viewers/SegmentRefList.tsx";
 import { parseSeg } from "../lib/seg.ts";
 import { manage } from "../lib/manage.ts";
 import { useAction } from "./manage/useAction.ts";
-import { useCan } from "../lib/me.ts";
+import { CLOUD, useCan } from "../lib/me.ts";
+import { STRUCT_EDITABLE } from "../lib/structedit.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
+
+// 구조 편집(5.0, Cloudflare 전용). 보기 화면에는 싣지 않는다
+const StructEditor = lazy(() => import("../viewers/structedit/StructEditor.tsx").then((m) => ({ default: m.StructEditor })));
 
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|svg|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
@@ -44,7 +48,9 @@ export function DocView() {
   const [savedNotice, setSavedNotice] = useState("");
   // 참조 복사 모드(3.2): 글자를 눌러 참조 주소를 복사한다
   const [refCopy, setRefCopy] = useState(false);
-  useEffect(() => { setTextEditing(false); setRefCopy(false); }, [menu, doc]);
+  // 구조 편집(5.0): 표·그림·블록을 고쳐 수정본으로 자동 저장하고, 버전으로 저장하면 새 버전
+  const [structEditing, setStructEditing] = useState(false);
+  useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); }, [menu, doc]);
   useEffect(() => {
     if (!savedNotice) return;
     const t = setTimeout(() => setSavedNotice(""), 5000);
@@ -80,6 +86,10 @@ export function DocView() {
       setParam("v", null);
       setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다${warnings?.length ? ` · 주의: ${warnings.join(" · ")}` : ""}`);
     }
+  };
+  const onStructExit = (saved?: string) => {
+    setStructEditing(false);
+    if (saved) { setParam("v", null); setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다`); }
   };
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
@@ -138,10 +148,14 @@ export function DocView() {
           )}
           {can.edit && <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />}
           {can.edit && entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
-            <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing}
+            <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing || structEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setTextEditing(true); }} />
           )}
-          {referable && !cmpVersion && !textEditing && (
+          {CLOUD && can.edit && entry && STRUCT_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+            <IconButton icon={LayoutPanelTop} label="구조 편집 (표·그림)" active={structEditing} disabled={structEditing || textEditing}
+              onClick={() => { setRefCopy(false); setParam("seg", null); setStructEditing(true); }} />
+          )}
+          {referable && !cmpVersion && !textEditing && !structEditing && (
             <IconButton icon={Link2} label="참조 복사 (글자를 눌러 Claude Code에 붙여 넣을 주소 복사)" active={refCopy}
               onClick={() => setRefCopy((v) => !v)} />
           )}
@@ -177,6 +191,10 @@ export function DocView() {
           </>
         ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
+        ) : structEditing ? (
+          <Suspense fallback={<EmptyState title="편집기를 불러오는 중…" />}>
+            <StructEditor menu={menu} doc={doc} onExit={onStructExit} />
+          </Suspense>
         ) : textEditing ? (
           /\.(docx|pptx|xlsx)$/i.test(entry.path) ? (
             <OfficeTextEditor menu={menu} doc={doc} version={version.version}

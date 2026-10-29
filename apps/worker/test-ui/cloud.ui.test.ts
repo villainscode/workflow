@@ -303,4 +303,89 @@ describe("Cloudflare 화면", { skip }, () => {
     await waitFor(async () => (await api("/docs/process/guide")).currentVersion === "v1.0", 10_000, "정식 확정");
     assert.equal((await api("/docs/process/guide")).status, "approved");
   });
+
+  test("TC-CFUI-12 PPTX 구조 편집: 표 끝에 행 넣기 → 수정본, 미리보기는 작업본 PDF(변환 컨테이너), 버전으로 저장", async () => {
+    const before = await api("/docs/notes/slides");
+    const t0 = (await api("/docs/notes/slides/work/structure")).tables[0];
+    await open("/team/sdlc/notes/slides", "slides 샘플");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction(() => document.body.innerText.includes("표 1개"), { timeout: 15_000 });
+    await clickText("끝에 넣기", "article");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    const t1 = (await api("/docs/notes/slides/work/structure")).tables[0];
+    assert.equal(t1.rows, t0.rows + 1);
+    const pdf = await (await page.waitForSelector('main iframe[src*="/work/pdf"], main embed[src*="/work/pdf"], main object[data*="/work/pdf"]', { timeout: 15_000 }))
+      .evaluate((e: Element) => e.getAttribute("src") ?? e.getAttribute("data"));
+    const res = await api(pdf.replace(/^.*\/api\/w\/team/, "").replace(/#.*$/, ""), true);
+    assert.equal(res.status, 200, "작업본 PDF");
+    assert.equal(res.headers.get("content-type"), "application/pdf");
+    await clickText("버전으로 저장", "body");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    assert.equal((await api("/docs/notes/slides")).versions.length, before.versions.length + 1);
+  });
+
+  test("TC-CFUI-11 구조 편집: 문단 뒤에 표 넣기 → 칸을 골라 행 넣기 → 되돌리기 → 글자 고치기(두 번 누름) → 버전으로 저장. 편집 사본은 스크립트가 돌지 않는다", async () => {
+    const before = await api("/docs/process/guide");
+    await open("/team/sdlc/process/guide", "샘플 프로세스 가이드");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    // 편집 사본은 스크립트를 막아(CSP sandbox) puppeteer가 안에서 못 돈다. 화면처럼 바깥 페이지에서 contentDocument로 다룬다
+    const FRAME = 'iframe[title="구조 편집"]';
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    const fire = (sel: string, type: "click" | "dblclick") => page.evaluate((f: string, s: string, t: string) => {
+      const el = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector(s)!;
+      el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
+    }, FRAME, sel, type);
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const rows = async () => (await api("/docs/process/guide/work/structure")).blocks.find((b: any) => b.tag === "table").table.rows;
+
+    await ready("p[data-eid]");
+    assert.equal(await page.evaluate((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.title, FRAME), "샘플 문서",
+      "편집 사본에서 문서 스크립트가 돌면 안 된다");
+    // 첫 문단을 골라 그 뒤에 3×3 표
+    await fire("p[data-eid]", "click");
+    await page.waitForSelector('button[aria-label="표 넣기 (3행 3열)"]');
+    await page.click('button[aria-label="표 넣기 (3행 3열)"]');
+    await status("수정본 1");
+    assert.equal(await rows(), 3);
+    // 다시 읽힌 사본에서 본문 첫 칸(머리 행 다음, 2행 1열)을 골라 아래에 행 넣기
+    await ready("table td[data-eid]");
+    await fire("table td[data-eid]", "click");
+    await page.waitForFunction(() => document.body.innerText.includes("2행 1열 고름"), { timeout: 5000 });
+    await clickText("아래에 넣기", "aside");
+    await status("수정본 2");
+    assert.equal(await rows(), 4);
+    // 되돌리기: 수정본 1 내용으로 새 수정본(3)
+    await page.click('button[aria-label="되돌리기"]');
+    await status("수정본 3");
+    assert.equal(await rows(), 3);
+    // 두 번째 문단 글자를 그 자리에서 고친다(Enter로 저장)
+    await ready("table");
+    const P2 = "body > p:nth-of-type(2)";
+    await fire(P2, "dblclick");
+    await page.evaluate((f: string) => {
+      const w = document.querySelector<HTMLIFrameElement>(f)!.contentWindow!;
+      const el = w.document.querySelector<HTMLElement>('[contenteditable="true"]')!;
+      const r = w.document.createRange(); r.selectNodeContents(el);
+      const sel = w.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+    }, FRAME);
+    await page.keyboard.type("배포는 D13에 한다.");
+    await page.keyboard.press("Enter");
+    await status("수정본 4");
+    // 버전으로 저장
+    await clickText("버전으로 저장", "body");
+    await clickConfirm("버전으로 저장");
+    await status("버전으로 저장했습니다");
+    const d = await api("/docs/process/guide");
+    assert.equal(d.versions.length, before.versions.length + 1);
+    const v = d.versions.find((x: any) => x.version === d.currentVersion);
+    assert.equal(v.source, "revision");
+    const html = await (await fetch(v.files.find((x: any) => x.isEntry).url)).text();
+    assert.match(html, /<table[\s\S]*<\/table>/);
+    assert.match(html, /<p>배포는 D13에 한다\.<\/p>/);
+    assert.match(html, /<script>document\.title = "스크립트";<\/script>/, "스크립트는 원본 그대로 남는다");
+  });
 });

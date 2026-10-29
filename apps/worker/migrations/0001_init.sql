@@ -1,5 +1,5 @@
 -- 문서 탐색 워크플로우 D1 스키마(원본). 로컬 사이트의 색인 테이블(site/server/schema.ts)에 workspace와 id 관계를 더했다.
--- 계획·설명: REQUIREMENT-4.0.md 5.2
+-- 계획·설명: spec/REQUIREMENT-4.0.md 5.2
 
 CREATE TABLE workspace (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

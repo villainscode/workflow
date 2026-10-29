@@ -33,7 +33,7 @@ async function docSlugsIn(db: D1Database, menuId: number): Promise<Set<string>> 
   return new Set(results.map((r) => r.slug));
 }
 
-async function versionFiles(db: D1Database, docId: number, version: string): Promise<VersionFileIn[]> {
+export async function versionFiles(db: D1Database, docId: number, version: string): Promise<VersionFileIn[]> {
   const { results } = await db.prepare(`SELECT f.path, f.sha256, f.size, f.mime FROM version_file f JOIN document_version v ON v.id = f.version_id
     WHERE v.document_id = ? AND v.version = ? ORDER BY f.id`).bind(docId, version).all<VersionFileIn>();
   return results;
@@ -42,8 +42,10 @@ async function versionFiles(db: D1Database, docId: number, version: string): Pro
 const isUnique = (e: unknown) => /UNIQUE constraint failed/i.test(String((e as Error)?.message ?? e));
 
 /** 버전 하나를 쓴다. data가 있는 파일만 R2에 올린다(나머지는 이전 버전 blob을 그대로 가리킨다) */
-async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; current: string | null }, input: {
+export async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; current: string | null }, input: {
   version?: string; entry: string; note?: string | null; source: string; files: VersionFileIn[]; origin?: string; status?: string; title?: string;
+  /** 수정본을 버전으로 올릴 때(5.0) 그 수정본 id */
+  revisionId?: number;
 }): Promise<string> {
   const db = env.DB;
   const { results: vs } = await db.prepare("SELECT version FROM document_version WHERE document_id = ?").bind(doc.id).all<{ version: string }>();
@@ -60,8 +62,8 @@ async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; cur
   for (const f of input.files) if (f.data) await putBlob(env.BLOBS, ws.id, f.sha256, f.data);
 
   const stmts: D1PreparedStatement[] = [
-    db.prepare("INSERT INTO document_version (document_id, version, note, source, created_at, entry) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(doc.id, version, input.note?.trim() || null, input.source, nowStamp(new Date(), TZ), input.entry),
+    db.prepare("INSERT INTO document_version (document_id, version, note, source, created_at, entry, revision_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(doc.id, version, input.note?.trim() || null, input.source, nowStamp(new Date(), TZ), input.entry, input.revisionId ?? null),
   ];
   // 파일 행: ?1·?2(문서·버전)를 줄마다 다시 쓰고 한 줄에 5개씩(바인드 값 100개 한도 → 19줄)
   for (let i = 0; i < input.files.length; i += 19) {
