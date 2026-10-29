@@ -6,9 +6,9 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
-import { adapterFor, EditError, type Segment } from "../server/textedit/index.ts";
-import { wrapForEdit } from "../server/textedit/html.ts";
-import { splitLines, svgAdapter, visualWidth, wrapSvgForEdit } from "../server/textedit/svg.ts";
+import { adapterFor, EditError, type Segment } from "@workflow/core/textedit";
+import { wrapForEdit } from "@workflow/core/textedit/html";
+import { splitLines, svgAdapter, visualWidth, wrapSvgForEdit } from "@workflow/core/textedit/svg";
 import { FIXTURES, HTML_DOC } from "./helpers.ts";
 
 const same = (a: Uint8Array, b: Uint8Array) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;

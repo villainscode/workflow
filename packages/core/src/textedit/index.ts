@@ -1,4 +1,4 @@
-import { extname } from "node:path";
+import { extname } from "../path.ts";
 import type { Adapter } from "./types.ts";
 import { htmlAdapter } from "./html.ts";
 import { docxAdapter, pptxAdapter } from "./ooxml.ts";

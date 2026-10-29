@@ -47,20 +47,26 @@ function ConfirmDialog({ options, onAnswer }: { options: ConfirmOptions; onAnswe
   const okRef = useRef<HTMLButtonElement>(null);
   const tone = TONE[options.tone ?? "default"];
   const Icon = tone.icon;
+  const armed = useRef(false);
 
   useEffect(() => {
-    ref.current?.showModal();
-    // 포커스는 잠깐 뒤에 준다. 이 창을 연 Enter 키 입력이 곧바로 새 포커스 버튼으로 이어져 확인 없이 실행되는 것을 막는다.
+    const dialog = ref.current!;
+    dialog.showModal();
+    // showModal은 첫 버튼("취소")에 바로 포커스를 준다. 이 창을 연 Enter 바로 뒤에 Enter가 한 번 더 오면(맥 한글 입력기는 조합 끝에 Enter를 두 번 보낸다)
+    // 그 Enter가 "취소"를 눌러 버리므로, 처음에는 창 자체에 포커스를 두고 버튼 포커스는 잠깐 뒤에 준다. 그 전의 Enter·Space는 버린다.
     // 위험한 작업은 실수로 Enter를 눌러도 실행되지 않도록 "취소"에 포커스를 둔다
-    const t = setTimeout(() => (options.tone === "danger" ? cancelRef : okRef).current?.focus(), 60);
+    dialog.focus();
+    const t = setTimeout(() => { armed.current = true; (options.tone === "danger" ? cancelRef : okRef).current?.focus(); }, 60);
     return () => clearTimeout(t);
   }, [options.tone]);
 
   return (
     <dialog
       ref={ref}
+      tabIndex={-1}
       onCancel={(e) => { e.preventDefault(); onAnswer(false); }}
-      className="m-auto w-[min(420px,calc(100vw-24px))] rounded-xl border border-line bg-surface p-0 text-fg backdrop:bg-black/40"
+      onKeyDownCapture={(e) => { if (!armed.current && (e.key === "Enter" || e.key === " ")) e.preventDefault(); }}
+      className="m-auto w-[min(420px,calc(100vw-24px))] rounded-xl border border-line bg-surface p-0 text-fg outline-none backdrop:bg-black/40"
       aria-labelledby="confirm-title"
     >
       <div className="grid gap-4 p-5">

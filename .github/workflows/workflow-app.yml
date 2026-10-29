@@ -1,0 +1,60 @@
+# 문서 탐색 워크플로우(REQUIREMENT-4.0 P8): PR마다 테스트, develop → staging, main → production 배포
+# 필요한 저장소 설정: Secrets CLOUDFLARE_API_TOKEN(Workers·D1·R2·KV·Containers 편집 권한), CLOUDFLARE_ACCOUNT_ID
+# GitHub Environments "staging"·"production"을 만들어 두면 production 배포에 승인 단계를 걸 수 있다
+# 배포 작업은 저장소 Variables DEPLOY_ENABLED=true일 때만 돈다(자원·비밀값을 준비하기 전에는 테스트만)
+name: workflow-app
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: workflow-app-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: 타입 검사
+        run: |
+          npm run typecheck -w site
+          npm run typecheck -w @workflow/core
+          npm run typecheck -w @workflow/mcp-tools
+          npm run typecheck -w @workflow/worker
+          npm run typecheck -w @workflow/cli
+      - name: 로컬 사이트 테스트(단위·API·MCP)
+        run: npm test -w site
+      - name: Worker 테스트(Workers 런타임)
+        run: npm test -w @workflow/worker
+
+  deploy:
+    needs: test
+    # 처음 배포 준비(apps/worker/README.md)가 끝나면 저장소 Variables에 DEPLOY_ENABLED=true를 넣어 켠다
+    if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TARGET: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: D1 마이그레이션
+        working-directory: apps/worker
+        run: npx wrangler d1 migrations apply DB --remote --env "$TARGET"
+      - name: 배포(화면 빌드 + Worker + 변환 컨테이너)
+        working-directory: apps/worker
+        run: npm run deploy -- --env "$TARGET"

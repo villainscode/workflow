@@ -13,7 +13,8 @@ interface CloudflareUploadResponse {
  *   const uploader = createCloudflareUploader('https://my-worker.workers.dev')
  *   const url = await uploader(file)
  */
-export function createCloudflareUploader(workerUrl: string) {
+// endpoint: 올리는 경로. 로컬은 Worker의 /upload, 문서 탐색 워크플로우(Cloudflare)는 앱 API의 /images
+export function createCloudflareUploader(workerUrl: string, endpoint = '/upload') {
   return async function uploadToCloudflare(file: File): Promise<string> {
     if (!workerUrl) {
       throw new Error('업로드 서버 주소가 설정되지 않았습니다')
@@ -23,7 +24,7 @@ export function createCloudflareUploader(workerUrl: string) {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await fetch(`${baseUrl}/upload`, {
+    const response = await fetch(`${baseUrl}${endpoint}`, {
       method: 'POST',
       body: formData,
     })

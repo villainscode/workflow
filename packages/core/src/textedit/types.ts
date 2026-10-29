@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
 /**
  * 텍스트 편집(2.0)의 공통 모델. 형식마다 어댑터가 원본에서 "텍스트 조각"을 뽑고,
@@ -30,7 +31,7 @@ export interface Adapter {
   apply(data: Uint8Array, changes: Change[]): { data: Uint8Array; changed: number; warnings?: string[] };
 }
 
-export const textHash = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);
+export const textHash = (t: string) => bytesToHex(sha256(utf8ToBytes(t))).slice(0, 16);
 
 export class EditError extends Error {
   constructor(public status: number, message: string) { super(message); }

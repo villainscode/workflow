@@ -10,7 +10,7 @@
 
 | # | 시나리오 | 예 |
 |---|---|---|
-| 1 | 문서를 주소·이름으로 지정 | "http://localhost:5173/sdlc/code-review-automation/review-modes 문서 열어 줘", "SDLC > 코드 리뷰 자동화 > 리뷰 방식 비교" |
+| 1 | 문서를 주소·이름으로 지정 | "http://localhost:8000/sdlc/code-review-automation/review-modes 문서 열어 줘", "SDLC > 코드 리뷰 자동화 > 리뷰 방식 비교" |
 | 2 | 문서 안 요소를 지정해 고치기 | 화면에서 고를 문단을 찍어 "이 문장을 이렇게 바꿔 줘" |
 | 3 | 새 문서·새 버전 등록 | Claude Code가 만든 HTML·Markdown·DOCX를 바로 메뉴에 등록 |
 | 4 | 다른 아티팩트 가져오기 | `https://claude.ai/artifact/…` 내용을 사이트 문서로 등록 |
@@ -50,7 +50,7 @@ flowchart LR
   CC -- "MCP 도구 호출(stdio)\n호출마다 승인" --> M[workflow-docs MCP 서버<br>site/mcp/server.ts]
   M -- REST --> S[사이트 서버 :5174]
   S --> D[/docs/ 원본 · 새 버전/]
-  S -- "SSE: 변경 · 포커스" --> B[브라우저 사이트 :5173]
+  S -- "SSE: 변경 · 포커스" --> B[브라우저 사이트 :8000]
 ```
 
 - MCP 서버는 사이트 서버(`npm run dev`)의 REST API를 부른다. 저장 규칙·충돌 검사·실시간 반영이 화면 편집과 **같은 코드**를 거친다.
@@ -61,7 +61,7 @@ flowchart LR
 하나의 형식으로 사람이 붙여 넣고, 브라우저로 열고, MCP가 해석한다.
 
 ```
-http://localhost:5173/sdlc/code-review-automation/review-modes?v=v1.0&seg=123
+http://localhost:8000/sdlc/code-review-automation/review-modes?v=v1.0&seg=123
                      └ 대분류/메뉴/문서 ┘                       └ 버전 ┘└ 조각 ┘
 ```
 

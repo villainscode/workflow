@@ -8,7 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { parse } from "yaml";
 import { freePort, makeWorkspace, openEvents, readText, SITE, startServer, TSX, upload, type TestServer } from "./helpers.ts";
 
-const WEB = "http://localhost:5173";
+const WEB = "http://localhost:8000";
 const ws = makeWorkspace();
 let srv: TestServer;
 let client: Client;
@@ -72,7 +72,7 @@ describe("조회", () => {
     const all = await ok("list_documents", {});
     assert.match(all, /## SDLC \(key: sdlc\)/);
     assert.match(all, /- 메뉴 개발 프로세스 \(slug: process\)\n {4}• .+\n {4}- 메뉴 코드 리뷰 \(slug: review\)/);
-    assert.match(all, /• 샘플 프로세스 가이드 — draft · draft · html · http:\/\/localhost:5173\/sdlc\/process\/guide/);
+    assert.match(all, /• 샘플 프로세스 가이드 — draft · draft · html · http:\/\/localhost:8000\/sdlc\/process\/guide/);
     assert.match(all, /## Agent \(key: agent\)\n {2}\(메뉴 없음\)/);
     const agent = await ok("list_documents", { category: "Agent" });
     assert.doesNotMatch(agent, /SDLC/);
@@ -115,7 +115,7 @@ describe("등록", () => {
       menu: "온보딩", title: "플랫폼팀 개발 환경", slug: "platform-env", filename: "platform-env.html",
       files: ["tool-results/artifact-1234.html"], origin: "https://claude.ai/artifact/abc",
     });
-    assert.match(t, /Agent › 온보딩에 draft로 등록했습니다\(파일 1개\)\.\nhttp:\/\/localhost:5173\/agent\/onboarding\/platform-env/);
+    assert.match(t, /Agent › 온보딩에 draft로 등록했습니다\(파일 1개\)\.\nhttp:\/\/localhost:8000\/agent\/onboarding\/platform-env/);
     const m = meta("onboarding", "platform-env");
     assert.equal(m.versions[0].entry, "platform-env.html");
     assert.equal(m.origin_url, "https://claude.ai/artifact/abc");

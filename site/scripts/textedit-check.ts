@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, readdirSync, writeFileSync, existsSync } fro
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
-import { adapterFor, EditError, type Segment } from "../server/textedit/index.ts";
+import { adapterFor, EditError, type Segment } from "@workflow/core/textedit";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const DOCS = resolve(ROOT, "../docs");

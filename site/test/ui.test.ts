@@ -50,7 +50,7 @@ describe("화면", { skip }, () => {
   before(async () => {
     srv = await startServer(ws);
     const webPort = await freePort();
-    vite = spawn(process.execPath, [join(SITE, "node_modules/vite/bin/vite.js")], {
+    vite = spawn(process.execPath, [join(SITE, "../node_modules/vite/bin/vite.js")], {
       cwd: SITE, env: { ...process.env, PORT: String(srv.port), WEB_PORT: String(webPort) }, stdio: "ignore",
     });
     WEB = `http://127.0.0.1:${webPort}`;
@@ -636,6 +636,64 @@ describe("화면", { skip }, () => {
     assert.ok(await page.$("dialog[open]"), "확인 창이 열려 있어야 한다");
     await clickConfirm("추가");
     await waitFor(async () => /name: 한글이름/.test(menusYaml()), 5000, "폴더 생성");
+  });
+
+  test("TC-UI-32 문서 화면 제목을 누르면 그 자리에서 고치고(Enter → 확인 창), Esc는 취소", async () => {
+    await open("/sdlc/notes/tree-1", "트리 상위");
+    await page.click('button[data-tip="눌러서 제목 수정"]');
+    await page.waitForSelector('input[aria-label="문서 제목"]');
+    await page.keyboard.type("취소될 제목");
+    await page.keyboard.press("Escape");
+    await page.waitForSelector('input[aria-label="문서 제목"]', { hidden: true });
+    assert.equal(meta("notes", "tree-1").title, "트리 상위");
+
+    await page.click('button[data-tip="눌러서 제목 수정"]');
+    await page.waitForSelector('input[aria-label="문서 제목"]');
+    await page.keyboard.type("바뀐 상위");
+    await page.keyboard.press("Enter");
+    await clickConfirm("저장");
+    await waitFor(async () => meta("notes", "tree-1").title === "바뀐 상위", 5000, "제목 저장");
+    await page.waitForFunction(() => document.querySelector("h1")?.textContent === "바뀐 상위", { timeout: 10_000 });
+  });
+
+  /** 맥 크롬 한글 입력기의 Enter: 조합 중 keydown(229) 뒤에 Enter가 한 번 더 온다. 두 번째 Enter가 확인 창을 연 직후에 와도 취소되면 안 된다 */
+  const imeEnter = async (selector: string) => {
+    await page.$eval(selector, (el: Element) =>
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229, isComposing: true, bubbles: true, cancelable: true })));
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(await page.$("dialog[open] #confirm-title"), "확인 창이 열려 있어야 한다");
+  };
+
+  test("TC-UI-33 업로드 창 새 Markdown 문서: 제목 칸에서 한글 Enter(연달아 두 번)로도 확인 창이 취소되지 않고 만들어진다", async () => {
+    await open("/sdlc/process/guide", "샘플 프로세스 가이드");
+    await page.click('button[aria-label="업로드"]');
+    await page.waitForSelector("dialog[open]");
+    for (const b of await page.$$("dialog[open] button")) if ((await b.evaluate((e: Element) => e.textContent)).trim() === "새 Markdown 문서") await b.click();
+    const selects = await page.$$("dialog[open] select");
+    await selects[1].select("notes");
+    await page.type('dialog[open] input[placeholder="doc"]', "enter-memo");
+    const titleInput = 'dialog[open] input[placeholder="예: 로그인 시퀀스 다이어그램"]';
+    await page.type(titleInput, "엔터 메모");
+    await imeEnter(titleInput);
+    await clickConfirm("만들기");
+    await page.waitForFunction(() => location.pathname === "/sdlc/notes/enter-memo", { timeout: 10_000 });
+    assert.equal(meta("notes", "enter-memo").title, "엔터 메모");
+  });
+
+  test("TC-UI-34 상단 메뉴 대분류 추가: 이름 칸에서 한글 Enter(연달아 두 번)로도 확인 창이 취소되지 않고 추가된다", async () => {
+    await open("/sdlc/process/guide", "샘플 프로세스 가이드");
+    await page.click('button[aria-label="대분류 추가"]');
+    const nameInput = 'input[placeholder="이름 (예: 운영)"]';
+    await page.waitForSelector(nameInput);
+    await page.type(nameInput, "운영");
+    await page.type('input[aria-label="key"]', "ops");
+    await page.focus(nameInput);
+    await imeEnter(nameInput);
+    await clickConfirm("추가");
+    await page.waitForFunction(() => location.pathname === "/ops", { timeout: 10_000 });
+    assert.match(readText(join(ws.docs, "_site/categories.yaml")), /key: ops[\s\S]*name: 운영|name: 운영[\s\S]*key: ops/);
   });
 
   test("TC-UI-12 없는 문서·없는 대분류는 안내 화면", async () => {

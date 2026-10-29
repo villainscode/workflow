@@ -9,9 +9,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     host: "127.0.0.1",
-    port: Number(process.env.WEB_PORT ?? 5173),
+    port: Number(process.env.WEB_PORT ?? 8000),
     strictPort: true, // 다른 포트로 바꿔 뜨지 않는다. 포트는 predev(scripts/free-ports.mjs)가 비운다
     proxy: { "/api": api, "/files": api },
   },
-  build: { outDir: "../dist", emptyOutDir: true },
+  // Cloudflare 빌드(apps/worker build:web)는 WEB_OUT으로 Worker 정적 파일 폴더에 낸다
+  build: { outDir: process.env.WEB_OUT ?? "../dist", emptyOutDir: true },
 });

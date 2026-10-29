@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 
 export const SITE = resolve(import.meta.dirname, "..");
 export const FIXTURES = join(SITE, "scripts/fixtures");
-export const TSX = join(SITE, "node_modules/tsx/dist/cli.mjs");
+export const TSX = join(SITE, "../node_modules/tsx/dist/cli.mjs");
 
 export const HTML_DOC = `<!doctype html>
 <html lang="ko">

@@ -7,6 +7,7 @@ import { manage, useTrash, type TrashItem } from "../../lib/manage.ts";
 import { Modal, ui } from "../Modal.tsx";
 import { useAction } from "./useAction.ts";
 import { flattenMenus } from "./menuTree.ts";
+import { CLOUD } from "../../lib/base.ts";
 
 export function TrashDialog({ onClose }: { onClose: () => void }) {
   const { data: items } = useTrash();
@@ -53,7 +54,7 @@ export function TrashDialog({ onClose }: { onClose: () => void }) {
                     disabled={busy || (!exists && !targets[item.id])} onClick={() => restore(item)} />
                   <IconButton icon={Trash2} label="영구 삭제" text="영구 삭제" variant="outline" className="!border-crit !text-crit hover:!bg-crit-soft" disabled={busy} onClick={() => void run(() => manage.purge(item.id), {
                     title: "영구 삭제할까요?", tone: "danger", confirmText: "영구 삭제", details: [`문서: ${item.title}`],
-                    message: "되돌릴 수 없습니다. 커밋된 적이 있으면 git 이력에는 남습니다.",
+                    message: CLOUD ? "되돌릴 수 없습니다." : "되돌릴 수 없습니다. 커밋된 적이 있으면 git 이력에는 남습니다.",
                   })} />
                 </div>
               </li>

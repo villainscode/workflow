@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const client = new Client({ name: "mcp-check", version: "0.0.1" });
-await client.connect(new StdioClientTransport({ command: resolve(ROOT, "site/node_modules/.bin/tsx"), args: ["site/mcp/server.ts"], cwd: ROOT, stderr: "ignore" }));
+await client.connect(new StdioClientTransport({ command: resolve(ROOT, "node_modules/.bin/tsx"), args: ["site/mcp/server.ts"], cwd: ROOT, stderr: "ignore" }));
 
 const call = async (name: string, args: Record<string, unknown>) => {
   const r = (await client.callTool({ name, arguments: args })) as { content: { text: string }[]; isError?: boolean };
@@ -29,8 +29,8 @@ const firstText = t.text.split("\n")[1].replace(/^.*?: /, "");
 show("edit_text(조각 id)", await call("edit_text", { ref: "agent/zz-mcp/platform-env", changes: [{ segment: firstId, text: firstText + " (Claude 수정)" }], note: "제목 표시 확인" }));
 show("edit_text(찾아 바꾸기, 여러 곳 → 거부)", await call("edit_text", { ref: "agent/zz-mcp/platform-env", changes: [{ find: "의", replace: "의" }] }), 2);
 show("upload_document(HTML 사본)", await call("upload_document", { menu: "zz-mcp", title: "프로세스 사본", slug: "process-copy", files: ["docs/sprint-gitflow/process/v0.0/process.html"] }));
-show("get_text(주소 seg 범위)", await call("get_text", { ref: "http://localhost:5173/agent/zz-mcp/process-copy?seg=1", context: 1 }), 5);
-show("edit_text(찾아 바꾸기 1곳)", await call("edit_text", { ref: "http://localhost:5173/agent/zz-mcp/process-copy", changes: [{ find: "Git-flow 스프린트 개발 프로세스", replace: "Git-flow 스프린트 개발 프로세스 (MCP)", all: false }] }), 4);
+show("get_text(주소 seg 범위)", await call("get_text", { ref: "http://localhost:8000/agent/zz-mcp/process-copy?seg=1", context: 1 }), 5);
+show("edit_text(찾아 바꾸기 1곳)", await call("edit_text", { ref: "http://localhost:8000/agent/zz-mcp/process-copy", changes: [{ find: "Git-flow 스프린트 개발 프로세스", replace: "Git-flow 스프린트 개발 프로세스 (MCP)", all: false }] }), 4);
 show("release_document", await call("release_document", { ref: "agent/zz-mcp/process-copy" }));
-show("이전 버전 편집 시도", await call("edit_text", { ref: "http://localhost:5173/agent/zz-mcp/process-copy?v=v0.0", changes: [{ segment: 1, text: "x" }] }), 2);
+show("이전 버전 편집 시도", await call("edit_text", { ref: "http://localhost:8000/agent/zz-mcp/process-copy?v=v0.0", changes: [{ segment: 1, text: "x" }] }), 2);
 await client.close();

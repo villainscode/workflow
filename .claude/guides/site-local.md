@@ -1,84 +1,11 @@
-# CLAUDE.md
+# 로컬 업무 문서 사이트 (`site/`) 개발 가이드
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## 이 리포지토리
-
-SDLC(Software Development Life Cycle) 전체에 걸친 업무 및 관리 솔루션을 만들기 위한 **설계 단계 문서(드래프트)**를 관리하는 워크 리포지토리다. 대상은 요구사항, 시퀀스 다이어그램, ERD, 시스템 아키텍처, 개발 도구, 코드 리뷰, 빌드·배포, 운영이고, 의사 결정 기록도 여기에 남긴다. 문서 안의 YAML·셸·워크플로 코드는 대상 팀 저장소에 적용할 예시이고, 이 리포에서 실행하는 코드가 아니다.
-
-리포 안의 문서를 메뉴 + 뷰어로 관리하는 로컬 웹사이트를 `site/`에 만들고 있다. 요구사항, 결정 사항, 단계별 계획은 `REQUIREMENT.md`(1.x), `REQUIREMENT-2.0.md`(2.0: HTML·DOCX·PPTX·XLSX 텍스트 편집), `REQUIREMENT-3.0.md`(3.0: Claude Code 직접 연결)에 있다.
-
-**사이트 문서를 다룰 때는 `docs/` 파일을 직접 고치지 말고 workflow-docs MCP 도구를 쓴다**(`.mcp.json`, 사용법은 `.claude/skills/workflow-docs/SKILL.md`). 사이트 서버(`cd site && npm run dev`)가 켜져 있어야 한다. 사이트 작업을 할 때는 먼저 그 문서의 현재 단계와 결정 사항(D-n)을 확인하고, 미결정 항목은 진행하기 전에 묻는다.
-
-- 응답과 문서는 한국어로 쓴다.
-- 결과물은 코드보다 설명, 프로세스, 그림, 문서 위주로 만든다.
-- 일반 행동 지침은 `.claude/CLAUDE.md`에 있다. 이 파일은 리포 고유 내용만 다룬다.
-
-## 문서 구조와 버전 관리
-
-문서는 **메뉴 → 문서 → 버전** 단위로 관리한다. 버전은 문서마다 따로 쌓인다.
-
-```
-docs/
-  _site/categories.yaml     # 상단 메뉴(대분류: SDLC · Agent · Image)와 순서. 원본
-  _site/menus.yaml          # 대분류 key별 좌측 메뉴 트리. 원본
-  <메뉴 slug>/              # 영문 kebab-case. 예: code-review-automation
-    <문서 slug>/            # 예: review-gate
-      meta.yaml             # 제목, 분류, 상태, 버전 목록, 외부 등록 링크 (문서 정보의 원본)
-      v0.0/                 # 최초 작성·업로드본. 화면에는 draft로 표시
-        review-gate.html    # 대표 파일(entry). 기본 형식은 HTML
-        diagrams/           # 편집 가능한 원본: .drawio, .mmd (필요할 때)
-        exports/            # 파생 산출물: .svg .png .pdf .pptx .xlsx (필요할 때)
-      v0.1/                 # 첫 수정. 이후 수정마다 v0.2, v0.3 …
-      v1.0/                 # 정식 확정
-      <하위 문서 slug>/     # 하위 문서(9단계): meta.yaml과 버전 폴더를 가진 문서 폴더가 상위 문서 폴더 안에 들어간다
-```
-
-- **원본은 파일이다.** `categories.yaml`, `menus.yaml`, 문서별 `meta.yaml`, 버전 폴더의 파일이 원본이고 git으로 추적한다. 사이트의 SQLite(`site/data/`)는 이 파일들을 스캔해 다시 만드는 색인이라 git에 넣지 않는다. 문서를 추가하거나 옮길 때는 yaml을 함께 고친다.
-- **버전 규칙**: 최초 작성·업로드는 `v0.0`이고 화면에는 **draft**로 표시한다(`versionLabel()`). 수정할 때마다 `v0.1`, `v0.2` …로 올라가고, 정식 확정하면 `v1.0`(이후 `v2.0`)이 된다. `v0.x`는 드래프트, `v1.0` 이상은 확정이다. 내용을 바꿀 때는 그 문서의 이전 버전 폴더를 복사해 새 버전을 만들고, `meta.yaml`의 `versions`에 메모(`note`)와 함께 추가하고 `current`를 바꾼다. **Notion에 등록했거나 커밋된 버전 폴더는 수정하지 않는다.** 오타 같은 사소한 수정과 구조 이전만 예외로 한다.
-- **slug**: 메뉴 slug는 리포 전체에서 하나만 존재한다. 메뉴의 대분류 소속과 상하 관계는 `menus.yaml`(`menus: { <대분류 key>: [트리] }`)에서 정하므로 폴더 경로에 넣지 않는다. 사이트에서 이름만 주고 만든 메뉴는 slug가 자동이다(영문이 없으면 `folder-<난수>`, D-35).
-- **하위 문서**(D-34): 문서 폴더 안에서 버전 폴더(`vN.N`)가 아니고 `meta.yaml`이 있는 폴더가 하위 문서다(`docs/<메뉴>/<상위>/<하위>/`). 문서 slug는 메뉴 안에서 깊이와 상관없이 하나뿐이라 주소는 `대분류/메뉴/문서` 그대로이고, 서버는 `server/docpath.ts`의 `findDocDir`로 실제 폴더를 찾는다. 같은 자리 안 문서 순서는 `meta.yaml`의 `order`이고, 없으면 제목순으로 뒤에 온다.
-- **원본과 파생**: 다이어그램의 원본은 `diagrams/`의 `.drawio`·`.mmd` 파일이다. `exports/`와 HTML에 넣은 SVG는 원본에서 다시 만들 수 있는 파생물이므로, 원본을 고친 뒤 다시 export한다.
-
-```yaml
-# docs/<메뉴>/<문서>/meta.yaml
-title: OCR 리뷰 게이트 운영 가이드
-category: sdlc            # categories.yaml의 대분류 key
-menu: code-review-automation
-kind: html                # html | image | pdf | pptx | docx | xlsx | markdown | code | drawio
-type: process             # requirements | sequence | erd | architecture | process | build-deploy | decision
-sdlc: develop             # plan | design | develop | test | build-deploy | operate
-status: draft             # draft | review | approved
-current: v0.0
-versions:
-  - version: v0.0
-    entry: review-gate.html
-    note: 변경 메모
-    source: upload        # upload | edit | text-edit | scan | release
-    created: 2026-10-13 14:05:33   # 작성 시각(로컬). 2026-10-13 이전 버전은 날짜만 있다. 문서 화면 제목 오른쪽에 보인다
-order: 0                  # 같은 자리 안 순서(사이드바에서 끌어 놓으면 생긴다). 없으면 제목순
-notion_url:               # 등록 후 채운다
-gdrive_url:
-```
-
-### 현재 메뉴와 문서
-
-| 대분류 | 메뉴 | 문서 | 최신 | 다루는 영역 |
-|---|---|---|---|---|
-| SDLC | `sprint-gitflow` | `process` | draft | 버전 관리·CI, 2주 스프린트 |
-| SDLC | `code-review-automation` | `review-gate` | draft | 코드 리뷰 게이트 설치·Slack·Ruleset |
-| SDLC | `code-review-automation` | `review-modes` | v1.0 | CI 리뷰 실행 방식 (API 키 vs Max 구독) |
-| SDLC | `onboarding` | `platform-env` | v1.0 | 플랫폼팀 개발 환경. 외부 claude.ai 아티팩트를 MCP로 가져와 시험한 문서(`origin_url`에 출처) |
-
-Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더까지 포함한 상대 경로로 연결한다. 예: `process.html`에서 `../../../code-review-automation/review-gate/v0.0/review-gate.html`. 새 버전을 만들면 다른 문서에서 이 문서를 가리키는 링크를 새 버전으로 바꿀지 판단한다.
-
-아직 문서가 없는 영역: 개발 도구 가이드, 빌드·배포, 이밸 게이트·골든셋(아래 이전 설계 참고), 시퀀스·ERD·아키텍처.
-
-## 업무 문서 사이트 (`site/`)
+리포 `docs/`를 메뉴 + 뷰어로 관리하는 로컬 웹사이트(1.x~3.x). 요구사항·결정은 `REQUIREMENT.md`·`REQUIREMENT-2.0.md`·`REQUIREMENT-3.0.md`. 같은 화면 코드를 Cloudflare 앱도 쓴다(`cloudflare-app.md`).
 
 ```bash
+npm install       # 리포 루트에서. npm workspaces(packages/* · apps/* · site)라 의존성은 루트 node_modules에 모인다
 cd site
-npm run dev        # 5173·5174 포트를 쓰던 프로세스를 먼저 종료(predev)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:5173) 실행
+npm run dev        # 8000·5174 포트를 쓰던 node 프로세스(이전 개발 서버)를 먼저 종료(predev, node가 아닌 프로세스면 종료하지 않고 멈춤)한 뒤 API(Fastify, 127.0.0.1:5174) + 화면(Vite, http://127.0.0.1:8000) 실행
 npm run typecheck  # tsc (server + web)
 npm run build      # 타입 검사 후 site/dist로 빌드
 npm run check:textedit  # 2.0 텍스트 편집 어댑터 검사(바꾼 것 없이 저장하면 바이트 동일 등)
@@ -86,16 +13,12 @@ npm test           # 단위·Markdown 편집기·텍스트 편집·API·MCP 자�
 npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘 다
 ```
 
-- **테스트** (`site/test/`, 케이스 목록은 루트 `TESTING.md`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·5173). 테스트 이름은 케이스 ID(`TC-…`)로 시작한다. 기능을 바꾸면 `TESTING.md`의 케이스도 함께 고친다.
-
+- **테스트** (`site/test/`): 임시 폴더에 docs를 만들고 빈 포트로 서버를 따로 띄우므로 실제 `docs/`와 켜 둔 사이트를 건드리지 않는다. 서버는 `WORKFLOW_DOCS_ROOT`·`WORKFLOW_DATA_DIR`·`PORT`, Vite는 `WEB_PORT`를 받는다(없으면 리포 `docs/`·`site/data/`·5174·8000). 지켜야 할 것은 `.claude/rules/testing.md`.
 - **server/**: `scan.ts`가 `docs/_site/categories.yaml`·`menus.yaml`(읽고 쓰기는 `sitefiles.ts`의 `loadSite`/`saveSite`)과 문서별 `meta.yaml`을 읽어 SQLite 색인(`site/data/index.db`)을 채운다. 서버가 시작하거나 `POST /api/reindex`가 호출될 때마다 테이블을 지우고 처음부터 다시 만든다. 그래서 스키마를 바꿀 때 마이그레이션이 필요 없다. yaml이나 파일에 문제가 있으면 멈추지 않고 경고로 모은다. 경고는 `/api/tree`의 `warnings`와 좌측 목록 하단에 표시된다.
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서. 메뉴의 `documents`는 하위 문서까지 모두 담고 하위 문서는 `parent`가 있다), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart, 새 하위 문서는 `parent`), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장), `POST /api/focus`(열린 화면 이동, 3.4). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`는 `{ menu, parent?, index? }`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
-- **확인 창** (`components/confirm/ConfirmProvider.tsx`, `useConfirm()`): 저장·수정·삭제·다운로드·업로드·이동·복원·휴지통 이동은 공통 확인 창을 거쳐 실행한다. 브라우저 `confirm()`은 쓰지 않는다.
-  - 관리 작업은 `useAction().run(작업, 확인옵션)`으로 넘기면 확인 후 실행된다. 무엇이 바뀌는지는 `details`에 적는다.
-  - tone은 일반(`default`, 파랑), 이동(`warning`, 주황), 삭제·휴지통(`danger`, 빨강 `--crit`)이다. danger는 기본 포커스가 "취소"다. 포커스는 창이 열리고 60ms 뒤에 준다. 창을 연 Enter 키 입력이 새로 포커스된 버튼으로 이어져 확인 없이 실행되는 것을 막기 위해서다. Enter로 확인 창을 여는 입력칸은 Enter의 기본 동작도 막는다.
-  - 순서 변경(↑↓)과 보기 전환은 확인하지 않는다.
-- **텍스트 편집 2.0** (`server/textedit/`, 계획은 `REQUIREMENT-2.0.md`): HTML·DOCX·PPTX의 태그 안 글자만 고친다.
+- **확인 창** (`components/confirm/ConfirmProvider.tsx`, `useConfirm()`, `useAction().run`): 규칙은 `.claude/rules/site-ui.md`.
+- **텍스트 편집 2.0** (`packages/core/src/textedit/`, 4.0 P1에서 `site/server/textedit/`에서 옮김, 계획은 `REQUIREMENT-2.0.md`): HTML·DOCX·PPTX의 태그 안 글자만 고친다.
   - 형식별 어댑터가 "텍스트 조각"(id, 글자, 해시)을 뽑는다. 저장할 때는 바뀐 조각의 **원본 구간만** 교체한다. 그래서 구조·서식·속성과 나머지 바이트는 그대로다.
   - HTML은 parse5의 텍스트 노드 원본 위치를 쓴다. 앞뒤 공백(들여쓰기)은 편집 구간 밖에 남기고, `pre` 안만 줄바꿈을 허용한다.
   - DOCX·PPTX는 zip 안 XML의 `<w:t>`·`<a:t>` 위치를 htmlparser2(xmlMode)로 찾는다. 같은 서식이고 사이에 run 경계만 있는 run은 한 조각으로 합치고, 저장할 때 첫 run에 글자를 넣고 나머지를 비운다. 바뀐 파트만 다시 써서 zip을 다시 묶는다.
@@ -107,18 +30,18 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
     - 바뀐 조각은 `data-changed`로 표시한다. 작성 중 내용은 localStorage(`workflow:textdraft:*`)에 둔다. 저장은 확인 창을 거쳐 `text-edit` API로 한다.
   - **DOCX 목록 편집** (`viewers/OfficeTextEditor.tsx`): 왼쪽은 영역(본문·머리글·바닥글·표 칸)과 문단별 조각 칸이다. 서식 힌트 `fmt`(b·i·u)로 원래 서식을 보여 준다. 오른쪽은 `POST /api/docs/:menu/:doc/text-preview`(저장 안 함)가 돌려준 파일을 docx-preview로 그린다.
   - **PPTX 목록 편집**(같은 `OfficeTextEditor`): 슬라이드 번호는 `presentation.xml`의 발표 순서다(파일 이름 slideN과 다를 수 있다). 미리보기는 `text-preview?to=pdf`(서버 LibreOffice 변환, `convert.ts`의 `convertData`로 내용 해시 캐시)를 PDF 뷰어로 열고, 고치던 슬라이드 쪽(`#page=n`)을 보여 준다.
-  - **SVG 텍스트 편집** (`server/textedit/svg.ts`, 화면은 `HtmlTextEditor`): SVG를 htmlparser2(xmlMode)로 읽어 글자 구간만 바꾸고, 특수 문자는 XML 방식으로만 쓴다(HTML 어댑터는 `&nbsp;`를 써서 SVG를 깨뜨린다).
+  - **SVG 텍스트 편집** (`packages/core/src/textedit/svg.ts`, 화면은 `HtmlTextEditor`): SVG를 htmlparser2(xmlMode)로 읽어 글자 구간만 바꾸고, 특수 문자는 XML 방식으로만 쓴다(HTML 어댑터는 `&nbsp;`를 써서 SVG를 깨뜨린다).
     - draw.io 내보내기는 글자마다 HTML(`foreignObject`)과 예비 `<text>` 두 벌이 있다. HTML 글자만 조각으로 보이고, 저장할 때 예비 글자를 원래 줄 수(`<tspan>`)를 지켜 원래 줄 길이 비율로 다시 나눠 쓴다. 브라우저에 안 보이는 `switch` 뒤 갈래(예: "Text is not SVG")는 조각이 아니다.
     - 편집 사본(`edit-view`)은 `image/svg+xml`로 주고, HTML 글자는 `<span data-seg>`(contenteditable), SVG 글자는 `<tspan data-seg>`(입력창)로 감싼다. 스타일은 `injectStyle`로 SVG 이름공간에 넣는다.
     - 넘침 경고: 화면은 고치기 전 글자를 품던 도형(가장 가까운 `g[data-cell-id]`)에 닿거나 넘치면 경고 막대와 확인 창 ⚠로 알린다. 서버는 예비 글자 줄이 원래 최장 줄보다 15% 넘게 길면 저장 결과 `warnings`로 알린다(MCP는 "주의:"). 상자 크기는 바꾸지 않는다.
     - 내보낼 때 다이어그램 원본을 넣지 않은 `.drawio.svg`는 draw.io로 다시 열 수 없으므로 이 SVG가 원본이다. 앞으로는 `.drawio` 원본을 함께 남긴다.
-  - **XLSX 셀 편집** (`server/textedit/xlsx.ts`, 같은 `OfficeTextEditor`): 문자 셀만 고친다(숫자·수식 셀 제외). 시트 순서는 `workbook.xml` 기준이다.
+  - **XLSX 셀 편집** (`packages/core/src/textedit/xlsx.ts`, 같은 `OfficeTextEditor`): 문자 셀만 고친다(숫자·수식 셀 제외). 시트 순서는 `workbook.xml` 기준이다.
     - 공유 문자열(`sharedStrings.xml`)을 그 셀만 쓰면 그 자리에서 고친다. 여러 셀이 함께 쓰면 고친 셀용 `<si>`를 끝에 붙이고 그 셀의 `<v>`만 새 번호로 바꾼다(`uniqueCount` +1). 그래서 같은 글자를 쓰던 다른 셀은 그대로 남는다.
     - 원래 줄바꿈이 있던 셀은 Enter를 허용한다. 미리보기는 기존 `SheetViewer`다.
   - **DOCX·PPTX·XLSX 버전 비교** (`viewers/SegmentDiffViewer.tsx`): 문서 상단 "비교"를 고르면 두 버전의 텍스트 조각을 jsdiff `diffArrays`로 맞춰 바뀜·추가·삭제를 보여 준다. HTML 등 텍스트 형식은 기존 줄 단위 `DiffViewer`를 쓴다.
   - 저장·임시 보관·편집 막대는 `viewers/textedit/session.tsx`의 `useTextSession`과 `EditBar`를 HTML·DOCX 편집기가 함께 쓴다.
   - 어댑터를 고쳤다면 `npm run check:textedit`로 확인한다(검사용 샘플은 `site/scripts/fixtures/`).
-- **workflow-docs MCP** (`site/mcp/server.ts`, `.mcp.json`으로 등록, 3.0): 사이트 REST API를 감싼 stdio MCP 서버다.
+- **workflow-docs MCP** (`site/mcp/server.ts`, `.mcp.json`으로 등록, 3.0): 사이트 REST API를 감싼 stdio MCP 서버다. 도구 정의는 `packages/mcp-tools`에 있고 Cloudflare 원격 MCP(`apps/worker/src/mcp.ts`, OAuth, 4.0 P6)와 같이 쓴다. 도구를 고치면 `site/test/mcp.test.ts`와 `apps/worker/test/mcp.test.ts`를 함께 돌린다.
   - 도구: `list_documents`(하위 문서는 들여 씀), `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename·parent), `upload_version`, `create_menu`, `release_document`, `focus_in_site`.
   - 모든 요청에 `X-Workflow-Agent: claude-code` 헤더를 붙인다. 서버는 이 헤더가 있으면 변경 알림(SSE)에 `by: claude-code`를 담는다.
   - 문서는 사이트 주소(`?v=`, `&seg=`), `대분류/메뉴/문서`, `대분류 > 메뉴 > 제목`, 제목으로 지정한다.
@@ -129,7 +52,8 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
 - **Claude 실시간 표시(3.4)** (`components/LiveNotice.tsx`): 변경 알림에 `by`, 대분류·메뉴·문서·제목·버전·`segs`를 담는다. Claude가 저장하면 알림을 띄우고, 같은 문서를 보고 있으면 `?seg=`로 바뀐 조각을 강조하며, 다른 문서면 "열기"만 준다(D-29). `POST /api/focus`(`focus_in_site`)는 SSE `focus` 이벤트로 열린 화면을 그 문서·버전·조각으로 옮긴다.
 - **정식 버전 확정** (`store.ts`의 `release`, `POST /api/docs/:menu/:doc/release`, `components/ReleaseBadge.tsx`): 문서 상단 상태 배지가 draft·review이면 버튼이 된다. 누르면 "vX.0으로 변경하시겠습니까?" 확인 후 현재 버전 폴더를 다음 major 버전(v0.x → v1.0, v1.2 → v2.0)으로 복사한다. 그리고 `source: release` 버전을 추가하고 `current`와 `status: approved`를 바꾼다. 기존 버전 폴더는 그대로 둔다. 같은 내용 복사라 업로드의 "직전과 같으면 거부" 검사를 거치지 않는 전용 함수다. 정식 문서에 업로드나 편집으로 새 버전이 생기면(v1.0 → v1.1) 상태는 approved 그대로 둔다(D-15). 업로드·저장 코드는 status를 건드리지 않는다.
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
-- **아이콘**: 사이트의 기능 버튼은 Lucide(`lucide-react`) 아이콘으로 만들고 `components/IconButton.tsx`를 쓴다. 아이콘만 있는 버튼은 `label`이 aria-label과 툴팁이 된다. **툴팁은 브라우저 `title`이 아니라 공통 툴팁(`components/Tooltip.tsx`)을 쓴다**: 요소에 `data-tip="설명"`(세로 손잡이처럼 오른쪽에 띄울 때는 `data-tip-side="right"`)을 붙이면, `main.tsx`에 한 번 둔 `TooltipLayer`가 마우스를 올리거나 키보드로 포커스할 때 띄운다. Popover API로 최상위 층에 띄우므로 `showModal` 대화상자와 전체 화면 위에서도 보인다. 툴팁이 있는 요소 안에 또 툴팁을 두지 않는다(안쪽이 이긴다. 예: 상태 배지 버튼 안 `StatusBadge noTip`). 대화상자의 확인·취소처럼 실수하면 안 되는 버튼과 휴지통의 복원·영구 삭제는 아이콘과 글자를 함께 둔다(`text` prop). 유니코드 기호(✕ ☰ ▾ 등)를 아이콘으로 쓰지 않는다.
+- **아이콘·툴팁** (`components/IconButton.tsx`, `components/Tooltip.tsx`): 규칙은 `.claude/rules/site-ui.md`.
+- **문서 화면 머리** (`components/DocView.tsx`): 제목(h1, 32px)을 누르면 그 자리 입력칸으로 고친다(Enter 확인 창, Esc·바깥 클릭 취소, 한글 조합 중 Enter는 건너뜀). 제목 오른쪽에 보고 있는 버전의 작성일(12px), 버전 선택, 비교, 상태 배지, 기능 버튼.
 - **좌측 폴더 트리** (`components/Sidebar.tsx`, `components/sidebar/ContextMenu.tsx`, 계획은 `REQUIREMENT.md` 5.3): MarkFlow 사이드바 방식. 폴더(메뉴) → 하위 폴더 → 문서 → 하위 문서. 폴더 아이콘은 열림·닫힘, 접힌 항목은 localStorage `workflow:sidebar-collapsed`, 지금 연 문서의 상위는 늘 펼친다.
   - 오른쪽 클릭이나 줄의 ⋯로 메뉴: 폴더는 새 문서·하위 폴더 추가·이름 바꾸기·위로·아래로·다른 위치로 옮기기(`MoveMenuDialog`)·폴더 삭제, 문서는 하위 문서 추가(업로드 창 `parent` 고정)·이름 바꾸기·위로·아래로·상위 문서 밖으로 꺼내기·휴지통으로. 이름 입력은 그 자리 입력칸(Enter 확인 창, Esc·바깥 클릭 취소).
   - 끌어서 놓기(D-36): 줄 위쪽 28% 앞, 아래쪽 28% 뒤, 가운데 안. 같은 자리 순서는 확인 없이, 다른 자리로 옮기기는 확인 창(warning). 자기 자신·하위로는 놓을 수 없다. 링크(`NavLink draggable={false}`)가 아니라 줄(`data-row`)이 끌기를 받는다. 바깥 파일을 폴더에 놓으면 업로드 창.
@@ -181,94 +105,3 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - 폴더 줄의 `+`(새 문서)·폴더 메뉴 "새 문서", 문서 메뉴 "하위 문서 추가"(`parent`)
   - 메뉴에 파일 끌어다 놓기
   - 문서 화면의 "새 버전"
-- 화면 확인: headless Chrome `--screenshot`은 iframe 내용을 그리기 전에 찍혀 빈 화면이 나올 수 있다. 사이트 화면은 Mermaid CLI와 함께 전역 설치된 puppeteer(`$(npm root -g)/@mermaid-js/mermaid-cli/node_modules/puppeteer`)로 찍는다. SSE 연결이 계속 열려 있어 `networkidle0`은 끝나지 않으므로 `domcontentloaded` 후 요소를 기다린다.
-
-## 산출물 형식과 도구
-
-| 형식 | 만드는 방법 |
-|---|---|
-| HTML (기본) | 단일 파일로 직접 작성한다. 아래 작성 규칙을 따른다 |
-| 다이어그램 (시퀀스, ERD, 아키텍처) | `.drawio` XML을 직접 쓰거나, 빠른 초안은 Mermaid `.mmd`로 쓴다. export: `drawio -x -f svg\|png\|pdf`, `mmdc -i x.mmd -o x.svg` |
-| SVG · PNG | draw.io나 mmdc로 export한다. HTML 페이지 이미지는 headless Chrome 스크린샷으로 만든다 |
-| PDF | HTML은 headless Chrome `--print-to-pdf`, 다이어그램은 draw.io export로 만든다 |
-| PPT · Excel | `pptx` · `xlsx` 스킬을 쓴다. 파이썬은 리포의 `.venv`(python-pptx, openpyxl)를 쓴다 |
-| Google Docs · Sheets · Slides | Google Drive MCP(claude.ai 연결됨)로 만든다. 만들 때는 `google-workspace` 스킬을 먼저 읽는다. 저장 위치는 아래 Google Drive 절을 따른다 |
-
-## Google Drive
-
-- 루트 폴더: 내 드라이브의 `tommoro-workspace` (folder id `1-v4RZ0GcJtHTgI8GxyO4ne0rlavTQBgz`, 계정 villainscode@gmail.com)
-- 리포 구조를 그대로 따라 `tommoro-workspace/<메뉴 slug>/<문서 slug>/<버전>/` 아래에 문서를 둔다. 하위 폴더는 처음 내보낼 때 만든다.
-- 업로드한 파일 URL은 `meta.yaml`의 `gdrive_url`과 Notion의 `Google Drive` 속성에 적는다. 업로드는 Notion 등록과 마찬가지로 문서마다 확인을 받은 뒤 한다.
-
-## Notion 등록
-
-- 등록 위치: Private 영역 `투모로업무프로세스` 페이지 아래의 데이터베이스 **`SDLC 설계 문서`**.
-  - 데이터베이스: `https://app.notion.com/p/4eb6430f2cee4365b7925717f46bfed7`
-  - 데이터 소스: `collection://b7c4aa34-0f54-45e1-8e7c-978977041819`
-  - 같은 부모 페이지에 수동으로 만든 페이지 `00. 업무 관련`, `01. Github Workflow`, `02. Code Review Workflow`가 있다. 이 페이지들은 건드리지 않는다.
-- **설계 문서 1건 = 데이터베이스 페이지 1개**로 등록한다. 업무 하나나 버전 하나를 페이지 하나로 묶지 않는다.
-- 속성은 `meta.yaml`에서 채운다.
-  - 문서명 ← `title`
-  - 업무명 ← `menus.yaml`의 메뉴 이름. select 옵션이라 새 메뉴면 옵션이 추가된다
-  - 업무 slug ← `menu`
-  - 버전 ← 등록하는 버전 (`current`)
-  - 문서 유형 ← `type`
-  - SDLC 단계 ← `sdlc`
-  - 상태 ← `status`
-  - 리포 경로
-  - 커밋 ← 등록 시점 SHA
-  - 산출물 ← 형식 목록
-  - Google Drive ← `gdrive_url`
-- 본문에는 문서 요약과 주요 다이어그램(이미지)을 넣는다.
-- 등록이 끝나면 페이지 URL을 `meta.yaml`의 `notion_url`에 적고 커밋한다. 이미 `notion_url`이 있는 문서는 새 페이지를 만들지 말고 그 페이지를 갱신한다. 새 버전이면 새 페이지를 만든다.
-- 외부 게시에 해당하므로 문서마다 사용자 확인을 받은 뒤 등록한다.
-- 연결: MCP 서버 `plugin:design:notion`(`https://mcp.notion.com/mcp`). 인증이 필요하면 `/mcp`에서 인증한다.
-
-## 문서 사이에 공유되는 결정
-
-여러 문서가 같은 결정을 전제로 쓰인다. 하나를 바꾸면 그 결정을 쓰는 다른 문서도 함께 맞춘다.
-
-- **브랜치 모델**: `main` · `develop` · `feature/WF-xxx-*` · `release/x.y.z` · `bugfix/WF-xxx-*`. hotfix 브랜치는 쓰지 않는다. 배포 후 결함은 다음 스프린트 티켓이 된다.
-- **2주 스프린트 (D1–D14)**: D1 플래닝, D2–D10 개발, D6 테스트, **D7 첫 코드 리뷰(PR → develop)**, D10 기능 동결과 release 생성, D10–D13 테스트·QA, **D14 리뷰(PR release → main)·배포·데모**.
-- **리뷰 두 층**: 로컬 리뷰는 개발자가 매일 한다(Claude Code `/code-review`·`/simplify`·`/security-review`, Codex `/review`). 결과를 기록하지 않고 머지도 막지 않는다. D7·D14 리뷰는 CI의 리뷰 에이전트(Open Code Review, `ocr`)가 자동으로 하고 Slack으로 알린다.
-- **게이트 판정**: critical·high가 하나라도 있으면 필수 체크 `ocr-review`가 실패해 머지가 막힌다. medium 이하는 막지 않는다.
-- **추적**: Asana 티켓 번호(`WF-201` 형식)를 브랜치 이름, 커밋(`feat(auth): ... [WF-201]`), PR 제목(`WF-201 ...`)에 넣는다.
-- **CI 설정 이름**: Secrets `OCR_API_KEY`, `SLACK_WEBHOOK_URL`, `CLAUDE_CODE_OAUTH_TOKEN`(Max 구독 방식). Variables `OCR_PROVIDER`, `OCR_MODEL`, `OCR_EFFORT`, `OCR_VERSION`, `OCR_LANGUAGE`, `OCR_MAX_TOKENS_BUDGET`, `OCR_SLACK_ON_PASS`, `CLAUDE_REVIEW_MODEL`.
-
-### 알려진 불일치
-
-- `code-review-automation/review-gate/v0.0/review-gate.html`의 워크플로는 `push`로 트리거된다(`feature/code-review` 게이트 브랜치와 `develop` 사후 리뷰). `sprint-gitflow/process/v0.0/process.html`은 `pull_request`(base가 `develop`·`main`)로 트리거되는 것으로 정했다. code-review-automation 다음 버전에서 이 차이를 맞춘다.
-- `sprint-gitflow` 문서 D7 단계는 `/ocr-triage <id> <판정>` 명령을 쓰는데, 이 명령을 설치하는 방법을 설명한 문서가 아직 없다.
-
-### 이밸 게이트·골든셋 이전 설계 (gitflow 문서 v1에 있던 내용)
-
-새 문서를 쓸 때 출발점으로 쓴다. 확정된 결정은 아니다.
-
-- 리뷰 원장: 고아 브랜치 `review-ledger`. `runs/<YYYY-MM>/<run_id>.jsonl`에 CI 봇이 critical·high 지적을 쌓고, `labels/`에 판정이 쌓인다. Ruleset과 워크플로 트리거에서는 뺀다.
-- 판정: PR 코멘트 첫 줄 `/ocr-triage <id> fixed|false_positive|accepted|missed "사유"`. `fixed`를 뺀 판정에는 사유가 필수다. 지적 ID는 `<run_number>.<순번>` 형식이다.
-- 골든셋: 매일 밤 원장과 판정을 합쳐 `golden/findings.jsonl`을 다시 만든다. 판정이 붙은 지적만 들어간다.
-- 활용: 로컬 에이전트는 AGENTS.md 지침으로, CI는 `--background-file`로 바뀐 파일의 골든 기록을 읽는다. 같은 경로에서 오탐이 2회 이상 나오면 `.opencodereview/rule.json` 규칙으로 승격한다. 모델이나 버전을 바꾸기 전에는 `fixed`·`missed` 기록으로 회귀 평가를 한다.
-
-## HTML 문서 작성 규칙
-
-기존 세 문서가 같은 체계를 쓴다. 새 문서도 맞춘다.
-
-- 외부 스크립트 없이 단일 파일로 만든다. 폰트만 Google Fonts(IBM Plex Sans KR, IBM Plex Mono)에서 불러온다. 다이어그램은 export한 SVG를 인라인으로 넣는다.
-- 색은 `:root` 토큰(`--bg`, `--surface`, `--fg`, `--muted`, `--accent`, `--crit`, `--high`, `--med`, `--ok`, `--rel` 등)으로 정의한다. 다크 모드는 `@media (prefers-color-scheme: dark)` 안의 `:root:not([data-theme="light"])`와 `:root[data-theme="dark"]` 두 곳에 똑같이 정의한다.
-- 구성: masthead(eyebrow, h1, lede, meta-row에 업무명·버전·상태) → 왼쪽 sticky 목차 + 본문 → 번호 붙은 섹션(`01 · 제목`) → footer(관련 문서 링크).
-- **내부 가로 스크롤 금지**: 코드 블록은 `white-space: pre-wrap`으로 줄을 바꾼다. 표는 `table-layout: fixed`로 두고, 640px 이하에서는 `data-l` 속성을 쓰는 카드로 쌓는다. 그림은 `viewBox` SVG에 `width: 100%`를 주고, 좁은 화면에서는 세로 목록으로 바꾼다. `overflow-x: auto`와 `min-width` 표를 쓰지 않는다.
-- 사람 이름, 티켓 번호, 고객사는 예시임을 문서에 밝힌다.
-
-## 검증과 export
-
-빌드·린트·테스트는 없다. HTML을 고친 뒤에는 headless Chrome으로 렌더링을 확인한다. headless 창은 500px보다 좁게 만들 수 없으므로, 그보다 좁은 폭은 실제 기기에서 확인한다.
-
-```bash
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-DOC="docs/<메뉴>/<문서>/<버전>/<파일>.html"
-"$CHROME" --headless=new --hide-scrollbars --window-size=1280,4000 --screenshot=/tmp/desk.png "file://$PWD/$DOC"
-"$CHROME" --headless=new --hide-scrollbars --window-size=500,7000 --screenshot=/tmp/narrow.png "file://$PWD/$DOC"
-"$CHROME" --headless=new --no-pdf-header-footer --print-to-pdf="${DOC%/*}/exports/<문서>.pdf" "file://$PWD/$DOC"
-```
-
-가로 넘침은 두 가지로 확인한다. 하나는 `document.documentElement.scrollWidth`가 창 너비보다 큰지, 다른 하나는 `overflow-x`가 visible이 아니면서 `scrollWidth > clientWidth`인 요소가 있는지다. 이 측정 스크립트를 문서 사본에 넣고 `--dump-dom`으로 결과를 읽는다.

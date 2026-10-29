@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { API } from "./base.ts";
 
 /** 2.0 텍스트 편집 API */
 export interface Segment { id: number; text: string; hash: string; multiline: boolean; group: string; svg?: boolean; fmt?: string }
@@ -19,7 +20,7 @@ export const useSegments = (menu: string, doc: string, version: string) =>
   useQuery({
     queryKey: ["segments", menu, doc, version],
     queryFn: async () => {
-      const res = await fetch(`/api/docs/${menu}/${doc}/segments?v=${encodeURIComponent(version)}`);
+      const res = await fetch(`${API}/docs/${menu}/${doc}/segments?v=${encodeURIComponent(version)}`);
       if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status}`);
       return res.json() as Promise<SegmentList>;
     },
@@ -29,7 +30,7 @@ export const useSegments = (menu: string, doc: string, version: string) =>
 export async function saveTextEdit(menu: string, doc: string, body: {
   baseVersion: string; changes: { id: number; hash: string; text: string }[]; note?: string;
 }): Promise<{ version: string; changed: number; warnings?: string[] }> {
-  const res = await fetch(`/api/docs/${menu}/${doc}/text-edit`, {
+  const res = await fetch(`${API}/docs/${menu}/${doc}/text-edit`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string; version: string; changed: number; warnings?: string[] };
@@ -38,7 +39,7 @@ export async function saveTextEdit(menu: string, doc: string, body: {
 }
 
 export const editViewUrl = (menu: string, doc: string, version: string) =>
-  `/api/docs/${menu}/${doc}/edit-view?v=${encodeURIComponent(version)}`;
+  `${API}/docs/${menu}/${doc}/edit-view?v=${encodeURIComponent(version)}`;
 
 // 저장 전 작성 내용(바뀐 조각 id → 글자)을 브라우저에 임시 보관한다. 저장소가 막혀 있으면 조용히 넘어간다
 const key = (id: string) => `workflow:textdraft:${id}`;

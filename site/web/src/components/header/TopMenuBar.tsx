@@ -3,9 +3,11 @@ import { NavLink, useNavigate, useParams } from "react-router";
 import { ChevronLeft, ChevronRight, Ellipsis, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Category } from "../../lib/api.ts";
 import { slugify } from "../../lib/files.ts";
+import { stopComposingEnter } from "../../lib/ime.ts";
 import { manage } from "../../lib/manage.ts";
 import { useAction } from "../manage/useAction.ts";
 import { IconButton } from "../IconButton.tsx";
+import { useCan } from "../../lib/me.ts";
 
 /**
  * 헤더의 상단 메뉴(대분류) 탭. 탭 줄에서 바로 관리한다.
@@ -83,7 +85,7 @@ function AddPopover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => v
   const finalKey = key.trim() || slugify(name);
   return (
     <Floating anchor={anchor} onClose={onClose}>
-      <form className="grid gap-2 p-1.5" onSubmit={async (e) => {
+      <form className="grid gap-2 p-1.5" onKeyDown={stopComposingEnter} onSubmit={async (e) => {
         e.preventDefault();
         const r = await run(() => manage.addCategory(name, key), {
           title: "대분류를 추가할까요?", confirmText: "추가", details: [`이름: ${name.trim()}`, `key: ${finalKey}`],
@@ -140,6 +142,8 @@ function RenameInput({ cat, onDone }: { cat: Category; onDone: () => void }) {
 }
 
 export function TopMenuBar({ categories }: { categories: Category[] }) {
+  // 대분류 관리(추가·이름·순서·삭제)는 워크스페이스 owner만(4.0 P4). 로컬 사이트는 늘 owner
+  const own = useCan().own;
   const { category: current } = useParams();
   const { run } = useAction();
   const [menuFor, setMenuFor] = useState<{ key: string; anchor: HTMLElement } | null>(null);
@@ -195,7 +199,7 @@ export function TopMenuBar({ categories }: { categories: Category[] }) {
               <span className={`absolute inset-y-1.5 w-[3px] rounded-full bg-accent ${lineSide === "left" ? "-left-[2px]" : "-right-[2px]"}`} aria-hidden />
             )}
             {/* 드래그 핸들: 마우스를 올리면 보인다. 이 핸들을 잡아야 끌린다(탭 링크는 눌러도 끌리지 않는다) */}
-            <span
+            {own && <span
               draggable={renaming !== c.key}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "move";
@@ -213,7 +217,7 @@ export function TopMenuBar({ categories }: { categories: Category[] }) {
               role="img"
             >
               <GripVertical size={14} aria-hidden />
-            </span>
+            </span>}
             {renaming === c.key ? (
               <RenameInput cat={c} onDone={() => setRenaming(null)} />
             ) : (
@@ -221,14 +225,14 @@ export function TopMenuBar({ categories }: { categories: Category[] }) {
                 <NavLink
                   to={`/${c.key}`}
                   draggable={false}
-                  onDoubleClick={() => setRenaming(c.key)}
+                  onDoubleClick={() => own && setRenaming(c.key)}
                   className={`py-3 pl-1 text-sm font-medium whitespace-nowrap ${active ? "pr-1 text-fg" : "pr-3 text-muted hover:text-fg"}`}
-                  data-tip="더블클릭으로 이름 변경"
+                  data-tip={own ? "더블클릭으로 이름 변경" : undefined}
                 >
                   {c.name}
                 </NavLink>
                 {/* ⋯ 버튼은 선택된 탭에만 둔다(빈 자리로 탭 간격이 벌어지지 않게). 링크 안에 넣지 않는다(링크 안의 버튼은 HTML 규칙 위반) */}
-                {(active || menuFor?.key === c.key) && (
+                {own && (active || menuFor?.key === c.key) && (
                   <IconButton icon={Ellipsis} label={`${c.name} 메뉴`} size={16} className="mr-1.5 p-0.5"
                     aria-haspopup="menu" aria-expanded={menuFor?.key === c.key}
                     onClick={(e) => setMenuFor(menuFor?.key === c.key ? null : { key: c.key, anchor: e.currentTarget })} />
@@ -242,10 +246,10 @@ export function TopMenuBar({ categories }: { categories: Category[] }) {
           </div>
         );
       })}
-      <div className="flex shrink-0 items-center pl-1">
+      {own && <div className="flex shrink-0 items-center pl-1">
         <IconButton icon={Plus} label="대분류 추가" size={18} aria-haspopup="dialog" aria-expanded={!!adding}
           onClick={(e) => setAdding(adding ? null : e.currentTarget)} />
-      </div>
+      </div>}
       {adding && <AddPopover anchor={adding} onClose={() => setAdding(null)} />}
     </nav>
   );
