@@ -145,7 +145,12 @@ auth.get("/google/callback", async (c) => {
       redirect_uri: `${new URL(c.req.url).origin}/api/auth/google/callback`, grant_type: "authorization_code", code_verifier: saved.verifier,
     }),
   });
-  if (!res.ok) return errorPage(c, 502, "Google 로그인 확인에 실패했습니다. 다시 시도하세요");
+  if (!res.ok) {
+    // 원인을 로그로 남긴다(Google의 오류 코드만, 비밀값은 남기지 않는다). invalid_client면 GOOGLE_CLIENT_ID·SECRET이 틀리거나 비었다
+    const err = await res.json<{ error?: string; error_description?: string }>().catch(() => ({} as { error?: string; error_description?: string }));
+    console.error("Google 토큰 교환 실패", res.status, err.error, err.error_description);
+    return errorPage(c, 502, `Google 로그인 확인에 실패했습니다(${err.error ?? res.status}). 다시 시도하세요`);
+  }
   const { id_token } = await res.json<{ id_token?: string }>();
   let claims: { iss?: string; aud?: string; sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string; exp?: number };
   try {
