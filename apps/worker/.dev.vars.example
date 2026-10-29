@@ -1,0 +1,6 @@
+# 로컬 개발·테스트용 값(진짜 비밀값 아님). .dev.vars가 없으면 typecheck·test가 이 파일을 복사한다
+SIGNING_KEY=dev-signing-key-change-me
+ADMIN_TOKEN=dev-admin-token
+GOOGLE_CLIENT_SECRET=
+DEV_LOGIN=1
+SUPERADMIN_EMAILS=dev@example.com

@@ -64,7 +64,7 @@ npm run dev                       # 화면 빌드 → 로컬 D1 마이그레이�
 9. **확인**: 로그인 → 문서 열기(HTML은 `workflow-files.simplite.net`에서 열린다) → 텍스트 편집 저장 → PPTX 문서 PDF 보기 → 멤버 창에서 초대 링크 만들기.
 10. **Claude Code 연결**: `claude mcp add --transport http workflow-docs https://workflow.simplite.net/mcp` → 처음 쓸 때 브라우저로 로그인하고 워크스페이스를 고른다.
 
-이후에는 GitHub Actions(`.github/workflows/workflow-app.yml`)가 develop 푸시 → staging, main 푸시 → production으로 마이그레이션·배포한다. 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID`가 있어야 한다.
+이후에는 GitHub Actions(`.github/workflows/workflow-app.yml`)가 develop 푸시 → staging, main 푸시 → production으로 마이그레이션·배포한다. 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID`를 넣고, 저장소 Variables에 `DEPLOY_ENABLED=true`를 넣어야 배포 작업이 돈다(그 전에는 테스트만).
 
 ## 백업과 복구
 

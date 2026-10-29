@@ -5,10 +5,10 @@
   "description": "문서 탐색 워크플로우 Cloudflare Worker(Hono API + 화면 정적 파일 + 사용자 콘텐츠)",
   "scripts": {
     "build:web": "cd ../../site && VITE_CLOUD=1 WEB_OUT=../../apps/worker/public vite build",
-    "dev": "npm run build:web && wrangler d1 migrations apply workflow --local && wrangler dev",
+    "dev": "([ -f .dev.vars ] || cp .dev.vars.example .dev.vars) && npm run build:web && wrangler d1 migrations apply workflow --local && wrangler dev",
     "deploy": "npm run build:web && wrangler deploy",
-    "typecheck": "wrangler types >/dev/null && tsc",
-    "test": "wrangler types >/dev/null && vitest run",
+    "typecheck": "([ -f .dev.vars ] || cp .dev.vars.example .dev.vars) && wrangler types >/dev/null && tsc",
+    "test": "([ -f .dev.vars ] || cp .dev.vars.example .dev.vars) && wrangler types >/dev/null && vitest run",
     "test:ui": "node --import tsx --test test-ui/cloud.ui.test.ts"
   },
   "dependencies": {
