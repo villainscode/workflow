@@ -56,7 +56,7 @@
       "vars": {
         "APP_ORIGIN": "https://workflow-app-staging.villainscode.workers.dev",
         "FILES_ORIGIN": "",
-        "GOOGLE_CLIENT_ID": "",
+        "GOOGLE_CLIENT_ID": "652522367926-187cf5mfo2p5kjit3cc7oc3g39gcdbfn.apps.googleusercontent.com",
         "SUPERADMIN_EMAILS": "villainscode@gmail.com"
       }
     },
@@ -80,7 +80,7 @@
       "vars": {
         "APP_ORIGIN": "https://workflow.simplite.net",
         "FILES_ORIGIN": "https://workflow-files.simplite.net",
-        "GOOGLE_CLIENT_ID": "",
+        "GOOGLE_CLIENT_ID": "652522367926-187cf5mfo2p5kjit3cc7oc3g39gcdbfn.apps.googleusercontent.com",
         "SUPERADMIN_EMAILS": "villainscode@gmail.com"
       }
     }
