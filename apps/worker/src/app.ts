@@ -21,7 +21,7 @@ import { getRevision, listRevisions, publish, restoreRevision, saveRevision, wor
 import { assetRow, putAsset } from "./assets.ts";
 import { applyStructOps, readStructure, structEditView, type StructOp } from "./structedit.ts";
 import { checkDeckPut, patchDeck, patchSlide, putSlide, readDeck } from "./deck.ts";
-import { deckPdf, slidePng } from "./deckRender.ts";
+import { htmlPdf, slidePng } from "./render.ts";
 import { usage } from "./usage.ts";
 import { StructEditError } from "@workflow/core/structedit/html";
 import { agentOf, liveStub, reasonOf } from "./live.ts";
@@ -81,7 +81,7 @@ app.use("/api/*", async (c, next) => {
   // 운영에서는 Cloudflare가 늘 cf-connecting-ip를 넣는다. 없으면(로컬·테스트) 제한하지 않는다
   const ip = c.req.header("cf-connecting-ip");
   const limiter = !ip ? undefined : c.req.path.startsWith("/api/auth/") ? c.env.LIMIT_AUTH
-    : c.req.path.startsWith("/api/w/") && (c.req.method !== "GET" || /\/deck\/(pdf|png)$/.test(c.req.path)) ? c.env.LIMIT_WRITE : undefined;
+    : c.req.path.startsWith("/api/w/") && (c.req.method !== "GET" || /\/(pdf-export|deck\/png)$/.test(c.req.path)) ? c.env.LIMIT_WRITE : undefined;
   if (limiter && ip && !(await limiter.limit({ key: ip })).success) return c.json({ error: "요청이 너무 많습니다. 잠시 뒤 다시 시도하세요" }, 429);
   await next();
 });
@@ -253,11 +253,10 @@ ws.put("/docs/:menu/:doc/deck/slides/:sid", async (c) =>
 ws.patch("/docs/:menu/:doc/deck", async (c) =>
   c.json(await patchDeck(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), await c.req.json(), agentOf(c) ? "agent" : "human")));
 
-// 덱 PDF 내보내기·슬라이드 PNG(5.0 M7, Browser Rendering). ?v=버전(없으면 지금 버전), ?work=1이면 작업본. PNG에 ?format=json이면 base64(MCP)
-ws.get("/docs/:menu/:doc/deck/pdf", async (c) => {
-  const r = await deckPdf(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), { version: c.req.query("v"), work: c.req.query("work") === "1" }, await contentBase(c));
-  const name = encodeURIComponent(`${r.title}.pdf`);
-  return new Response(r.body, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename*=UTF-8''${name}`, "cache-control": "no-store" } });
+// HTML 문서 PDF 내보내기·슬라이드 PNG(5.0 M7·M8, Browser Rendering). ?v=버전(없으면 지금 버전). PNG는 ?work=1이면 작업본, ?format=json이면 base64(MCP)
+ws.get("/docs/:menu/:doc/pdf-export", async (c) => {
+  const r = await htmlPdf(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), c.req.query("v"), await contentBase(c));
+  return new Response(r.body, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(r.name)}`, "cache-control": "no-store" } });
 });
 ws.get("/docs/:menu/:doc/deck/png", async (c) => {
   const slide = c.req.query("slide") ?? "";

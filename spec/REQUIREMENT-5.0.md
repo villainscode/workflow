@@ -237,7 +237,7 @@ D-47에서 C를 고르면 DOCX·PPTX는 "행·열 넣기·빼기, 열 너비, �
 | **M4 슬라이드 편집기** | 2스프린트 | 명세 14절 1~4단계(형식·보기, 선택·글자, 배치, 표·이미지). 저장은 R2 정본(2절 조정) | 명세 15절 테스트 + 확대 비율별 좌표 오차 1px 이내 |
 | **M5 오피스 편집(DOCX·PPTX·XLSX)** | 2스프린트(A) / 3스프린트(C) | A: 편집 서버 운영 구성(Containers, JWT, 파일·콜백 API, viewer 보기 모드, 수정본 연결, 동시 편집 키). C: OOXML 표·이미지 연산 + 목록형 편집 화면 | A: 저장 콜백 → 수정본 → 버전 올리기까지 화면 테스트, 두 사람 동시 편집. C: 연산마다 Word·LibreOffice로 열리는지(변환 컨테이너로 PDF 확인) |
 | **M6 PDF 편집** | 1스프린트 | pdf.js 편집 레이어(글상자·이미지·형광펜·펜), pdf-lib 페이지 회전·삭제·순서·합치기·양식 채우기, 한글 글꼴 | 저장한 PDF를 다시 열어 주석·페이지 순서 확인, 한글 글상자 표시 |
-| **M7 에이전트·공유·내보내기** | 1스프린트 | MCP 도구: `doc_ops`(HTML·슬라이드 구조 연산), `asset_put`, `revision_list`·`revision_restore`, 덱 도구(명세 11절). 접속자 표시, 슬라이드 PDF 내보내기(Browser Rendering), 수정본 비교 화면 | MCP 테스트: 잘못된 연산에 진단(fix 포함) 반환, 에이전트 수정본이 `source=agent`로 구분 |
+| **M7 에이전트·공유·내보내기** | 1스프린트 | MCP 도구: `doc_ops`(HTML·슬라이드 구조 연산), `asset_put`, `revision_list`·`revision_restore`, 덱 도구(명세 11절). 접속자 표시, HTML 문서 PDF 내보내기(Browser Rendering, 처음 계획한 슬라이드 PDF에서 바꿈), 수정본 비교 화면 | MCP 테스트: 잘못된 연산에 진단(fix 포함) 반환, 에이전트 수정본이 `source=agent`로 구분 |
 | **M8 운영 마감** | 1스프린트 | 수정본 보존 정책 적용, 사용량 지표(편집 서버 가동 시간·R2 쓰기), 보안 점검(CSP·자산 주소·편집 서버 JWT), 문서·가이드 갱신 | staging에서 전체 회귀, 운영 배포 |
 
 합계: A로 가면 약 12스프린트(24주), C로 가면 약 13스프린트. M3·M4·M6은 서로 의존이 없어 두 사람이면 나란히 갈 수 있다. M1·M2가 끝나야 그 뒤가 시작된다.
@@ -323,7 +323,10 @@ gantt
 - 접속자 표시: 워크스페이스 Durable Object가 연결마다 사용자와 보는 문서·보기/편집을 들고 목록을 보낸다. 문서 머리에 같은 문서를 보는 사람(편집 중이면 강조).
 - 실시간 반영: 저장 알림에 저장한 사람 id를 담아, 편집 화면(덱·구조·PDF)이 다른 사람·Claude Code의 저장을 받으면 최신으로 바꾸고 알린다(내 대기 중 편집이 있으면 덱은 보낼 때 서버가 최신본에 다시 얹는다).
 - 수정본 비교: 이력에서 고른 수정본과 지금 작업본. 글자 형식은 줄 단위, 덱은 슬라이드를 이어 붙여 비교, 그 밖은 바뀐 파일 목록.
-- 덱 PDF 내보내기·`deck_render`(확정 2026-10-30, 사용자: Browser Rendering): core `renderDeckHtml`(화면 렌더러와 같은 DOM, 기본 스타일 `SLIDE_BASE_CSS`는 core 한 곳)을 Worker가 Browser Rendering으로 열어 글꼴·그림을 기다린 뒤 1920×1080 쪽 PDF·960×540 PNG. 내용(파일 sha 묶음)으로 R2 캐시. 덱 보기 화면 「PDF」 버튼(확인 창), MCP `deck_render`(이미지로 돌려줌). 명세의 "발표 화면 /present?print=1 + 단기 토큰" 대신 정적 HTML을 넣는다(로그인 없이 같은 렌더링).
+- PDF 내보내기·`deck_render`(확정 2026-10-30, 사용자: Browser Rendering): Worker가 Browser Rendering으로 열어 글꼴·그림을 기다린 뒤 그리고, 내용(파일 sha 묶음)으로 R2에 캐시한다.
+  - **HTML 문서 PDF**(바꿈 2026-10-30, 사용자: "슬라이드 to PDF는 필요 없고 HTML to PDF는 필요"): 문서 화면 「PDF로 내보내기」 버튼(확인 창, Cloudflare만)으로 버전의 대표 HTML을 콘텐츠 도메인 주소로 열어 A4로 인쇄한다(`GET /docs/:menu/:doc/pdf-export?v=`). 렌더링 브라우저는 그 워크스페이스 콘텐츠·Google Fonts·`data:`만 읽는다. 처음 만든 덱 PDF 버튼과 `/deck/pdf`는 뺐다.
+  - **슬라이드 PNG** MCP `deck_render`(960×540, 이미지로 돌려줌)는 남긴다. 에이전트가 배치를 눈으로 확인하는 용도다. core `renderDeckHtml`(화면 렌더러와 같은 DOM, 기본 스타일 `SLIDE_BASE_CSS`는 core 한 곳)을 연다.
+  - 열 때는 `load`까지만 기다린다. 실제 Browser Rendering에서 `networkidle0`은 거의 매번 30초 시간 초과였다(staging에서 발견, `spec/TESTING.md` 5절).
 - 테스트: core TC-ED-42, Worker TC-CF-45·46, 로컬 TC-MCP-22, 화면 TC-CFUI-17·18.
 
 **M8 운영 마감 (2026-10-30, 진행 중)**

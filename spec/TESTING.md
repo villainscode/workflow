@@ -313,7 +313,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-12 | 구조 편집(PPTX): 표 끝에 행 넣기 → 수정본, 미리보기는 작업본 PDF(`…/work/pdf`, 변환 컨테이너), 버전으로 저장 | 5.0 M5 |
 | TC-CFUI-13 | 슬라이드 덱 보기: 목록 썸네일, 1920×1080을 창에 맞춰 그림, →로 다음 슬라이드·발표자 노트 | 5.0 M4 |
 | TC-CFUI-14 | 슬라이드 편집: 한글 조합 입력(CDP IME 이벤트) → Esc 확정 → 새로 고침 뒤 유지, 고정 요소 끌기(화면 이동량 ÷ 배율, 맞춤선 6px 안), 표 열 넣기·열 경계 손잡이 끌기(이웃 두 열만, 합 100), ⌘Z, 다른 사람이 지운 요소를 고치면 알림·최신본, 버전으로 저장 | 명세 15절 |
-| TC-CFUI-18 | 덱 PDF 내보내기(확인 창 → 내려받기)·API(슬라이드마다 16:9 한 쪽, 두 번째는 캐시로 빠름)·슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 명세 12절 |
+| TC-CFUI-18 | HTML 문서 PDF 내보내기(확인 창 → 내려받기)·API(A4 쪽, 두 번째는 캐시로 빠름, HTML이 아닌 문서는 400), 덱 화면에는 PDF 버튼 없음, 슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 5.0 M8 |
 | TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
 | TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
 | TC-CFUI-15 | 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 놓은 자리 가운데에 고정 위치 그림, 서명 주소(`/c/…/_asset/…`)로 그림 | 명세 08절 |
@@ -429,6 +429,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-29 | 구조 편집에서 문단을 두 번 눌러도 글자 편집이 켜지지 않을 때가 있음 | 글자를 고칠 수 있는 요소 표시(`data-editable`)를 렌더 뒤 effect에서 칠해서, 편집 사본이 아직 다 읽히기 전이면 빠졌다 | 사본의 `load`에서 칠함(`HtmlStructPane.tsx`) | TC-CFUI-11 |
 | 2026-10-30 | 슬라이드 글자를 두 번 눌러 편집기가 열린 직후 친 글자가 들어가지 않음 | Tiptap 편집기 DOM이 붙기 전에 포커스를 요청해 커서가 들어가지 않았다 | `autofocus: "end"` + 다음 프레임에 한 번 더 포커스(`TextEditor.tsx`) | TC-CFUI-14 |
 | 2026-10-30 | (보안 점검) 덱 글꼴 이름(`faces.family`)으로 Browser Rendering 문서에 스크립트·임의 주소를 넣을 수 있음(중간) | 글꼴 이름을 문자열인지만 보고 인쇄 HTML의 `<style>`에 그대로 넣었다. 수정본 파일 저장(put)은 덱 검사도 거치지 않았다 | 글꼴 이름 허용 문자(`FAMILY_RE`)로 검사하고 렌더러도 걸러 넣음, 인쇄 문서에 CSP `script-src 'none'`, 헤드리스 브라우저는 콘텐츠 도메인 그림·Google Fonts만 읽게 요청 가로채기, put에도 덱 검사 | TC-ED-43·46 (수정 전 실패 확인), TC-CFUI-18 |
-| 2026-10-30 | (보안 점검) 낮음 6건: 실시간 WebSocket에 Origin 검사 없음, viewer가 렌더링을 제한 없이 부름, OOXML 압축 폭탄·연산 수 제한 없음, put 크기 제한 없음, HTML 링크 `java\tscript:`·`data:` 통과, 렌더 캐시가 영구 삭제 뒤에도 남음 | — | WebSocket 업그레이드도 Origin 검사, 덱 PDF·PNG에 요청 수 제한, 풀린 크기 64MB·연산 500개 상한, put 25MB·200개 상한, 링크 허용 형태만, 캐시 30일 정리 | TC-CF-48, TC-ED-44·45·46·47 |
+| 2026-10-30 | (보안 점검) 낮음 6건: 실시간 WebSocket에 Origin 검사 없음, viewer가 렌더링을 제한 없이 부름, OOXML 압축 폭탄·연산 수 제한 없음, put 크기 제한 없음, HTML 링크 `java\tscript:`·`data:` 통과, 렌더 캐시가 영구 삭제 뒤에도 남음 | — | WebSocket 업그레이드도 Origin 검사, PDF·PNG 렌더링에 요청 수 제한, 풀린 크기 64MB·연산 500개 상한, put 25MB·200개 상한, 링크 허용 형태만, 캐시 30일 정리 | TC-CF-48, TC-ED-44·45·46·47 |
 | 2026-10-30 | PDF 편집에서 글상자 도구로 쪽을 눌러도 글자 칸이 생기지 않음 | 눌렀을 때 생긴 글자 칸이 포커스를 받은 뒤, 같은 누름의 기본 동작(포커스 옮기기)으로 바로 포커스를 잃어 빈 칸으로 지워졌다 | 글상자 도구의 pointerdown 기본 동작을 막음(`PdfEditor.tsx`) | TC-CFUI-16 |
 | 2026-10-30 | 가져오기 CLI로 들어온 덱은 슬라이드 파일에 data-eid가 없어 에이전트가 고칠 요소를 가리킬 수 없음 | 가져오기는 업로드 검사(`prepareDeck`)를 거치지 않는다 | 덱 읽기 API(`readDeck`, 로컬·Worker)가 늘 직렬화 형식(eid 붙은)으로 준다. eid는 문서 순서로 정해져 서버·화면이 같다 | TC-CFUI-14, TC-MCP-21 |
+| 2026-10-30 | (Cloudflare staging) PDF 내보내기가 「Navigation timeout of 30000 ms exceeded」로 실패 | 렌더링 문서를 열 때 `networkidle0`(0.5초 동안 요청 없음)을 기다렸는데, 실제 Browser Rendering에서는 이 신호가 오지 않아 거의 매번 30초를 넘겼다. 로컬 `wrangler dev`는 로컬 Chrome이라 드러나지 않았다 | `load`까지만 기다리고 그 뒤 글꼴·그림을 기다림(`apps/worker/src/render.ts`) | 실제 Browser Rendering(원격 바인딩 시험 Worker)에서 `networkidle0` 3번 모두 시간 초과·`load` 3번 모두 4~5초 성공 확인, TC-CFUI-18 |

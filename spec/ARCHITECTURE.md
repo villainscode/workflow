@@ -61,7 +61,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | DB | D1. SQL을 직접 쓰고 마이그레이션은 `migrations/0001~0003` |
 | 파일 | R2. 파일은 sha256 이름으로 한 번만 저장한다. 편집기 이미지와 PDF 캐시도 R2 |
 | 실시간 | Durable Objects, WebSocket Hibernation(쉬는 연결은 시간 요금 없음). 연결마다 사용자·보는 문서·보기/편집을 붙여(serializeAttachment) 접속자 목록을 보낸다(5.0 M7) |
-| 덱 PDF·미리보기 | Cloudflare Browser Rendering(`@cloudflare/puppeteer`, `BROWSER` 바인딩). core가 만든 정적 HTML(화면 렌더러와 같은 DOM·기본 스타일)을 1920×1080 쪽으로 인쇄하거나 PNG로 찍고, 내용(파일 sha 묶음)으로 R2에 캐시(5.0 M7) |
+| HTML PDF·슬라이드 미리보기 | Cloudflare Browser Rendering(`@cloudflare/puppeteer`, `BROWSER` 바인딩). HTML 문서는 콘텐츠 도메인 주소로 열어 A4 PDF로, 슬라이드는 core가 만든 정적 HTML(화면 렌더러와 같은 DOM·기본 스타일)을 PNG로 찍는다. `load`까지 기다린 뒤 글꼴·그림을 기다리고, 내용(파일 sha 묶음)으로 R2에 캐시(5.0 M7·M8) |
 | PDF 변환 | Cloudflare Containers(`@cloudflare/containers`, durable_object 스케줄링 + `images` 형식이라 `Converter`가 `start()`에 이미지 이름을 넣는다). 이미지는 Node 22(Debian) + LibreOffice + Noto CJK |
 | 로그인 | Google OIDC를 직접 구현(인가 코드 + PKCE). 세션은 D1, 쿠키는 HttpOnly·SameSite=Lax |
 | 권한 | 초대 링크로만 가입. 역할은 owner·editor·viewer |
@@ -77,7 +77,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | API·권한 | `src/app.ts`(워크스페이스 미들웨어: 로그인·역할·Origin 검사·변경 알림), `src/members.ts` | D1 |
 | 로그인 | `src/auth.ts`(Google OIDC + PKCE, 세션 쿠키, 초대, 개발용 로그인, 원격 MCP 내부 호출 머리글) | D1 |
 | 쓰기·읽기 | `src/write.ts`, `src/manage.ts`, `src/repo.ts`, `src/search.ts`, `src/export.ts` | D1 + R2 |
-| 편집기(5.0) | `src/revisions.ts`(수정본·작업본·버전으로 올리기), `src/structedit.ts`(구조 편집 연산 → 수정본), `src/deck.ts`(슬라이드 덱 연산·통째 쓰기·색인, rev 다시 적용), `src/deckRender.ts`(덱 PDF·PNG, Browser Rendering), `src/assets.ts`(편집기 이미지) | D1 + R2 |
+| 편집기(5.0) | `src/revisions.ts`(수정본·작업본·버전으로 올리기), `src/structedit.ts`(구조 편집 연산 → 수정본), `src/deck.ts`(슬라이드 덱 연산·통째 쓰기·색인, rev 다시 적용), `src/render.ts`(HTML PDF·슬라이드 PNG, Browser Rendering), `src/assets.ts`(편집기 이미지) | D1 + R2 |
 | 사용자 콘텐츠 | `src/content.ts`(서명 토큰 `/c/…`, `/i/…`), `src/token.ts` | R2, 콘텐츠 도메인 |
 | 실시간 | `src/live.ts` | Durable Object(WebSocket) |
 | 변환 | `src/convert.ts`, `apps/converter` | Containers |
@@ -95,7 +95,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 - 사용자가 올린 파일은 앱과 다른 도메인에서만 준다. 주소에는 12~24시간 유효한 서명 토큰이 들어간다. HTML·SVG에는 sandbox CSP를 붙인다.
 - 콘텐츠 도메인은 앱 출처에만 CORS를 연다. 화면이 Markdown·표를 `fetch`로 읽기 때문이다.
 - 상태를 바꾸는 API는 Origin이 앱 주소일 때만 받는다. 두 도메인이 같은 사이트(simplite.net)라 SameSite 쿠키만으로는 막히지 않는다.
-- 로그인 API는 IP당 분당 20번, 쓰기 API와 덱 PDF·PNG(Browser Rendering)는 분당 120번까지 받는다.
+- 로그인 API는 IP당 분당 20번, 쓰기 API와 HTML PDF·슬라이드 PNG(Browser Rendering)는 분당 120번까지 받는다.
 - 실시간 WebSocket 업그레이드도 Origin이 앱 주소여야 한다(교차 사이트 WebSocket 막기).
 - Browser Rendering은 core가 검증한 정적 HTML만 연다: 문서에 CSP `script-src 'none'`, 요청은 콘텐츠 도메인 그림·Google Fonts만 통과.
 - 입력 상한: OOXML 풀린 크기 64MB, 연산 500개, 수정본 파일 저장 25MB·200개. 변환·렌더링 캐시는 30일 뒤 정리.

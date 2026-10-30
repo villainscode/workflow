@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { Download, ExternalLink, FileDown, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -21,6 +21,7 @@ import { parseSeg } from "../lib/seg.ts";
 import { manage } from "../lib/manage.ts";
 import { useAction } from "./manage/useAction.ts";
 import { CLOUD, useCan } from "../lib/me.ts";
+import { API } from "../lib/base.ts";
 import { STRUCT_EDITABLE } from "../lib/structedit.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
 import { PresenceChips } from "./PresenceChips.tsx";
@@ -54,7 +55,9 @@ export function DocView() {
   const [refCopy, setRefCopy] = useState(false);
   // 구조 편집(5.0): 표·그림·블록을 고쳐 수정본으로 자동 저장하고, 버전으로 저장하면 새 버전
   const [structEditing, setStructEditing] = useState(false);
-  useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); }, [menu, doc]);
+  // HTML PDF 내보내기(5.0 M8, Cloudflare Browser Rendering): 진행·오류 안내
+  const [exporting, setExporting] = useState("");
+  useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); setExporting(""); }, [menu, doc]);
   useEffect(() => {
     if (!savedNotice) return;
     const t = setTimeout(() => setSavedNotice(""), 5000);
@@ -96,6 +99,23 @@ export function DocView() {
   const onStructExit = (saved?: string) => {
     setStructEditing(false);
     if (saved) { setParam("v", null); setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다`); }
+  };
+  const exportPdf = async () => {
+    const ok = await confirm({ title: "PDF로 내보낼까요?", confirmText: "내보내기",
+      details: [`문서: ${data.title}`, `버전: ${versionLabel(version.version)}`, "A4 크기로 인쇄합니다"] });
+    if (!ok) return;
+    setExporting("PDF를 만드는 중…");
+    try {
+      const res = await fetch(`${API}/docs/${menu}/${doc}/pdf-export?v=${encodeURIComponent(version.version)}`);
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status}`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.title} ${version.version}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setExporting("");
+    } catch (e) { setExporting(`내보내지 못했습니다: ${(e as Error).message}`); }
   };
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
@@ -153,6 +173,9 @@ export function DocView() {
               a.click();
             }} />
           )}
+          {CLOUD && entry && /\.html?$/i.test(entry.path) && (
+            <IconButton icon={FileDown} label="PDF로 내보내기" disabled={exporting === "PDF를 만드는 중…"} onClick={() => void exportPdf()} />
+          )}
           {can.edit && <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />}
           {can.edit && entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing || structEditing}
@@ -189,6 +212,7 @@ export function DocView() {
           )}
         </div>
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
+        {exporting && <p role="status" className="basis-full rounded-md bg-sunken px-3 py-1 text-xs text-muted">{exporting}</p>}
         {savedNotice && <p className="basis-full rounded-md bg-ok-soft px-3 py-1 text-xs text-ok">{savedNotice}</p>}
       </div>
       <div>

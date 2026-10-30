@@ -570,26 +570,30 @@ describe("Cloudflare 화면", { skip }, () => {
     await page.waitForFunction(() => !document.querySelector('[aria-label="같이 보는 사람"]'), { timeout: 15_000 });
   });
 
-  test("TC-CFUI-18 덱 PDF 내보내기·슬라이드 PNG(Browser Rendering): 슬라이드마다 16:9 한 쪽, PNG 960×540, 같은 내용은 캐시", async () => {
+  test("TC-CFUI-18 HTML 문서 PDF 내보내기(Browser Rendering): A4, 같은 버전은 캐시, 덱에는 PDF 버튼이 없고 슬라이드 PNG(deck_render)는 960×540", async () => {
     const { PDFDocument } = await import("pdf-lib");
-    await open("/team/sdlc/notes/intro-deck", "팀 소개 덱");
+    await open("/team/sdlc/process/guide", "샘플 프로세스 가이드");
     await page.waitForSelector('button[data-tip="PDF로 내보내기"]', { timeout: 15_000 });
-    const n = (await api("/docs/notes/intro-deck/deck")).index.order.length;
     // 화면: 확인 창 → 내려받기(오류 없이 끝난다)
     await page.click('button[data-tip="PDF로 내보내기"]');
     await clickConfirm("내보내기");
     await page.waitForFunction(() => !document.body.innerText.includes("PDF를 만드는 중"), { timeout: 90_000 });
     assert.ok(!(await page.evaluate(() => document.body.innerText.includes("내보내지 못했습니다"))), await page.evaluate(() => document.body.innerText.slice(0, 300)));
-    // API: PDF 쪽 수·크기
+    // API: A4 쪽, 두 번째는 캐시
     const t0 = Date.now();
-    const res = await api("/docs/notes/intro-deck/deck/pdf", true);
+    const res = await api("/docs/process/guide/pdf-export", true);
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "application/pdf");
     const pdf = await PDFDocument.load(new Uint8Array(await res.arrayBuffer()));
-    assert.equal(pdf.getPageCount(), n);
+    assert.ok(pdf.getPageCount() >= 1);
     const { width, height } = pdf.getPage(0).getSize();
-    assert.ok(Math.abs(width / height - 16 / 9) < 0.01, `${width}×${height}`);
+    assert.ok(Math.abs(width - 595.9) < 2 && Math.abs(height - 842.9) < 2, `${width}×${height}`);
     assert.ok(Date.now() - t0 < 5000, "두 번째는 캐시");
+    assert.equal((await api("/docs/notes/intro-deck/pdf-export", true)).status, 400, "HTML이 아닌 문서");
+    // 덱 화면에는 PDF 버튼이 없다
+    await open("/team/sdlc/notes/intro-deck", "팀 소개 덱");
+    await page.waitForSelector('ol[aria-label="슬라이드 목록"] li', { timeout: 15_000 });
+    assert.equal(await page.$('button[data-tip="PDF로 내보내기"]'), null);
     // PNG(작업본)
     const png = await api("/docs/notes/intro-deck/deck/png?work=1&slide=cover", true);
     assert.equal(png.headers.get("content-type"), "image/png");
