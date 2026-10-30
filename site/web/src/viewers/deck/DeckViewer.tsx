@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileDown } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { deckFamily, useDeckFonts, useDeckVersion, type Deck } from "../../lib/deck.ts";
-import { API, CLOUD } from "../../lib/base.ts";
-import { versionLabel } from "../../lib/api.ts";
-import { useConfirm } from "../../components/confirm/ConfirmProvider.tsx";
 import { EmptyState } from "../../components/EmptyState.tsx";
 import { IconButton } from "../../components/IconButton.tsx";
 import { SlideCanvas, SlideRenderer } from "./SlideRenderer.tsx";
@@ -12,36 +9,13 @@ import { SlideCanvas, SlideRenderer } from "./SlideRenderer.tsx";
 export function DeckViewer({ menu, doc, version }: { menu: string; doc: string; version: string }) {
   const { data, error } = useDeckVersion(menu, doc, version);
   const [cur, setCur] = useState(0);
-  const [exporting, setExporting] = useState("");
-  const confirm = useConfirm();
   useDeckFonts(data?.index);
   if (error) return <EmptyState title="덱을 열 수 없습니다" body={String((error as Error).message)} />;
   if (!data) return <EmptyState title="불러오는 중…" />;
-
-  // PDF 내보내기(5.0 M7, Cloudflare Browser Rendering): 서버가 슬라이드마다 1920×1080 쪽으로 인쇄한다
-  const exportPdf = async () => {
-    const ok = await confirm({ title: "PDF로 내보낼까요?", confirmText: "내보내기",
-      details: [`덱: ${data.index.title}`, `버전: ${versionLabel(version)}`, `슬라이드 ${data.slides.length}장`] });
-    if (!ok) return;
-    setExporting("PDF를 만드는 중…");
-    try {
-      const res = await fetch(`${API}/docs/${menu}/${doc}/deck/pdf?v=${encodeURIComponent(version)}`);
-      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status}`);
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${data.index.title}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      setExporting("");
-    } catch (e) { setExporting(`내보내지 못했습니다: ${(e as Error).message}`); }
-  };
-  return <DeckLayout deck={data} cur={Math.min(cur, data.slides.length - 1)} setCur={setCur} onExport={CLOUD ? () => void exportPdf() : undefined} exportStatus={exporting} />;
+  return <DeckLayout deck={data} cur={Math.min(cur, data.slides.length - 1)} setCur={setCur} />;
 }
 
-export function DeckLayout({ deck, cur, setCur, onExport, exportStatus }: {
-  deck: Deck; cur: number; setCur: (n: number) => void; onExport?: () => void; exportStatus?: string;
-}) {
+export function DeckLayout({ deck, cur, setCur }: { deck: Deck; cur: number; setCur: (n: number) => void }) {
   const family = deckFamily(deck.index);
   const n = deck.slides.length;
   const go = (d: number) => setCur(Math.max(0, Math.min(n - 1, cur + d)));
@@ -72,8 +46,6 @@ export function DeckLayout({ deck, cur, setCur, onExport, exportStatus }: {
           <span className="font-mono text-xs text-muted">{cur + 1} / {n}</span>
           <IconButton icon={ChevronRight} label="다음 슬라이드 (→)" disabled={cur === n - 1} onClick={() => go(1)} />
           <p className="min-w-0 flex-1 truncate text-xs text-muted" data-tip={slide.notes || undefined}>{slide.notes ? `노트: ${slide.notes}` : ""}</p>
-          {exportStatus && <span role="status" className="text-xs text-muted">{exportStatus}</span>}
-          {onExport && <IconButton icon={FileDown} label="PDF로 내보내기" text="PDF" variant="outline" disabled={exportStatus === "PDF를 만드는 중…"} onClick={onExport} />}
         </div>
       </div>
     </div>
