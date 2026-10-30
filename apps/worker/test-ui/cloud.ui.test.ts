@@ -577,7 +577,9 @@ describe("Cloudflare 화면", { skip }, () => {
     // 화면: 확인 창 → 내려받기(오류 없이 끝난다)
     await page.click('button[data-tip="PDF로 내보내기"]');
     await clickConfirm("내보내기");
-    await page.waitForFunction(() => !document.body.innerText.includes("PDF를 만드는 중"), { timeout: 90_000 });
+    // 진행 막대: 만드는 동안 보이고, 끝나면 사라진다
+    await page.waitForSelector('[role="progressbar"][aria-label="PDF 내보내기 진행"]', { timeout: 5_000 });
+    await page.waitForFunction(() => !document.querySelector('[role="progressbar"]'), { timeout: 90_000 });
     assert.ok(!(await page.evaluate(() => document.body.innerText.includes("내보내지 못했습니다"))), await page.evaluate(() => document.body.innerText.slice(0, 300)));
     // API: A4 쪽, 두 번째는 캐시
     const t0 = Date.now();

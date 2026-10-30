@@ -57,6 +57,7 @@ export function DocView() {
   const [structEditing, setStructEditing] = useState(false);
   // HTML PDF 내보내기(5.0 M8, Cloudflare Browser Rendering): 진행·오류 안내
   const [exporting, setExporting] = useState("");
+  const [exportPct, setExportPct] = useState<number | null>(null);
   useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); setExporting(""); }, [menu, doc]);
   useEffect(() => {
     if (!savedNotice) return;
@@ -104,11 +105,29 @@ export function DocView() {
     const ok = await confirm({ title: "PDF로 내보낼까요?", confirmText: "내보내기",
       details: [`문서: ${data.title}`, `버전: ${versionLabel(version.version)}`, "A4 크기로 인쇄합니다"] });
     if (!ok) return;
-    setExporting("PDF를 만드는 중…");
+    // 서버가 그리는 동안(보통 5~10초)은 크기를 알 수 없어 경과 시간으로 80%까지 채우고, 받는 동안은 받은 바이트로 채운다
+    let pct = 0;
+    const show = (p: number) => { pct = p; setExportPct(Math.round(p)); };
+    show(0); setExporting("PDF를 만드는 중…");
+    const t0 = Date.now();
+    const timer = setInterval(() => show(80 * (1 - Math.exp(-(Date.now() - t0) / 6000))), 200);
     try {
       const res = await fetch(`${API}/docs/${menu}/${doc}/pdf-export?v=${encodeURIComponent(version.version)}`);
+      clearInterval(timer);
       if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status}`);
-      const url = URL.createObjectURL(await res.blob());
+      setExporting("PDF를 내려받는 중…");
+      const total = Number(res.headers.get("content-length")) || 0;
+      const start = pct;
+      const reader = res.body!.getReader();
+      const chunks: Uint8Array[] = [];
+      for (let got = 0; ;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        if (total) show(start + (100 - start) * Math.min(1, got / total));
+      }
+      show(100);
+      const url = URL.createObjectURL(new Blob(chunks as BlobPart[], { type: "application/pdf" }));
       const a = document.createElement("a");
       a.href = url;
       a.download = `${data.title} ${version.version}.pdf`;
@@ -116,6 +135,7 @@ export function DocView() {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       setExporting("");
     } catch (e) { setExporting(`내보내지 못했습니다: ${(e as Error).message}`); }
+    finally { clearInterval(timer); setExportPct(null); }
   };
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
@@ -174,7 +194,7 @@ export function DocView() {
             }} />
           )}
           {CLOUD && entry && /\.html?$/i.test(entry.path) && (
-            <IconButton icon={FileDown} label="PDF로 내보내기" disabled={exporting === "PDF를 만드는 중…"} onClick={() => void exportPdf()} />
+            <IconButton icon={FileDown} label="PDF로 내보내기" disabled={exportPct !== null} onClick={() => void exportPdf()} />
           )}
           {can.edit && <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />}
           {can.edit && entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
@@ -212,7 +232,16 @@ export function DocView() {
           )}
         </div>
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
-        {exporting && <p role="status" className="basis-full rounded-md bg-sunken px-3 py-1 text-xs text-muted">{exporting}</p>}
+        {exporting && (
+          <div role="status" className="basis-full rounded-md bg-sunken px-3 py-1 text-xs text-muted">
+            <p>{exporting}{exportPct !== null && ` ${exportPct}%`}</p>
+            {exportPct !== null && (
+              <div role="progressbar" aria-label="PDF 내보내기 진행" aria-valuemin={0} aria-valuemax={100} aria-valuenow={exportPct} className="mt-1 h-1.5 overflow-hidden rounded-sm bg-line">
+                <div className="h-full bg-accent transition-[width] duration-150" style={{ width: `${exportPct}%` }} />
+              </div>
+            )}
+          </div>
+        )}
         {savedNotice && <p className="basis-full rounded-md bg-ok-soft px-3 py-1 text-xs text-ok">{savedNotice}</p>}
       </div>
       <div>
