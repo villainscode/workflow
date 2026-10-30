@@ -394,6 +394,21 @@ function setColWidth(xml: string, col: number, width: number): string {
 
 // ---------- 공개 함수 ----------
 
+/** 풀었을 때 크기 상한(Worker 메모리 128MB 안). 넘으면 압축 폭탄으로 보고 413 */
+export const MAX_UNZIPPED = 64 * 1024 * 1024;
+/** 한 번에 받는 연산 수 상한 */
+export const MAX_OPS = 500;
+
+function unzipLimited(data: Uint8Array) {
+  let total = 0;
+  const zip = unzipSync(data, { filter: (f) => {
+    total += f.originalSize;
+    if (total > MAX_UNZIPPED) throw new StructEditError(413, `압축을 풀면 ${MAX_UNZIPPED / 1024 / 1024}MB를 넘는 파일은 고칠 수 없습니다`);
+    return true;
+  } });
+  return zip;
+}
+
 function slideOrder(zip: Record<string, Uint8Array>): Map<string, number> {
   const order = new Map<string, number>();
   const pres = zip["ppt/presentation.xml"];
@@ -404,7 +419,7 @@ function slideOrder(zip: Record<string, Uint8Array>): Map<string, number> {
 }
 
 export function ooxmlStructure(kind: OoxmlKind, data: Uint8Array): OoxmlStructure {
-  const zip = unzipSync(data);
+  const zip = unzipLimited(data);
   if (kind === "xlsx") {
     return { tables: [], images: [], sheets: sheetsOf(zip).map((s) => ({ id: s.part, name: s.name, widths: sheetWidths(strFromU8(zip[s.part])) })) };
   }
@@ -426,12 +441,13 @@ export function ooxmlStructure(kind: OoxmlKind, data: Uint8Array): OoxmlStructur
 
 /** 그림 파트의 바이트(목록 화면 미리보기용) */
 export function ooxmlMedia(data: Uint8Array, media: string): Uint8Array | null {
-  return unzipSync(data, { filter: (f) => f.name === media })[media] ?? null;
+  return unzipSync(data, { filter: (f) => f.name === media && f.originalSize <= MAX_UNZIPPED })[media] ?? null;
 }
 
 /** 연산을 차례로 적용한 새 파일. 바뀐 파트만 다시 쓴다 */
 export function applyOoxmlOps(kind: OoxmlKind, data: Uint8Array, ops: OoxmlOp[]): Uint8Array {
-  const zip = unzipSync(data);
+  if (ops.length > MAX_OPS) throw new StructEditError(400, `연산은 한 번에 ${MAX_OPS}개까지입니다`);
+  const zip = unzipLimited(data);
   const changed = new Map<string, Uint8Array>();
   const current = () => ({ ...zip, ...Object.fromEntries(changed) });
   for (const op of ops) {

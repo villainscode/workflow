@@ -148,4 +148,14 @@ describe("HTML 구조 편집", () => {
     }
     assert.ok(tables > 0, "리포 문서에 표가 있어야 한다");
   });
+
+  test("TC-ED-44 보안: 글자 바꾸기의 링크는 http(s)·mailto·#·상대 경로만(제어 문자를 지운 뒤 검사, java\\tscript:·data:·vbscript: 제거), 그림 주소의 역슬래시 외부 주소 거부", () => {
+    const out = sanitizeInline('<a href="java\tscript:alert(1)">x</a><a href="data:text/html,1">y</a><a href="vbscript:x">z</a><a href="https://ok.example/a">o</a><a href="docs/b.html">r</a><a href="mailto:a@b.c">m</a>');
+    assert.doesNotMatch(out, /script:|data:/);
+    assert.match(out, /href="https:\/\/ok\.example\/a"/);
+    assert.match(out, /href="docs\/b\.html"/);
+    assert.match(out, /href="mailto:a@b\.c"/);
+    const t = eid(DOC, "img");
+    assert.throws(() => applyOp(DOC, { t: "setAttr", eid: t, name: "src", value: "\\\\evil.com/x.png" }), StructEditError);
+  });
 });

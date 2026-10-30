@@ -92,4 +92,17 @@ describe("슬라이드 덱", () => {
   it("TC-ED-37 덱이 아닌 문서는 덱 API가 400", async () => {
     expect((await call(`${W}/docs/process/guide/deck`)).status).toBe(400);
   });
+
+  it("TC-ED-46 보안: 수정본 파일 저장(put)으로 deck.json·슬라이드를 쓰면 덱 검사(글꼴 이름 주입 400), 너무 큰 저장 413, 연산 500개 넘으면 400", async () => {
+    const evil = { ...DECK, faces: { f: { family: "x</style><script>1</script>", href: "https://fonts.googleapis.com/css2?family=X" } } };
+    const put = (body: object) => call(`${D}/revisions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await put({ baseRev: 0, put: [{ path: "deck.json", text: JSON.stringify(evil) }] });
+    expect(r.status).toBe(400);
+    expect((await r.json<any>()).error).toMatch(/\[font\]/);
+    expect((await put({ baseRev: 0, put: [{ path: "slides/cover.html", text: '<section id="cover"><script>1</script></section>' }] })).status).toBe(400);
+    expect((await put({ baseRev: 0, put: [{ path: "slides/cover.html", text: '<section id="cover"><h1>정상</h1></section>' }] })).status).toBe(200);
+    const big = "x".repeat(26 * 1024 * 1024);
+    expect((await put({ baseRev: 1, put: [{ path: "big.txt", text: big }] })).status).toBe(413);
+    expect((await patch("cover", 1, Array(501).fill({ t: "setNotes", text: "x" }))).status).toBe(400);
+  });
 });

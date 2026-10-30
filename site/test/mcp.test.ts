@@ -51,9 +51,9 @@ before(async () => {
 after(async () => { await client?.close(); await srv?.stop(); ws.cleanup(); });
 
 describe("도구 구성", () => {
-  test("TC-MCP-01 도구 20개(3.4 focus_in_site, 5.0 덱·구조 연산·수정본 도구 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
+  test("TC-MCP-01 도구 21개(3.4 focus_in_site, 5.0 덱·구조 연산·수정본·미리보기 도구 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(names, ["asset_put", "create_menu", "deck_create", "deck_get", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents",
+    assert.deepEqual(names, ["asset_put", "create_menu", "deck_create", "deck_get", "deck_render", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents",
       "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "upload_document", "upload_version"]);
     assert.ok(!names.some((n) => /delete|trash|purge|remove/.test(n)));
   });

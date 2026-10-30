@@ -116,8 +116,11 @@ export function sanitizeInline(input: string): string {
     if (n.tagName === "br") { out.push("<br>"); return; }
     let attrs = "";
     if (n.tagName === "a") {
-      const href = (attr(n, "href") ?? "").trim();
-      if (!/^(https?:\/\/|#|\.{0,2}\/?[\w-])/i.test(href) || /^\s*javascript:/i.test(href)) { for (const c of n.childNodes) walk(c); return; }
+      // 브라우저는 주소의 탭·줄바꿈을 지우므로(java\tscript:) 제어 문자를 먼저 지우고, 허용한 형태만 남긴다:
+      // http(s)·mailto·#·상대 경로(스킴 없음, 역슬래시·// 없음)
+      const href = (attr(n, "href") ?? "").replace(/[\u0000-\u001f\u007f\s]+/g, "");
+      const ok = /^(https?:\/\/|mailto:|#)/i.test(href) || (!/^[a-z][\w+.-]*:/i.test(href) && !href.startsWith("//") && !href.includes("\\") && href !== "");
+      if (!ok) { for (const c of n.childNodes) walk(c); return; }
       attrs = ` href="${escAttr(href)}"`;
     }
     out.push(`<${n.tagName}${attrs}>`);
@@ -215,8 +218,8 @@ const clampPct = (p: number) => { if (!(p > 0 && p <= 100)) throw new StructEdit
 /** 이미지 주소: 버전 폴더 상대 경로나 https만(서명 주소·data:·javascript: 금지) */
 function checkSrc(src: string): string {
   const s = src.trim();
-  if (/^https:\/\//i.test(s)) return s;
-  if (/^[a-z][\w+.-]*:/i.test(s) || s.startsWith("/") || s.split("/").includes("..")) throw new StructEditError(400, "이미지는 문서 안 상대 경로나 https 주소만 쓸 수 있습니다");
+  if (/^https:\/\//i.test(s) && !s.includes("\\")) return s;
+  if (/^[a-z][\w+.-]*:/i.test(s) || s.startsWith("/") || s.includes("\\") || /[\u0000-\u001f]/.test(s) || s.split("/").includes("..")) throw new StructEditError(400, "이미지는 문서 안 상대 경로나 https 주소만 쓸 수 있습니다");
   return s;
 }
 

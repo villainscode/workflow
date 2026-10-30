@@ -1,5 +1,5 @@
 import { applyOps, markEids, outline, type HtmlOp } from "@workflow/core/structedit/html";
-import { applyOoxmlOps, ooxmlStructure, type OoxmlKind, type OoxmlOp } from "@workflow/core/structedit/ooxml";
+import { applyOoxmlOps, MAX_OPS, ooxmlStructure, type OoxmlKind, type OoxmlOp } from "@workflow/core/structedit/ooxml";
 import { assetRow } from "./assets.ts";
 import { getBlob } from "./blobs.ts";
 import { HttpError, type Bindings, type User, type Workspace } from "./env.ts";
@@ -61,6 +61,7 @@ async function asset(env: Bindings, ws: Workspace, ref: string) {
 export async function applyStructOps(env: Bindings, ws: Workspace, user: User | null, menu: string, docSlug: string,
   input: { baseRev: number; ops: StructOp[]; summary?: string; source: "human" | "agent" }) {
   if (!Array.isArray(input.ops) || input.ops.length === 0) throw new HttpError(400, "ops가 비어 있습니다");
+  if (input.ops.length > MAX_OPS) throw new HttpError(400, `연산은 한 번에 ${MAX_OPS}개까지입니다`);
   const { st, kind, data } = await entryOf(env, ws, menu, docSlug);
   // 다른 곳에서 먼저 저장했으면 연산을 적용하기 전에 알린다(saveRevision도 다시 확인한다)
   if (input.baseRev !== st.rev) throw new HttpError(409, `다른 곳에서 먼저 저장했습니다(지금 수정본 ${st.rev}). 최신 내용을 받아 다시 적용하세요`);

@@ -61,7 +61,7 @@ describe("원격 MCP", () => {
     const { token } = await connect("owner@test.com");
     await rpc(token, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
     const names = (await rpc(token, "tools/list")).body.result.tools.map((t: any) => t.name).sort();
-    expect(names).toEqual(["asset_put", "create_menu", "deck_create", "deck_get", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents", "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "upload_document", "upload_version"]);
+    expect(names).toEqual(["asset_put", "create_menu", "deck_create", "deck_get", "deck_render", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents", "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "upload_document", "upload_version"]);
     expect((await tool(token, "list_documents", {})).text).toContain(`${O}/team/sdlc/process/guide`);
     const t = await tool(token, "get_text", { ref: `${O}/team/sdlc/process/guide` });
     expect(t.text).toContain("둘째 판");

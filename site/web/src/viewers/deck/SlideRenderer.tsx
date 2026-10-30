@@ -1,10 +1,18 @@
 import { createElement, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { Slide, SlideNode } from "@workflow/core/slide";
+import { SLIDE_BASE_CSS, type Slide, type SlideNode } from "@workflow/core/slide";
 import { useAssetUrl } from "../../lib/deck.ts";
-import "./slide-base.css";
+
+// 캔버스 기본 스타일(명세 05절)은 core가 정한다. 인쇄·미리보기(Worker)도 같은 것을 쓴다
+if (typeof document !== "undefined" && !document.getElementById("slide-base-css")) {
+  const st = document.createElement("style");
+  st.id = "slide-base-css";
+  st.textContent = SLIDE_BASE_CSS;
+  document.head.appendChild(st);
+}
 
 /**
  * 슬라이드 렌더러(명세 05절). 노드 트리를 React 요소로 그린다(innerHTML 금지). 허용 목록 밖은 그릴 방법이 없다.
+ * 인쇄·미리보기용 정적 HTML(core renderSlideHtml)과 같은 DOM 모양을 낸다. 한쪽을 고치면 다른 쪽도 맞춘다.
  * 글자 조각만 core가 검증한 인라인 HTML(b i u a span br)이라 dangerouslySetInnerHTML로 넣는다.
  * 보기·썸네일·발표·편집이 모두 이 컴포넌트를 쓴다. 편집에서는 요소마다 data-eid를 붙인다.
  */

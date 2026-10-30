@@ -21,6 +21,8 @@ export const DECK_ENTRY = "deck.json";
 export const slidePath = (id: string) => `slides/${id}.html`;
 const FONT_RE = /^https:\/\/fonts\.googleapis\.com\/css2\?[^"<>\s]+$/;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+/** 글꼴 이름: 인쇄 HTML의 CSS에 들어가므로 글자·숫자·공백·-만 */
+export const FAMILY_RE = /^[\p{L}\p{N} \-]{1,64}$/u;
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export interface DeckFileDiagnostic extends Diagnostic { file: string }
@@ -44,7 +46,8 @@ export function parseDeckIndex(text: string): { index?: DeckIndex; diagnostics: 
     }
   }
   for (const [k, f] of Object.entries(x.faces ?? {})) {
-    if (!f || typeof f.family !== "string" || !FONT_RE.test(f.href ?? "")) diags.push(d(`faces.${k}: href는 https://fonts.googleapis.com/css2?… 만 씁니다`, "font"));
+    if (!f || typeof f.family !== "string" || !FAMILY_RE.test(f.family)) diags.push(d(`faces.${k}: family는 글자·숫자·공백·-만(64자까지): ${String(f?.family).slice(0, 40)}`, "font"));
+    else if (!FONT_RE.test(f.href ?? "")) diags.push(d(`faces.${k}: href는 https://fonts.googleapis.com/css2?… 만 씁니다`, "font"));
   }
   for (const c of x.palette ?? []) if (!HEX_RE.test(String(c))) diags.push(d(`palette 색은 #rrggbb: ${String(c)}`));
   for (const [k, s] of Object.entries(x.sections ?? {})) {

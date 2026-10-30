@@ -20,7 +20,9 @@ import { exportWorkspace } from "./export.ts";
 import { getRevision, listRevisions, publish, restoreRevision, saveRevision, workState } from "./revisions.ts";
 import { assetRow, putAsset } from "./assets.ts";
 import { applyStructOps, readStructure, structEditView, type StructOp } from "./structedit.ts";
-import { patchDeck, patchSlide, putSlide, readDeck } from "./deck.ts";
+import { checkDeckPut, patchDeck, patchSlide, putSlide, readDeck } from "./deck.ts";
+import { deckPdf, slidePng } from "./deckRender.ts";
+import { usage } from "./usage.ts";
 import { StructEditError } from "@workflow/core/structedit/html";
 import { agentOf, liveStub, reasonOf } from "./live.ts";
 
@@ -66,19 +68,20 @@ app.get("/i/:ws/:name", async (c) => {
 // 요청 위조(CSRF) 막기: 쿠키로 인증하는 API는 상태를 바꾸는 요청이 이 앱 화면에서 온 것만 받는다.
 // 콘텐츠 도메인도 같은 사이트(simplite.net)라 SameSite 쿠키만으로는 막히지 않는다(5.5). 가져오기 API는 Bearer 토큰이라 제외
 app.use("/api/*", async (c, next) => {
-  const unsafe = !["GET", "HEAD", "OPTIONS"].includes(c.req.method);
+  // WebSocket 업그레이드(GET /live)도 쿠키가 따라가므로 같은 검사를 받는다(교차 사이트 WebSocket 막기, 5.0 M8)
+  const unsafe = !["GET", "HEAD", "OPTIONS"].includes(c.req.method) || c.req.header("upgrade")?.toLowerCase() === "websocket";
   if (unsafe && !c.req.path.startsWith("/api/admin/") && c.req.header("origin") !== new URL(c.req.url).origin) {
     return c.json({ error: "허용되지 않은 요청입니다" }, 403);
   }
   await next();
 });
 
-// 요청 수 제한(4.0 P8, Workers Rate Limiting): 로그인은 IP마다 분당 20번, 상태를 바꾸는 워크스페이스 API는 IP마다 분당 120번
+// 요청 수 제한(4.0 P8, Workers Rate Limiting): 로그인은 IP마다 분당 20번, 상태를 바꾸는 워크스페이스 API와 덱 PDF·PNG(Browser Rendering, 5.0 M8)는 IP마다 분당 120번
 app.use("/api/*", async (c, next) => {
   // 운영에서는 Cloudflare가 늘 cf-connecting-ip를 넣는다. 없으면(로컬·테스트) 제한하지 않는다
   const ip = c.req.header("cf-connecting-ip");
   const limiter = !ip ? undefined : c.req.path.startsWith("/api/auth/") ? c.env.LIMIT_AUTH
-    : c.req.method !== "GET" && c.req.path.startsWith("/api/w/") ? c.env.LIMIT_WRITE : undefined;
+    : c.req.path.startsWith("/api/w/") && (c.req.method !== "GET" || /\/deck\/(pdf|png)$/.test(c.req.path)) ? c.env.LIMIT_WRITE : undefined;
   if (limiter && ip && !(await limiter.limit({ key: ip })).success) return c.json({ error: "요청이 너무 많습니다. 잠시 뒤 다시 시도하세요" }, 429);
   await next();
 });
@@ -114,7 +117,7 @@ const ws = new Hono<AppEnv>();
  */
 const OWNER_ONLY: [string, RegExp][] = [
   ["DELETE", /^\/menus\/[^/]+$/], ["DELETE", /^\/trash\/[^/]+$/], ["*", /^\/categories(\/|$)/], ["*", /^\/invites(\/|$)/],
-  ["PATCH", /^\/members\//], ["DELETE", /^\/members\//], ["GET", /^\/export$/],
+  ["PATCH", /^\/members\//], ["DELETE", /^\/members\//], ["GET", /^\/export$/], ["GET", /^\/usage$/],
 ];
 function needed(method: string, path: string): Role {
   if (OWNER_ONLY.some(([m, re]) => (m === "*" || m === method) && re.test(path))) return "owner";
@@ -214,6 +217,9 @@ ws.post("/docs/:menu/:doc/revisions", async (c) => {
     path: f.path,
     data: f.base64 !== undefined ? Uint8Array.from(atob(f.base64), (ch) => ch.charCodeAt(0)) : new TextEncoder().encode(f.text ?? ""),
   }));
+  // 크기 상한(업로드 화면과 비슷하게)과 덱 파일 검사(업로드와 같은 규칙)
+  if (put.length > 200 || put.reduce((n, f) => n + f.data.byteLength, 0) > 25 * 1024 * 1024) throw new HttpError(413, "한 번에 파일 200개·25MB까지 저장할 수 있습니다");
+  await checkDeckPut(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), put);
   return c.json(await saveRevision(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), {
     baseRev: b.baseRev, put, remove: b.remove, entry: b.entry, summary: b.summary, source: agentOf(c) ? "agent" : "human",
   }));
@@ -246,6 +252,23 @@ ws.put("/docs/:menu/:doc/deck/slides/:sid", async (c) =>
   c.json(await putSlide(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), c.req.param("sid"), await c.req.json(), agentOf(c) ? "agent" : "human")));
 ws.patch("/docs/:menu/:doc/deck", async (c) =>
   c.json(await patchDeck(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), await c.req.json(), agentOf(c) ? "agent" : "human")));
+
+// 덱 PDF 내보내기·슬라이드 PNG(5.0 M7, Browser Rendering). ?v=버전(없으면 지금 버전), ?work=1이면 작업본. PNG에 ?format=json이면 base64(MCP)
+ws.get("/docs/:menu/:doc/deck/pdf", async (c) => {
+  const r = await deckPdf(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), { version: c.req.query("v"), work: c.req.query("work") === "1" }, await contentBase(c));
+  const name = encodeURIComponent(`${r.title}.pdf`);
+  return new Response(r.body, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename*=UTF-8''${name}`, "cache-control": "no-store" } });
+});
+ws.get("/docs/:menu/:doc/deck/png", async (c) => {
+  const slide = c.req.query("slide") ?? "";
+  const png = await slidePng(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), slide, { version: c.req.query("v"), work: c.req.query("work") === "1" }, await contentBase(c));
+  if (c.req.query("format") === "json") {
+    let s = "";
+    for (let i = 0; i < png.length; i += 0x8000) s += String.fromCharCode(...png.subarray(i, i + 0x8000));
+    return c.json({ png: btoa(s), width: 960, height: 540 });
+  }
+  return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
+});
 
 ws.get("/docs/:menu/:doc/revisions", async (c) => {
   const before = c.req.query("before");
@@ -291,6 +314,9 @@ ws.get("/activity", async (c) => {
     LEFT JOIN app_user u ON u.id = a.user_id WHERE a.workspace_id = ? ORDER BY a.id DESC LIMIT 100`).bind(c.var.ws.id).all();
   return c.json(results);
 });
+
+/** 사용량(5.0 M8, owner): ?days=30 */
+ws.get("/usage", async (c) => c.json(await usage(c.env, c.var.ws.id, Math.min(365, Math.max(1, Number(c.req.query("days") ?? 30) || 30)))));
 
 ws.route("/", members);
 

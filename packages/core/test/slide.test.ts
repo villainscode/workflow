@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { applyOps, checkDeck, parseSlide, serializeSlide, SlideError, slidePath, type Slide, type SlideOp } from "../src/slide/index.ts";
+import { applyOps, checkDeck, parseSlide, renderDeckHtml, renderSlideHtml, serializeSlide, SLIDE_BASE_CSS, SlideError, slidePath, type Slide, type SlideOp } from "../src/slide/index.ts";
 
 /** 5.0 M4: 슬라이드 형식(명세 docs/slide-editor-spec.html 03·04·07절). 케이스 목록은 spec/TESTING.md 2.8 */
 
@@ -140,5 +140,34 @@ describe("슬라이드 형식", () => {
     const bad2 = checkDeck(new Map([["deck.json", JSON.stringify(deck)], [slidePath("team"), SAMPLE.replace('id="team"', 'id="other"')]]));
     assert.deepEqual(bad2.diagnostics.map((d) => `${d.file}:${d.code}`), ["slides/team.html:id", "slides/cover.html:missing"]);
     assert.equal(checkDeck(new Map([["deck.json", "{"]])).diagnostics[0].code, "json");
+  });
+
+  test("TC-ED-42 정적 HTML(인쇄·미리보기): 화면 렌더러와 같은 모양(.slide-root, 표 안 tbody, 링크 새 탭), 그림은 주소로·없으면 자리 표시, 덱 글꼴·1920×1080 쪽", () => {
+    const s = parse(SAMPLE);
+    const html = renderSlideHtml(s, (sha) => `https://files.example/c/t/_asset/${sha}`);
+    assert.match(html, /^<div class="slide-root" style="background:#f7f7f4;padding:128px;/);
+    assert.match(html, /<table style="font-size:24px"><tbody><tr><th style="width:30%">이름<\/th>/);
+    assert.match(html, /<a target="_blank" rel="noopener noreferrer" href="https:\/\/example\.com">링크<\/a>/);
+    assert.match(html, /<img src="https:\/\/files\.example\/c\/t\/_asset\/a{64}" alt="콘솔 화면" style="position:absolute;/);
+    assert.doesNotMatch(html, /data-eid|<aside|발표자 노트/);
+    assert.match(renderSlideHtml(s, () => null), /<div class="slide-img-missing" role="img" aria-label="콘솔 화면"/);
+    const doc = renderDeckHtml({ v: 1, title: "팀 <소개>", order: ["team"], faces: { p: { family: "Pretendard", href: "https://fonts.googleapis.com/css2?family=X" } } }, [s], () => null);
+    assert.match(doc, /<title>팀 &lt;소개&gt;<\/title>/);
+    assert.match(doc, /@page\{size:1920px 1080px;margin:0\}/);
+    assert.match(doc, /<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=X">/);
+    assert.match(doc, /font-family:"Pretendard"/);
+    assert.ok(doc.includes(SLIDE_BASE_CSS));
+    assert.match(doc, /<section class="slide-page" data-slide="team"><div class="slide-root"/);
+  });
+
+  test("TC-ED-43 보안: 덱 글꼴 이름(faces.family)에 태그·CSS를 넣으면 진단, 인쇄 HTML은 글꼴 이름을 늘 이스케이프, 프로토타입 키 CSS는 진단(예외 아님)", () => {
+    const evil = { v: 1, title: "x", order: ["a"], faces: { f: { family: "x</style><script>fetch('http://169.254.169.254/')</script><style>", href: "https://fonts.googleapis.com/css2?family=X" } } };
+    assert.equal(checkDeck(new Map([["deck.json", JSON.stringify(evil)], [slidePath("a"), '<section id="a"></section>']])).diagnostics[0].code, "font");
+    const nl = { ...evil, faces: { f: { family: "X;}body{background:red", href: evil.faces.f.href } } };
+    assert.equal(checkDeck(new Map([["deck.json", JSON.stringify(nl)], [slidePath("a"), '<section id="a"></section>']])).diagnostics[0].code, "font");
+    // 검증을 거치지 않은 색인이 와도 렌더러가 막는다
+    const html = renderDeckHtml(evil as never, [parse('<section id="a"></section>')], () => null);
+    assert.doesNotMatch(html, /<script|<\/style><script/);
+    assert.deepEqual(parseSlide('<section id="a"><p style="constructor:x;__proto__:y">a</p></section>').diagnostics.map((d) => d.code), ["css-prop", "css-prop"]);
   });
 });

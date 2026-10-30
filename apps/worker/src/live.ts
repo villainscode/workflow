@@ -29,7 +29,8 @@ export class Live extends DurableObject {
 
   /** 화면이 보내는 "지금 여기": { type: "here", menu, doc, mode }. 바뀌면 모두에게 접속자 목록을 보낸다 */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    if (typeof message !== "string") return;
+    // 접속자 알림은 작다. 큰 메시지는 버린다(모두에게 다시 보내므로 키우지 않는다)
+    if (typeof message !== "string" || message.length > 1000) return;
     let m: { type?: string; menu?: unknown; doc?: unknown; mode?: unknown };
     try { m = JSON.parse(message); } catch { return; }
     if (m.type !== "here") return;

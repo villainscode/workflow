@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.6 (2026-10-28). 로컬 사이트: 자동 케이스 156개(실제 테스트 204건: `npm test` 170건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 67건 + Cloudflare 화면 테스트 17건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 23건 통과). Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.6 (2026-10-28). 로컬 사이트: 자동 케이스 156개(실제 테스트 204건: `npm test` 170건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 71건 + Cloudflare 화면 테스트 18건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 27건 통과). Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -182,7 +182,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 
 | ID | 확인 내용 | 근거 |
 |---|---|---|
-| TC-MCP-01 | 도구 20개(`focus_in_site`, 5.0 덱 도구 `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`, 구조·수정본 도구 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
+| TC-MCP-01 | 도구 21개(`focus_in_site`, 5.0 덱 도구 `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`·`deck_render`, 구조·수정본 도구 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
 | TC-MCP-02 | 사이트 서버가 꺼져 있으면 `npm run dev` 실행 안내 | 3.0 §4 |
 | TC-MCP-03 | `list_documents`: 트리·주소·draft 표시·대분류 필터 | 3.0 §4.2 |
 | TC-MCP-04 | `find_documents`: 본문 검색 결과와 "없음" 안내 | 3.0 §4.2 |
@@ -297,6 +297,8 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CF-43 | upload_document는 파일 내용(글자·base64)으로 새 문서, viewer로 연결하면 쓰기 도구는 권한 오류·읽기 도구는 됨 | 4.0 5.9 |
 | TC-CF-45 | 접속자: 화면이 "here"(메뉴·문서·보기/편집)를 보내면 모두에게 접속자 목록(같은 사람·같은 문서는 하나, 편집이 앞섬), 창을 닫으면 빠짐. 저장 알림에 저장한 사람 id (`test/live.test.ts`) | 5.0 M7 |
 | TC-CF-46 | `doc_structure`(eid·rev) → `doc_ops`(에이전트 수정본, 메모 "Claude Code:"), 지난 rev는 409 + "→ doc_structure로 다시 읽고", 잘못된 연산은 400 + "→ 쓸 수 있는 연산", `revision_list`(출처·작성자·메모), `revision_restore`(rev 0 = 기준 버전) | 5.0 M7 |
+| TC-CF-48 | 보안: 다른 출처(또는 Origin 없이) 연 실시간 WebSocket은 403(교차 사이트 WebSocket 막기), 1000자 넘는 접속자 메시지는 버림 (`test/live.test.ts`) | 5.0 M8 보안 점검 |
+| TC-CF-47 | 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·PDF 변환·렌더링 횟수(캐시에 없어 실제로 만든 것만 기록), owner 아니면 403 (`test/revisions.test.ts`) | 5.0 M8 |
 | TC-CF-44 | 덱 도구: `deck_create` → `deck_get`(eid) → `slide_patch`(수정본 출처 agent, 메모 "Claude Code:") → `slide_put` 형식 오류 진단 → `asset_put`(asset:<sha>·크기) | 5.0 M4 |
 | TC-CF-44 | PDF 변환: 결과는 원본 sha256으로 R2에 캐시(캐시가 있으면 컨테이너를 부르지 않음), 다른 워크스페이스 파일 404, svg 대상·Office가 아닌 형식 400 | 4.0 P7 |
 | TC-CF-45 | 워크스페이스 내보내기(owner): 리포 `docs/` 모양 zip(categories·menus yaml, 하위 문서는 상위 폴더 안, meta.yaml order, 버전 파일 내용), 휴지통 문서 제외, editor는 403 | 4.0 P8 |
@@ -311,6 +313,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-12 | 구조 편집(PPTX): 표 끝에 행 넣기 → 수정본, 미리보기는 작업본 PDF(`…/work/pdf`, 변환 컨테이너), 버전으로 저장 | 5.0 M5 |
 | TC-CFUI-13 | 슬라이드 덱 보기: 목록 썸네일, 1920×1080을 창에 맞춰 그림, →로 다음 슬라이드·발표자 노트 | 5.0 M4 |
 | TC-CFUI-14 | 슬라이드 편집: 한글 조합 입력(CDP IME 이벤트) → Esc 확정 → 새로 고침 뒤 유지, 고정 요소 끌기(화면 이동량 ÷ 배율, 맞춤선 6px 안), 표 열 넣기·열 경계 손잡이 끌기(이웃 두 열만, 합 100), ⌘Z, 다른 사람이 지운 요소를 고치면 알림·최신본, 버전으로 저장 | 명세 15절 |
+| TC-CFUI-18 | 덱 PDF 내보내기(확인 창 → 내려받기)·API(슬라이드마다 16:9 한 쪽, 두 번째는 캐시로 빠름)·슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 명세 12절 |
 | TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
 | TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
 | TC-CFUI-15 | 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 놓은 자리 가운데에 고정 위치 그림, 서명 주소(`/c/…/_asset/…`)로 그림 | 명세 08절 |
@@ -363,6 +366,12 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-35 | rev 충돌: 기준이 지났어도 대상 요소가 있으면 최신본에 다시 적용해 저장(rebased), 지워진 요소면 409 | 명세 10절 |
 | TC-ED-36 | 슬라이드 통째 쓰기(새 id면 순서에 추가), 색인 고치기(제목·순서, 빠진 슬라이드 파일 지움, 없는 id 400), 에이전트 출처, 버전으로 올리기, viewer 403 | 명세 10·11절 |
 | TC-ED-37 | 덱이 아닌 문서는 덱 API 400 | 5.0 M4 |
+| TC-ED-42 | 정적 HTML(인쇄·미리보기): 화면 렌더러와 같은 모양(.slide-root, 표 안 tbody, 링크 새 탭), 그림은 콘텐츠 주소·없으면 자리 표시, eid·노트는 넣지 않음, 덱 글꼴·1920×1080 쪽·기본 스타일 하나 (`packages/core/test/slide.test.ts`) | 명세 12절 |
+| TC-ED-43 | 보안: 덱 글꼴 이름(faces.family)에 태그·CSS를 넣으면 진단, 인쇄 HTML은 형식에 맞는 글꼴만 넣음(스크립트 없음), 프로토타입 키 CSS 속성은 진단(예외 아님) | 5.0 M8 보안 점검 |
+| TC-ED-44 | 보안: HTML 글자 바꾸기 링크는 http(s)·mailto·#·상대 경로만(제어 문자 제거 뒤 검사, `java\tscript:`·`data:`·`vbscript:` 제거), 그림 주소 역슬래시 외부 주소 거부 (`structedit-html.test.ts`) | 5.0 M8 보안 점검 |
+| TC-ED-45 | 보안: 풀면 64MB를 넘는 OOXML(압축 폭탄)은 413, 연산 500개 초과 400 (`structedit-ooxml.test.ts`) | 5.0 M8 보안 점검 |
+| TC-ED-46 | 보안: 수정본 파일 저장(put)으로 deck.json·슬라이드를 쓰면 업로드와 같은 덱 검사(글꼴 이름 주입 400, script 400), 25MB·200개 초과 413, 슬라이드 연산 500개 초과 400 (`deck.test.ts`) | 5.0 M8 보안 점검 |
+| TC-ED-47 | 매일 정리: 변환·렌더링 캐시는 30일이 지나면 지움(영구 삭제한 문서의 결과 포함) | 5.0 M8 보안 점검 |
 | TC-ED-38 | PDF 부분 글꼴: harfbuzz로 쓴 글자만 남겨(원본 2MB의 1/10 미만) 한글 글상자 PDF에 글꼴 하나만, 글꼴 없이 글자를 쓰면 거부 (`packages/core/test/pdfedit.test.ts`) | 5.0 4.5, M0 |
 | TC-ED-39 | PDF 덧그리기: 글상자·그림·형광펜(곱하기 섞기, 화면 왼쪽 위 → PDF 좌표)·펜이 그 쪽 내용에 더해지고, 90도 돌린 쪽의 글자는 회전 행렬로 그려 화면에서 똑바로 | 5.0 4.5 |
 | TC-ED-40 | PDF 쪽: 회전(누적)·지우기·옮기기·다른 PDF 끼워 넣기, 범위 밖·잘못된 각도·PDF 아닌 파일 400, 마지막 쪽은 못 지움, 빈 연산은 원본 그대로 | 5.0 4.5 |
@@ -419,5 +428,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-29 | (Cloudflare) PPTX·DOCX를 PDF로 바꾸지 못함(`Container failed to start`) | 이 계정은 컨테이너를 `scheduling_policy: durable_object` + `images` 형식으로만 만들 수 있어 배포 때 설정을 바꿨는데, 그 형식에서는 `start()`에 이미지 이름이 있어야 한다. `@cloudflare/containers` 0.3.7은 넘기지 않는다(로그: `Container.start() requires an image or container snapshot`) | `Converter`가 `ctx.container.start`에 `images.base`를 넣는다(`apps/worker/src/convert.ts`) | TC-CFUI-09 (수정 전 실패 확인), TC-CFUI-12 |
 | 2026-10-29 | 구조 편집에서 문단을 두 번 눌러도 글자 편집이 켜지지 않을 때가 있음 | 글자를 고칠 수 있는 요소 표시(`data-editable`)를 렌더 뒤 effect에서 칠해서, 편집 사본이 아직 다 읽히기 전이면 빠졌다 | 사본의 `load`에서 칠함(`HtmlStructPane.tsx`) | TC-CFUI-11 |
 | 2026-10-30 | 슬라이드 글자를 두 번 눌러 편집기가 열린 직후 친 글자가 들어가지 않음 | Tiptap 편집기 DOM이 붙기 전에 포커스를 요청해 커서가 들어가지 않았다 | `autofocus: "end"` + 다음 프레임에 한 번 더 포커스(`TextEditor.tsx`) | TC-CFUI-14 |
+| 2026-10-30 | (보안 점검) 덱 글꼴 이름(`faces.family`)으로 Browser Rendering 문서에 스크립트·임의 주소를 넣을 수 있음(중간) | 글꼴 이름을 문자열인지만 보고 인쇄 HTML의 `<style>`에 그대로 넣었다. 수정본 파일 저장(put)은 덱 검사도 거치지 않았다 | 글꼴 이름 허용 문자(`FAMILY_RE`)로 검사하고 렌더러도 걸러 넣음, 인쇄 문서에 CSP `script-src 'none'`, 헤드리스 브라우저는 콘텐츠 도메인 그림·Google Fonts만 읽게 요청 가로채기, put에도 덱 검사 | TC-ED-43·46 (수정 전 실패 확인), TC-CFUI-18 |
+| 2026-10-30 | (보안 점검) 낮음 6건: 실시간 WebSocket에 Origin 검사 없음, viewer가 렌더링을 제한 없이 부름, OOXML 압축 폭탄·연산 수 제한 없음, put 크기 제한 없음, HTML 링크 `java\tscript:`·`data:` 통과, 렌더 캐시가 영구 삭제 뒤에도 남음 | — | WebSocket 업그레이드도 Origin 검사, 덱 PDF·PNG에 요청 수 제한, 풀린 크기 64MB·연산 500개 상한, put 25MB·200개 상한, 링크 허용 형태만, 캐시 30일 정리 | TC-CF-48, TC-ED-44·45·46·47 |
 | 2026-10-30 | PDF 편집에서 글상자 도구로 쪽을 눌러도 글자 칸이 생기지 않음 | 눌렀을 때 생긴 글자 칸이 포커스를 받은 뒤, 같은 누름의 기본 동작(포커스 옮기기)으로 바로 포커스를 잃어 빈 칸으로 지워졌다 | 글상자 도구의 pointerdown 기본 동작을 막음(`PdfEditor.tsx`) | TC-CFUI-16 |
 | 2026-10-30 | 가져오기 CLI로 들어온 덱은 슬라이드 파일에 data-eid가 없어 에이전트가 고칠 요소를 가리킬 수 없음 | 가져오기는 업로드 검사(`prepareDeck`)를 거치지 않는다 | 덱 읽기 API(`readDeck`, 로컬·Worker)가 늘 직렬화 형식(eid 붙은)으로 준다. eid는 문서 순서로 정해져 서버·화면이 같다 | TC-CFUI-14, TC-MCP-21 |

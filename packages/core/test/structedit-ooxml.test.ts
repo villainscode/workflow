@@ -201,4 +201,16 @@ describe("OOXML 구조 편집", () => {
     assert.equal(status([{ t: "tableRow", table: s.id, at: 0, op: "add" }], "pptx", mergedDoc), 400);
     assert.equal(status([{ t: "tableCols", table: s.id, widths: [50, 25, 25] }], "pptx", mergedDoc), 0);
   });
+
+  test("TC-ED-45 보안: 풀면 64MB를 넘는 zip(압축 폭탄)은 413, 연산이 500개를 넘으면 400", () => {
+    const z = unzipSync(fx("struct.pptx"));
+    z["ppt/media/huge.bin"] = new Uint8Array(70 * 1024 * 1024);
+    const bomb = zipSync(z, { level: 9 });
+    assert.ok(bomb.length < 2 * 1024 * 1024, `${bomb.length}`);
+    const code = (fn: () => unknown) => { try { fn(); return 0; } catch (e) { assert.ok(e instanceof StructEditError, String(e)); return e.status; } };
+    assert.equal(code(() => ooxmlStructure("pptx", bomb)), 413);
+    assert.equal(code(() => applyOoxmlOps("pptx", bomb, [{ t: "tableRow", table: "x", at: 0, op: "add" }])), 413);
+    const t = ooxmlStructure("pptx", fx("struct.pptx")).tables[0];
+    assert.equal(code(() => applyOoxmlOps("pptx", fx("struct.pptx"), Array(501).fill({ t: "tableCols", table: t.id, widths: [1, 1, 1] }))), 400);
+  });
 });

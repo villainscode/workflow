@@ -161,4 +161,33 @@ describe("편집기 이미지 자산", () => {
     expect(await (await call(pathOf(w.files.find((f: any) => f.path === "guide.html").url))).text()).toBe("rev3 head");
     expect(await env.BLOBS.head(`ws/${await wsId()}/blobs/${asset.sha256}`)).not.toBeNull();
   });
+
+  it("TC-CF-47 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·변환·렌더링 횟수, owner 아니면 403", async () => {
+    const { noteUsage } = await import("../src/usage.ts");
+    await save(0, [{ path: "guide.html", text: "사람" }]);
+    await save(1, [{ path: "guide.html", text: "에이전트" }], {}, { "x-workflow-agent": "claude-code" });
+    await json("POST", `${D}/revisions/1/restore`, { baseRev: 2 });
+    await json("POST", `${D}/publish`, { baseRev: 3 });
+    await noteUsage(env, await wsId(), "convert", "pptx");
+    await noteUsage(env, await wsId(), "render", "notes/deck");
+    await noteUsage(env, await wsId(), "render", "notes/deck#cover");
+    const u = await getJson(`${W}/usage?days=30`);
+    expect(u).toMatchObject({ days: 30, revisions: { total: 3, human: 1, agent: 1, restore: 1 }, conversions: 1, renders: 2 });
+    expect(u.versions).toBeGreaterThanOrEqual(1);
+    expect(u.storage.versionBytes).toBeGreaterThan(0);
+    await addMember("team", "e@test.com", "editor");
+    useSession((await login("e@test.com")).cookie);
+    expect((await call(`${W}/usage`)).status).toBe(403);
+  });
+
+  it("TC-ED-47 매일 정리: 변환·렌더링 캐시(ws/<id>/cache/)는 30일이 지나면 지운다(필요하면 다시 만든다), 30일 안은 남긴다", async () => {
+    const { cleanup } = await import("../src/cleanup.ts");
+    const id = await wsId();
+    await env.BLOBS.put(`ws/${id}/cache/deck-pdf/abc`, "pdf");
+    await env.BLOBS.put(`ws/${id}/cache/pdf/def`, "pdf");
+    expect((await cleanup(env, Date.now() + 2 * 86400_000)).caches).toBe(0);
+    expect(await env.BLOBS.head(`ws/${id}/cache/deck-pdf/abc`)).not.toBeNull();
+    expect((await cleanup(env, Date.now() + 31 * 86400_000)).caches).toBe(2);
+    expect(await env.BLOBS.head(`ws/${id}/cache/pdf/def`)).toBeNull();
+  });
 });

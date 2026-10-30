@@ -471,6 +471,21 @@ export function registerTools(server: McpServer, host: ToolHost) {
     return `슬라이드 ${slideId}에 연산 ${ops.length}개를 적용했습니다(수정본 ${res.rev}${res.rebased ? ", 그사이 바뀐 최신본에 다시 적용" : ""}).\n${res.html}`;
   }));
 
+  server.registerTool("deck_render", {
+    title: "슬라이드 미리보기",
+    description: "슬라이드 하나를 PNG(960×540)로 그려 돌려준다. 고친 뒤 배치·넘침을 눈으로 확인할 때 쓴다. 작업본(최신 수정본)을 그린다.",
+    inputSchema: { ref: REF, slideId: z.string() },
+    annotations: { readOnlyHint: true },
+  }, async ({ ref, slideId }) => {
+    try {
+      const r = await resolveRef(ref);
+      const res = await api<{ png: string; width: number; height: number }>(`/docs/${r.menu}/${r.doc}/deck/png?work=1&format=json&slide=${encodeURIComponent(slideId)}`).catch(LOCAL_ONLY);
+      return { content: [{ type: "image" as const, data: res.png, mimeType: "image/png" }, { type: "text" as const, text: `슬라이드 ${slideId} (${res.width}×${res.height}, 캔버스 1920×1080의 절반)` }] };
+    } catch (e) {
+      return { content: [{ type: "text" as const, text: e instanceof ToolError ? e.message : `오류: ${(e as Error).message}` }], isError: true };
+    }
+  });
+
   server.registerTool("asset_put", {
     title: "그림 올리기",
     description: "PNG·JPEG·WebP·GIF 그림을 올리고 슬라이드에 쓸 asset:<sha256> 주소를 받는다(같은 그림은 한 번만 저장). SVG는 받지 않는다.",

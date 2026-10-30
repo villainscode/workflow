@@ -1,5 +1,6 @@
 import { Container, getRandom } from "@cloudflare/containers";
 import { HttpError, type Bindings } from "./env.ts";
+import { noteUsage } from "./usage.ts";
 
 /**
  * 변환(4.0 P7): PPTX·DOCX·XLSX → PDF는 LibreOffice 컨테이너(apps/converter)가 한다. 결과는 원본 sha256으로 R2에 캐시한다
@@ -41,5 +42,6 @@ export async function toPdf(env: Bindings, wsId: number, data: Uint8Array | null
   if (!res.ok) throw new HttpError(502, `변환에 실패했습니다: ${(await res.text()).slice(0, 200)}`);
   const pdf = await res.arrayBuffer();
   await env.BLOBS.put(cacheKey(wsId, sha), pdf, { httpMetadata: { contentType: "application/pdf" } });
+  await noteUsage(env, wsId, "convert", ext.replace(/^\./, ""));
   return pdf;
 }

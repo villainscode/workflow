@@ -15,6 +15,7 @@ npm run dev                       # 화면 빌드 → 로컬 D1 마이그레이�
 - 비밀값은 `.dev.vars`(git 제외): `SIGNING_KEY`, `ADMIN_TOKEN`, `GOOGLE_CLIENT_SECRET`, `DEV_LOGIN=1`(로그인 화면에 개발용 이메일 로그인), `SUPERADMIN_EMAILS`.
 - 문서 넣기: 리포 루트에서 `npx tsx packages/cli/src/import.ts --url http://127.0.0.1:8787 --token <ADMIN_TOKEN> --ws <주소> --name <이름> --owner <내 이메일>` (리포 `docs/`를 그 워크스페이스로).
 - PDF 변환은 로컬 Docker가 있으면 `wrangler dev`가 컨테이너를 띄운다(처음엔 이미지를 만드느라 1분쯤 걸린다).
+- 덱 PDF 내보내기·슬라이드 미리보기(Browser Rendering, `BROWSER` 바인딩)는 로컬에서 `wrangler dev`가 Chrome(headless shell)을 내려받아 흉내 낸다. 운영은 Workers Paid의 Browser Rendering을 쓴다(포함 사용량을 넘으면 브라우저 사용 시간만큼 과금).
 - 테스트: `npm test`(Workers 런타임, D1·R2·DO 로컬), `npm run test:ui`(전역 puppeteer, 앱·콘텐츠 출처를 나눠 띄움, 변환은 Docker).
 
 ## 처음 배포하기 (한 번)

@@ -21,7 +21,7 @@ export async function cleanup(env: Bindings, now = Date.now()) {
       WHERE v.id IS NULL AND h.document_id IS NULL
         AND (r.created_at < ? OR (SELECT COUNT(*) FROM document_revision r2 WHERE r2.document_id = r.document_id AND r2.rev > r.rev) >= 200))`)
     .bind(cutoff).run();
-  let blobs = 0;
+  let blobs = 0, caches = 0;
   const { results: wss } = await db.prepare("SELECT id FROM workspace").all<{ id: number }>();
   for (const { id } of wss) {
     // 남은 수정본의 매니페스트와 그 파일, 편집기 이미지 자산도 "쓰는 blob"으로 센다
@@ -51,8 +51,16 @@ export async function cleanup(env: Bindings, now = Date.now()) {
         if (gone.length) { await env.BLOBS.delete(gone); blobs += gone.length; }
       }
     } while (cursor);
+    // 변환·렌더링 캐시는 30일이 지나면 지운다(내용으로 만든 것이라 필요하면 다시 만든다). 영구 삭제한 문서의 결과도 이렇게 사라진다
+    let cc: string | undefined;
+    do {
+      const page = await env.BLOBS.list({ prefix: `ws/${id}/cache/`, cursor: cc, limit: 500 });
+      cc = page.truncated ? page.cursor : undefined;
+      const gone = page.objects.filter((o) => now - o.uploaded.getTime() > 30 * 86400_000).map((o) => o.key);
+      if (gone.length) { await env.BLOBS.delete(gone); caches += gone.length; }
+    } while (cc);
   }
-  const result = { sessions: s.meta.changes, invites: i.meta.changes, revisions: pruned.meta.changes, blobs };
+  const result = { sessions: s.meta.changes, invites: i.meta.changes, revisions: pruned.meta.changes, blobs, caches };
   console.log("정리", JSON.stringify(result));
   return result;
 }

@@ -1,4 +1,4 @@
-import { applyOps, DECK_ENTRY, formatDiagnostics, loadSlide, parseDeckIndex, parseSlide, serializeSlide, SlideError, slidePath, type DeckIndex, type SlideOp } from "@workflow/core/slide";
+import { applyOps, checkDeck, DECK_ENTRY, formatDiagnostics, loadSlide, parseDeckIndex, parseSlide, serializeSlide, SlideError, slidePath, type DeckIndex, type SlideOp } from "@workflow/core/slide";
 import { getBlob } from "./blobs.ts";
 import { HttpError, type Bindings, type User, type Workspace } from "./env.ts";
 import { findDoc } from "./repo.ts";
@@ -65,6 +65,7 @@ async function withLatest<T>(env: Bindings, ws: Workspace, user: User | null, me
 export async function patchSlide(env: Bindings, ws: Workspace, user: User | null, menu: string, docSlug: string, sid: string,
   input: { baseRev: number; ops: SlideOp[]; summary?: string }, source: Source) {
   if (!Array.isArray(input.ops) || input.ops.length === 0) throw new HttpError(400, "ops가 비어 있습니다");
+  if (input.ops.length > 500) throw new HttpError(400, "연산은 한 번에 500개까지입니다");
   return withLatest(env, ws, user, menu, docSlug, input.baseRev, async ({ index, text }) => {
     if (!index.order.includes(sid)) throw new HttpError(404, `슬라이드 ${sid}이(가) 없습니다`);
     const slide = loadSlide((await text(slidePath(sid)))!);
@@ -110,4 +111,22 @@ export async function patchDeck(env: Bindings, ws: Workspace, user: User | null,
       result: { index: ok },
     };
   }, source);
+}
+
+/**
+ * 수정본 파일 저장(POST …/revisions {put})으로 덱 파일(deck.json·slides/*.html)을 바꿀 때도 업로드와 같은 검사를 한다(5.0 M8 보안 점검).
+ * 덱이 아니거나 덱 파일을 건드리지 않으면 아무것도 하지 않는다
+ */
+export async function checkDeckPut(env: Bindings, ws: Workspace, menu: string, docSlug: string, put: { path: string; data: Uint8Array }[]) {
+  if (!put.some((f) => f.path === DECK_ENTRY || /^slides\/[^/]+\.html$/.test(f.path))) return;
+  const doc = await findDoc(env.DB, ws.id, menu, docSlug);
+  const st = await workState(env, ws, doc);
+  if (st.manifest.entry !== DECK_ENTRY) return;
+  const files = new Map<string, string>();
+  for (const f of st.manifest.files) {
+    if (f.path === DECK_ENTRY || /^slides\/[^/]+\.html$/.test(f.path)) files.set(f.path, dec.decode(await getBlob(env.BLOBS, ws.id, f.sha256)));
+  }
+  for (const f of put) files.set(f.path, dec.decode(f.data));
+  const r = checkDeck(files);
+  if (r.diagnostics.length) throw new HttpError(400, `덱 형식 오류 ${r.diagnostics.length}건\n${formatDiagnostics(r.diagnostics)}`);
 }

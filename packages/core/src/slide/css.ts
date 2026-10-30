@@ -64,8 +64,8 @@ const FIX: [RegExp, string][] = [
 
 /** 속성 하나 검사. 문제가 없으면 null */
 export function validateStyle(prop: string, value: string): Omit<Diagnostic, "line" | "col"> | null {
-  const p = prop.trim().toLowerCase(), v = value.trim();
-  const rule = RULES[p];
+  const p = String(prop).trim().toLowerCase(), v = String(value).trim();
+  const rule = Object.hasOwn(RULES, p) ? RULES[p] : undefined;
   if (!rule) {
     const fix = FIX.find(([r]) => r.test(p))?.[1];
     return { code: "css-prop", message: `허용하지 않는 CSS 속성: ${p}`, ...(fix ? { fix } : {}) };

@@ -8,6 +8,8 @@ export interface Bindings {
   LIMIT_WRITE?: RateLimit;
   /** 변환 컨테이너(Workers Paid). 없으면 PDF 변환은 501 */
   CONVERTER?: DurableObjectNamespace<import("./convert.ts").Converter>;
+  /** Browser Rendering(5.0 M7 덱 PDF·미리보기). 없으면 501 */
+  BROWSER?: BrowserRun;
   /** 앱 주소(예: https://workflow.simplite.net). 원격 MCP OAuth 자원 주소 */
   APP_ORIGIN: string;
   /** 사용자 콘텐츠 출처(예: https://workflow-files.simplite.net). 비면 앱과 같은 출처에서 /c/로 준다(로컬) */

@@ -7,8 +7,8 @@ import { exports } from "cloudflare:workers";
 const W = "/api/w/team";
 
 /** 실시간 연결을 열고 받은 알림을 모은다 */
-async function connect(cookie = sessionCookie()) {
-  const res = await exports.default.fetch(new Request(`${BASE}${W}/live`, { headers: { upgrade: "websocket", cookie } }));
+async function connect(cookie = sessionCookie(), origin: string | null = BASE) {
+  const res = await exports.default.fetch(new Request(`${BASE}${W}/live`, { headers: { upgrade: "websocket", cookie, ...(origin ? { origin } : {}) } }));
   if (res.status !== 101) return { status: res.status, events: [] as any[], next: async () => null as any, close: () => {} };
   const socket = res.webSocket!;
   socket.accept();
@@ -98,6 +98,17 @@ describe("실시간 반영", () => {
     await upload("team", { menu: "notes", title: "누가" }, [["who.md", "# 누가"]]);
     const ev = await a.next();
     expect(ev).toMatchObject({ type: "changed", reason: "upload", userId: expect.any(Number) });
+    a.close();
+  });
+
+  it("TC-CF-48 보안: 다른 출처(또는 Origin 없이)에서 연 실시간 연결은 403(쿠키가 따라가는 교차 사이트 WebSocket 막기), 너무 큰 \"here\"는 버린다", async () => {
+    const owner = await login("owner@test.com");
+    expect((await connect(owner.cookie, "https://evil.simplite.net")).status).toBe(403);
+    expect((await connect(owner.cookie, null)).status).toBe(403);
+    const a = await connect(owner.cookie);
+    a.send!(JSON.stringify({ type: "here", menu: "x".repeat(5000), doc: "d" }));
+    a.send!(JSON.stringify({ type: "here", menu: "process", doc: "guide" }));
+    expect((await a.next()).list.map((x: any) => x.menu)).toEqual(["process"]);
     a.close();
   });
 });
