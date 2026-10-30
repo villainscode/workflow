@@ -77,4 +77,27 @@ describe("실시간 반영", () => {
     useSession(viewer.cookie);
     expect((await getJson(`${W}/activity`)).length).toBeGreaterThan(0);
   });
+
+  it("TC-CF-45 접속자(5.0 M7): 화면이 \"here\"를 보내면 모두에게 누가 어느 문서를 보고·고치는지, 창을 닫으면 빠진다. 저장 알림에는 저장한 사람 id", async () => {
+    await addMember("team", "e@test.com", "editor");
+    const owner = await login("owner@test.com");
+    const editor = await login("e@test.com");
+    const a = await connect(owner.cookie);
+    const b = await connect(editor.cookie);
+    a.send!(JSON.stringify({ type: "here", menu: "process", doc: "guide", mode: "view" }));
+    expect(await a.next()).toEqual({ type: "presence", list: [{ userId: expect.any(Number), email: "owner@test.com", name: "owner", menu: "process", doc: "guide", mode: "view" }] });
+    expect((await b.next()).list).toHaveLength(1);
+    b.send!(JSON.stringify({ type: "here", menu: "process", doc: "guide", mode: "edit" }));
+    const both = (await a.next()).list;
+    expect(both.map((x: any) => [x.email, x.mode]).sort()).toEqual([["e@test.com", "edit"], ["owner@test.com", "view"]]);
+    await b.next();
+    b.close();
+    expect((await a.next()).list.map((x: any) => x.email)).toEqual(["owner@test.com"]);
+    // 저장 알림에 저장한 사람 id(편집 화면이 자기 저장과 남의 저장을 가른다)
+    useSession(owner.cookie);
+    await upload("team", { menu: "notes", title: "누가" }, [["who.md", "# 누가"]]);
+    const ev = await a.next();
+    expect(ev).toMatchObject({ type: "changed", reason: "upload", userId: expect.any(Number) });
+    a.close();
+  });
 });

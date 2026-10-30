@@ -9,6 +9,10 @@ import { SheetViewer } from "./SheetViewer.tsx";
 import { MarkdownViewer, type DocContext } from "./MarkdownViewer.tsx";
 import { DrawioViewer } from "./DrawioViewer.tsx";
 import { CLOUD } from "../lib/base.ts";
+import { lazy, Suspense } from "react";
+
+// 슬라이드 덱(5.0 M4): 파서(parse5)를 쓰므로 덱을 열 때만 불러온다
+const DeckViewer = lazy(() => import("./deck/DeckViewer.tsx").then((m) => ({ default: m.DeckViewer })));
 
 const ext = (p: string) => p.slice(p.lastIndexOf(".") + 1).toLowerCase();
 const IMAGE = new Set(["svg", "png", "jpg", "jpeg", "gif", "webp"]);
@@ -20,6 +24,7 @@ const CODE = new Set(["yaml", "yml", "json", "ts", "tsx", "js", "sh", "py", "sql
 export function Viewer({ file, ctx }: { file: VersionFile; ctx: DocContext }) {
   const e = ext(file.path);
   const src = fileSrc(file);
+  if (file.path === "deck.json") return <Suspense fallback={<EmptyState title="불러오는 중…" />}><DeckViewer menu={ctx.menu} doc={ctx.doc} version={ctx.version} /></Suspense>;
   if (e === "md" || e === "markdown") return <MarkdownViewer file={file} src={src} ctx={ctx} />;
   if (e === "html" || e === "htm") return <HtmlViewer key={String(ctx.scripts ?? true)} url={src} scripts={ctx.scripts ?? true} />;
   if (IMAGE.has(e)) return <ImageViewer url={src} />;

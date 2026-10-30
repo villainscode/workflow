@@ -11,7 +11,7 @@ import type { ServerResponse } from "node:http";
 import { parse as parseYaml } from "yaml";
 import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
-import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
+import { StoreError, htmlEditView, previewTextEdit, readDeck, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
 import { mimeOf } from "@workflow/core/mime";
 import { findDocDir } from "./docpath.ts";
 import type { Change } from "@workflow/core/textedit";
@@ -175,6 +175,8 @@ app.patch<DocParams & { Body: { title?: string; status?: string; origin?: string
 // 다른 메뉴로, 다른 문서 아래(parent)로, 같은 자리 안 순서(index) 바꾸기
 app.post<DocParams & { Body: { menu: string; parent?: string | null; index?: number } }>("/api/docs/:menu/:doc/move", async (req) =>
   done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
+// 슬라이드 덱 읽기(5.0 M4, 로컬은 보기만)
+app.get<DocParams>("/api/docs/:menu/:doc/deck", async (req) => readDeck(DOCS_ROOT, req.params.menu, req.params.doc));
 // 텍스트 편집(2.0): 조각 목록과 저장
 app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/segments", async (req) =>
   readSegments(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v));

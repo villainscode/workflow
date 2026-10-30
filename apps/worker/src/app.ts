@@ -20,6 +20,7 @@ import { exportWorkspace } from "./export.ts";
 import { getRevision, listRevisions, publish, restoreRevision, saveRevision, workState } from "./revisions.ts";
 import { assetRow, putAsset } from "./assets.ts";
 import { applyStructOps, readStructure, structEditView, type StructOp } from "./structedit.ts";
+import { patchDeck, patchSlide, putSlide, readDeck } from "./deck.ts";
 import { StructEditError } from "@workflow/core/structedit/html";
 import { agentOf, liveStub, reasonOf } from "./live.ts";
 
@@ -152,7 +153,7 @@ async function afterChange(c: Context<AppEnv>, reason: string, sub: string) {
     : null;
   const segs = reason === "text-edit" ? ((await c.req.json<{ changes?: { id: number }[] }>().catch(() => ({}) as { changes?: { id: number }[] })).changes ?? []).map((x) => x.id) : undefined;
   const event = {
-    type: "changed", reason, by: agentOf(c), category: (body.category as string | undefined) ?? info?.category, menu, doc, title: info?.title,
+    type: "changed", reason, by: agentOf(c), userId: c.var.user?.id, category: (body.category as string | undefined) ?? info?.category, menu, doc, title: info?.title,
     version: body.version as string | undefined, rev: body.rev as number | undefined, segs,
   };
   await Promise.all([
@@ -165,7 +166,11 @@ async function afterChange(c: Context<AppEnv>, reason: string, sub: string) {
 /** 실시간 연결(WebSocket). 워크스페이스 DO로 넘긴다 */
 ws.get("/live", async (c) => {
   if (c.req.header("upgrade")?.toLowerCase() !== "websocket") return c.json({ error: "WebSocket으로 연결하세요" }, 426);
-  return liveStub(c.env, c.var.ws.id).fetch(c.req.raw);
+  // 접속자 표시(5.0 M7)용으로 누구인지 DO에 넘긴다
+  const u = c.var.user;
+  const headers = new Headers(c.req.raw.headers);
+  headers.set("x-live-user", JSON.stringify(u ? { id: u.id, email: u.email, name: u.name } : null));
+  return liveStub(c.env, c.var.ws.id).fetch(new Request(c.req.raw, { headers }));
 });
 
 /** 열린 화면을 문서·버전·조각으로 옮긴다(3.4 focus_in_site). 받은 화면 수를 돌려준다 */
@@ -232,6 +237,15 @@ ws.get("/docs/:menu/:doc/work/pdf", async (c) => {
   const pdf = await toPdf(c.env, c.var.ws.id, null, f.path.slice(f.path.lastIndexOf(".")), f.sha256);
   return new Response(pdf, { headers: { "content-type": "application/pdf", "cache-control": "no-store" } });
 });
+
+// 슬라이드 덱(5.0 M4): 작업본 읽기, 슬라이드 연산·통째 쓰기, 색인(순서·제목) 고치기. 모두 수정본으로 저장
+ws.get("/docs/:menu/:doc/deck", async (c) => c.json(await readDeck(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"))));
+ws.post("/docs/:menu/:doc/deck/slides/:sid", async (c) =>
+  c.json(await patchSlide(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), c.req.param("sid"), await c.req.json(), agentOf(c) ? "agent" : "human")));
+ws.put("/docs/:menu/:doc/deck/slides/:sid", async (c) =>
+  c.json(await putSlide(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), c.req.param("sid"), await c.req.json(), agentOf(c) ? "agent" : "human")));
+ws.patch("/docs/:menu/:doc/deck", async (c) =>
+  c.json(await patchDeck(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), await c.req.json(), agentOf(c) ? "agent" : "human")));
 
 ws.get("/docs/:menu/:doc/revisions", async (c) => {
   const before = c.req.query("before");

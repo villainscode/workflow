@@ -34,6 +34,8 @@ const D = (menu: string, doc: string) => `${API}/docs/${menu}/${doc}`;
 
 export const getStructure = async (menu: string, doc: string) => send<Structure>(await fetch(`${D(menu, doc)}/work/structure`));
 export const getWork = async (menu: string, doc: string) => send<Work>(await fetch(`${D(menu, doc)}/work`));
+/** 수정본 하나의 파일 목록(콘텐츠 주소 포함) */
+export const getRevisionFiles = async (menu: string, doc: string, rev: number) => send<Work & { source: string; summary: string | null }>(await fetch(`${D(menu, doc)}/revisions/${rev}`));
 export const editViewUrl = (menu: string, doc: string, rev: number) => `${D(menu, doc)}/work/edit-view?r=${rev}`;
 export const workPdfUrl = (menu: string, doc: string, rev: number) => `${D(menu, doc)}/work/pdf?r=${rev}`;
 

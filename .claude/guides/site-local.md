@@ -42,7 +42,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - 저장·임시 보관·편집 막대는 `viewers/textedit/session.tsx`의 `useTextSession`과 `EditBar`를 HTML·DOCX 편집기가 함께 쓴다.
   - 어댑터를 고쳤다면 `npm run check:textedit`로 확인한다(검사용 샘플은 `site/scripts/fixtures/`).
 - **workflow-docs MCP** (`site/mcp/server.ts`, `.mcp.json`으로 등록, 3.0): 사이트 REST API를 감싼 stdio MCP 서버다. 도구 정의는 `packages/mcp-tools`에 있고 Cloudflare 원격 MCP(`apps/worker/src/mcp.ts`, OAuth, 4.0 P6)와 같이 쓴다. 도구를 고치면 `site/test/mcp.test.ts`와 `apps/worker/test/mcp.test.ts`를 함께 돌린다.
-  - 도구: `list_documents`(하위 문서는 들여 씀), `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename·parent), `upload_version`, `create_menu`, `release_document`, `focus_in_site`.
+  - 도구: `list_documents`(하위 문서는 들여 씀), `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename·parent), `upload_version`, `create_menu`, `release_document`, `focus_in_site`, 슬라이드 덱(5.0 M4) `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`, 구조 연산·수정본(5.0 M7) `doc_structure`·`doc_ops`·`revision_list`·`revision_restore`. 덱 쓰기(`slide_*`·`asset_put`)와 구조·수정본 도구는 Cloudflare만이고 로컬은 보기만이라(D-51) 로컬 서버에는 읽기용 `GET /api/docs/:menu/:doc/deck`만 있다.
   - 모든 요청에 `X-Workflow-Agent: claude-code` 헤더를 붙인다. 서버는 이 헤더가 있으면 변경 알림(SSE)에 `by: claude-code`를 담는다.
   - 문서는 사이트 주소(`?v=`, `&seg=`), `대분류/메뉴/문서`, `대분류 > 메뉴 > 제목`, 제목으로 지정한다.
   - 삭제·휴지통 도구는 두지 않는다(D-24). 쓰기 도구는 변경 메모 앞에 "Claude Code:"를 붙인다(D-26). 외부에서 가져온 문서는 `meta.yaml`의 `origin_url`에 출처를 남긴다.

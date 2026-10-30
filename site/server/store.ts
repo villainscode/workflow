@@ -8,7 +8,8 @@ import { wrapForEdit } from "@workflow/core/textedit/html";
 import { wrapSvgForEdit } from "@workflow/core/textedit/svg";
 import { nextMajor, nextVersion, VERSION_RE } from "@workflow/core/versions";
 import { slugify as baseSlug } from "@workflow/core/slug";
-import { kindOf, normalizeFiles, nowStamp as coreNowStamp, pickEntry as corePickEntry, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
+import { DECK_ENTRY, loadSlide, parseDeckIndex, serializeSlide, slidePath } from "@workflow/core/slide";
+import { kindOf, normalizeFiles, nowStamp as coreNowStamp, pickEntry as corePickEntry, prepareDeck, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
 import { Document, parseDocument, YAMLSeq } from "yaml";
 
 /** docs/에 파일과 yaml을 쓰는 작업. 원본(파일)을 먼저 쓰고, 색인은 호출한 쪽에서 다시 만든다. */
@@ -74,9 +75,12 @@ export function upload(docsRoot: string, input: UploadInput) {
   const category = findMenuCategory(docsRoot, input.menu);
   if (!category) throw new StoreError(400, `메뉴 ${input.menu}이(가) menus.yaml에 없습니다`);
 
-  const files = normalizeFiles(input.files);
+  let files = normalizeFiles(input.files);
   if (files.length === 0) throw new StoreError(400, "올릴 파일이 없습니다");
   const entry = pickEntry(files, input.entry);
+  const deck = prepareDeck(files, entry);
+  if (deck.error) throw new StoreError(400, deck.error);
+  files = deck.files;
 
   // 대상 문서 정하기
   let docSlug: string;
@@ -217,6 +221,17 @@ export function htmlEditView(docsRoot: string, menu: string, doc: string, versio
   if (format !== "html") throw new StoreError(400, "HTML·SVG 문서만 그 자리 편집을 지원합니다");
   const dir = v.entry.includes("/") ? v.entry.slice(0, v.entry.lastIndexOf("/") + 1) : "";
   return { type: "html", body: wrapForEdit(readFileSync(v.path), `/files/${relative(docsRoot, v.docDir)}/${v.version}/${dir}`) };
+}
+
+/** 슬라이드 덱 읽기(5.0 M4). 로컬은 보기만 하므로(D-51) 수정본이 없고 rev는 0, 지금 버전 파일을 eid가 붙은 형식으로 준다 */
+export function readDeck(docsRoot: string, menu: string, doc: string) {
+  const v = versionEntry(docsRoot, menu, doc);
+  if (v.entry !== DECK_ENTRY) throw new StoreError(400, "슬라이드 덱(deck.json) 문서가 아닙니다");
+  const dir = join(v.docDir, v.version);
+  const { index, diagnostics } = parseDeckIndex(readFileSync(join(dir, DECK_ENTRY), "utf8"));
+  if (!index) throw new StoreError(500, `deck.json을 읽을 수 없습니다: ${diagnostics[0]?.message}`);
+  const slides = index.order.map((id) => ({ id, html: serializeSlide(loadSlide(readFileSync(join(dir, slidePath(id)), "utf8"))) }));
+  return { baseVersion: v.version, rev: 0, index, slides };
 }
 
 /** 대표 파일의 텍스트 조각 목록. 지원하지 않는 형식이면 400 */

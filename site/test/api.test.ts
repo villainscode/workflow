@@ -143,6 +143,21 @@ describe("업로드", () => {
   });
 });
 
+describe("슬라이드 덱(5.0 M4)", () => {
+  test("TC-API-DECK-01 덱 업로드: kind deck·대표 파일 deck.json, 슬라이드는 eid가 붙은 형식으로 저장, 형식 오류는 400(Cloudflare TC-ED-33과 같은 규칙)", async () => {
+    const deck = JSON.stringify({ v: 1, title: "덱", order: ["cover"] });
+    const r = await upload(U, { menu: "notes", title: "로컬 덱", slug: "local-deck" }, [["deck.json", deck], ["slides/cover.html", '<section id="cover"><h1>표지</h1></section>']]);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const m = meta("notes", "local-deck");
+    assert.equal(m.kind, "deck");
+    assert.equal(m.versions[0].entry, "deck.json");
+    assert.equal(readText(join(ws.docs, "notes/local-deck/v0.0/slides/cover.html")), '<section id="cover" data-eid="cover">\n  <h1 data-eid="e1">표지</h1>\n</section>\n');
+    const bad = await upload(U, { menu: "notes", title: "나쁜 덱" }, [["deck.json", deck], ["slides/cover.html", '<section id="cover"><p style="margin:4px">x</p></section>']]);
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error, /slides\/cover\.html:1:\d+ \[css-prop\]/);
+  });
+});
+
 describe("Markdown 편집", () => {
   test("TC-MD-01 저장하면 source: edit 새 버전이 생기고 대표 .md만 바뀐다", async () => {
     const r = await call(U, "POST", "/api/docs/notes/minutes/edit", { baseVersion: "v0.0", content: "# 회의록\n\n- 바뀜\n", note: "수정" });

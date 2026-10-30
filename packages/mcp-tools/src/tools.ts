@@ -32,12 +32,15 @@ interface DocDetail {
 }
 interface Segment { id: number; text: string; hash: string; multiline: boolean; group: string; svg?: boolean; fmt?: string }
 
-export class ToolError extends Error {}
+export class ToolError extends Error {
+  /** 사이트 API의 HTTP 상태(있을 때). 409·400에 고칠 방법을 붙이는 데 쓴다 */
+  constructor(message: string, public status?: number) { super(message); }
+}
 
 /** 응답을 JSON으로 읽고, 실패면 서버의 error 메시지로 ToolError(호스트의 api 구현이 쓴다) */
 export async function readJson<T>(res: Response, path: string): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new ToolError(body.error ?? `${res.status} ${path}`);
+  if (!res.ok) throw new ToolError(body.error ?? `${res.status} ${path}`, res.status);
   return body;
 }
 
@@ -382,5 +385,188 @@ export function registerTools(server: McpServer, host: ToolHost) {
     return res.clients > 0
       ? `열린 사이트 화면 ${res.clients}개를 옮겼습니다.\n${url}`
       : `열린 사이트 화면이 없습니다. 브라우저에서 이 주소를 여세요:\n${url}`;
+  }));
+
+  // ---------- 슬라이드 덱(5.0 M4, 명세 docs/slide-editor-spec.html 11절) ----------
+
+  const DECK_FORMAT = "덱 형식: 캔버스 1920×1080px, 여백 128px, 글자 24px 이상. 슬라이드 한 장 = <section id=\"슬라이드id\" style=\"…\">…</section>(직계 <aside>는 발표자 노트). " +
+    "블록 section div h1 h2 h3 p ul ol li table tr th td img hr, 글자 안 마크 b i u a[href^=https] span[style=color] br. 속성은 data-eid·style·img의 src(asset:<sha256>만)·alt. " +
+    "CSS는 위치(position absolute·relative, left top width height), 배치(display flex·grid, flex-*, grid-template-columns, gap, align-*, justify-*, padding), 글자(font-*, line-height, letter-spacing, color, text-align, text-decoration), " +
+    "상자(background 단색, border*, border-radius), 이미지(object-fit, object-position). 단위 px·%·fr. margin·z-index·url()·script·on* 금지. 표 열 너비는 첫 행 칸의 width:N%.";
+  const SLIDE_OPS = "연산(eid로 대상 지정): setText{eid,html}, setStyle{eid,set,unset}, setAttr{eid,name:alt|src,value}, insert{parent,index,html}, remove{eid}, restore{parent,index,html}, move{eid,parent,index}, " +
+    "toPinned{eid,box:{left,top,width,height}}, tableCols{eid,widths}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, setNotes{text}";
+  const LOCAL_ONLY = (e: unknown) => {
+    if (e instanceof ToolError && (e.status === 404 && /Not Found|^404/.test(e.message))) throw new ToolError("이 사이트에서는 고칠 수 없습니다(로컬 사이트는 보기만, D-51). Cloudflare 워크스페이스에서 쓰세요.");
+    throw e;
+  };
+  interface DeckWork { rev: number; baseVersion: string; index: { title: string; order: string[] }; slides: { id: string; html: string }[] }
+  const loadDeck = (r: Ref) => api<DeckWork>(`/docs/${r.menu}/${r.doc}/deck`);
+
+  server.registerTool("deck_create", {
+    title: "슬라이드 덱 만들기",
+    description: `새 슬라이드 덱 문서를 만든다(draft). 슬라이드마다 HTML 한 조각. 형식에 맞지 않으면 파일:줄:칸과 고칠 방법(fix)이 담긴 진단을 돌려준다. ${DECK_FORMAT}`,
+    inputSchema: {
+      menu: z.string().describe("메뉴 slug 또는 이름"),
+      title: z.string().describe("덱 제목"),
+      slides: z.array(z.object({ id: z.string().describe("슬라이드 id(영문 소문자·숫자·-), section id와 같게"), html: z.string() })).min(1),
+      slug: z.string().optional(),
+      palette: z.array(z.string()).optional().describe("속성 패널 색 견본(#rrggbb)"),
+      faces: z.record(z.string(), z.object({ family: z.string(), href: z.string().describe("https://fonts.googleapis.com/css2?… 만") })).optional(),
+      note: z.string().optional(),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, safe(async ({ menu, title, slides, slug, palette, faces, note }) => {
+    const m = findMenu(await api<Tree>("/tree"), menu);
+    const enc = new TextEncoder();
+    const index = { v: 1, title, order: slides.map((s) => s.id), ...(palette ? { palette } : {}), ...(faces ? { faces } : {}) };
+    const files = [{ path: "deck.json", data: enc.encode(JSON.stringify(index, null, 2) + "\n") }, ...slides.map((s) => ({ path: `slides/${s.id}.html`, data: enc.encode(s.html) }))];
+    const res = await uploadFiles({ menu: m.menu.slug, title, slug, entry: "deck.json", note: withPrefix(note, "슬라이드 덱 만듦") }, files);
+    return `슬라이드 덱 "${title}"(${slides.length}장)을 만들었습니다. 고치려면 deck_get으로 eid를 읽고 slide_patch를 쓰세요.\n${docUrl(res.category, res.menu, res.doc)}`;
+  }));
+
+  server.registerTool("deck_get", {
+    title: "슬라이드 덱 읽기",
+    description: "덱의 색인(제목·순서)과 슬라이드 HTML(eid가 붙은 형식)·작업본 rev를 읽는다. 사람이 고친 뒤에는 반드시 다시 읽고 고친다.",
+    inputSchema: { ref: REF, slides: z.array(z.string()).optional().describe("이 슬라이드 id만") },
+    annotations: { readOnlyHint: true },
+  }, safe(async ({ ref, slides }) => {
+    const r = await resolveRef(ref);
+    const d = await loadDeck(r).catch(LOCAL_ONLY);
+    const list = d.slides.filter((s) => !slides || slides.includes(s.id));
+    return `덱 "${d.index.title}" · rev ${d.rev}(기준 ${versionLabel(d.baseVersion)}) · 순서 ${d.index.order.join(", ")}\n\n` +
+      list.map((s) => `--- ${s.id}\n${s.html}`).join("\n");
+  }));
+
+  server.registerTool("slide_put", {
+    title: "슬라이드 통째로 쓰기",
+    description: `슬라이드 하나를 HTML로 통째로 쓴다(새 id면 index 자리, 없으면 끝에 추가). 작은 수정은 slide_patch를 쓴다(사람의 다른 편집을 덮지 않는다). ${DECK_FORMAT}`,
+    inputSchema: {
+      ref: REF, slideId: z.string(), html: z.string(),
+      baseRev: z.number().int().optional().describe("deck_get에서 읽은 rev. 없으면 지금 rev"),
+      index: z.number().int().optional(), note: z.string().optional(),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true },
+  }, safe(async ({ ref, slideId, html, baseRev, index, note }) => {
+    const r = await resolveRef(ref);
+    const rev = baseRev ?? (await loadDeck(r).catch(LOCAL_ONLY)).rev;
+    const res = await api<{ rev: number; added: boolean }>(`/docs/${r.menu}/${r.doc}/deck/slides/${encodeURIComponent(slideId)}`,
+      { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseRev: rev, html, index, summary: withPrefix(note, `슬라이드 ${slideId} 다시 씀`) }) }).catch(LOCAL_ONLY);
+    return `슬라이드 ${slideId}를 ${res.added ? "추가" : "다시 썼"}습니다(수정본 ${res.rev}). 버전은 사람이 「버전으로 저장」할 때 생깁니다.\n${docUrl(r.category, r.menu, r.doc)}`;
+  }));
+
+  server.registerTool("slide_patch", {
+    title: "슬라이드 고치기(연산)",
+    description: `슬라이드 하나에 편집 연산을 적용한다. 대상은 deck_get으로 읽은 data-eid로 가리킨다. baseRev가 지났어도 대상 요소가 모두 있으면 최신본에 다시 적용되고, 지워진 요소면 실패한다. ${SLIDE_OPS}. ${DECK_FORMAT}`,
+    inputSchema: {
+      ref: REF, slideId: z.string(),
+      ops: z.array(z.record(z.string(), z.unknown())).min(1).describe(SLIDE_OPS),
+      baseRev: z.number().int().optional(), note: z.string().optional(),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, safe(async ({ ref, slideId, ops, baseRev, note }) => {
+    const r = await resolveRef(ref);
+    const rev = baseRev ?? (await loadDeck(r).catch(LOCAL_ONLY)).rev;
+    const res = await api<{ rev: number; rebased: boolean; html: string }>(`/docs/${r.menu}/${r.doc}/deck/slides/${encodeURIComponent(slideId)}`,
+      json({ baseRev: rev, ops, summary: withPrefix(note, `슬라이드 ${slideId} 연산 ${ops.length}개`) })).catch(LOCAL_ONLY);
+    return `슬라이드 ${slideId}에 연산 ${ops.length}개를 적용했습니다(수정본 ${res.rev}${res.rebased ? ", 그사이 바뀐 최신본에 다시 적용" : ""}).\n${res.html}`;
+  }));
+
+  server.registerTool("asset_put", {
+    title: "그림 올리기",
+    description: "PNG·JPEG·WebP·GIF 그림을 올리고 슬라이드에 쓸 asset:<sha256> 주소를 받는다(같은 그림은 한 번만 저장). SVG는 받지 않는다.",
+    inputSchema: {
+      base64: z.string().describe("그림 파일 내용(base64)"),
+      mime: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
+      name: z.string().optional(),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, safe(async ({ base64, mime, name }) => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const form = new FormData();
+    form.append("file", new File([bytes], name ?? `image.${mime.split("/")[1]}`, { type: mime }));
+    const res = await api<{ asset: string; width: number; height: number }>("/assets", { method: "POST", body: form }).catch(LOCAL_ONLY);
+    return `${res.asset} (${res.width}×${res.height}px)`;
+  }));
+
+  // ---------- 구조 편집·수정본(5.0 M7): HTML·DOCX·PPTX·XLSX 연산, 수정본 목록·되돌리기 ----------
+
+  const STRUCT_OPS = "HTML 연산(eid로 대상): setText{eid,html(인라인 마크만)}, setAttr{eid,name:src|alt|href,value}, setWidth{eid,percent|null}, insert{ref,where:before|after,node:{kind:table,rows,cols,header?}|{kind:image,src(상대 경로·https·asset:<sha>),alt?,width?}|{kind:paragraph,text?}|{kind:heading,level:2|3|4,text?}}, " +
+    "remove{eid}, move{eid,ref,where}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, tableCols{eid,widths(%)}. " +
+    "DOCX·PPTX 연산(table·image는 doc_structure의 id): tableRow{table,at,op}, tableCol{table,at,op}, tableCols{table,widths}, replaceImage{image,asset:\"asset:<sha>\"}. XLSX: colWidth{sheet,col(0부터),width(글자 수)}";
+  /** 연산 실패에 고칠 방법을 붙인다(명세 15절: 잘못된 연산에 진단·fix) */
+  const withFix = (e: unknown): never => {
+    if (!(e instanceof ToolError)) throw e;
+    if (e.status === 409) throw new ToolError(`${e.message}\n→ doc_structure로 최신 eid·id와 rev를 다시 읽고 연산을 고쳐 보내세요.`, 409);
+    if (e.status === 400) throw new ToolError(`${e.message}\n→ 쓸 수 있는 연산: ${STRUCT_OPS}`, 400);
+    return LOCAL_ONLY(e) as never;
+  };
+  interface Block { eid: string; tag: string; text: string; table?: { rows: number; cols: number; widths: number[] | null; merged: boolean }; image?: { src: string; alt: string; width: number | null }; editable: boolean }
+  interface Structure { rev: number; baseVersion: string; entry: string; kind: string; blocks?: Block[];
+    tables?: { id: string; where: string; rows: number; cols: number; widths: number[]; merged: boolean; header: string[] }[];
+    images?: { id: string; where: string; media: string }[]; sheets?: { id: string; name: string; widths: number[] }[] }
+
+  server.registerTool("doc_structure", {
+    title: "문서 구조 읽기",
+    description: "HTML·DOCX·PPTX·XLSX 작업본의 구조를 읽는다: HTML은 블록(eid·태그·글자, 표 행·열·너비, 그림), 오피스는 표·그림·시트 id. doc_ops 전에 반드시 읽는다(eid는 저장할 때마다 바뀐다).",
+    inputSchema: { ref: REF },
+    annotations: { readOnlyHint: true },
+  }, safe(async ({ ref }) => {
+    const r = await resolveRef(ref);
+    const s = await api<Structure>(`/docs/${r.menu}/${r.doc}/work/structure`).catch(LOCAL_ONLY);
+    const head = `${s.entry} (${s.kind}) · rev ${s.rev}(기준 ${versionLabel(s.baseVersion)})`;
+    if (s.blocks) {
+      return `${head}\n` + s.blocks.map((b) => {
+        const extra = b.table ? ` [표 ${b.table.rows}×${b.table.cols}${b.table.widths ? ` 너비 ${b.table.widths.join("/")}%` : ""}${b.table.merged ? " 병합 있음" : ""}]`
+          : b.image ? ` [그림 ${b.image.src}${b.image.alt ? ` "${b.image.alt}"` : ""}]` : "";
+        return `${b.eid} <${b.tag}>${extra}${b.text ? ` ${b.text.slice(0, 60)}` : ""}${b.editable ? "" : " (글자 고치기 불가)"}`;
+      }).join("\n");
+    }
+    return [head,
+      ...(s.tables ?? []).map((t) => `표 ${t.id} · ${t.where} · ${t.rows}×${t.cols} · 너비 ${t.widths.join("/")}%${t.merged ? " · 병합 있음(행·열 불가)" : ""}${t.header.length ? ` · 머리: ${t.header.join(" | ")}` : ""}`),
+      ...(s.images ?? []).map((i) => `그림 ${i.id} · ${i.where} · ${i.media}`),
+      ...(s.sheets ?? []).map((x) => `시트 ${x.id} · ${x.name} · 열 너비 ${x.widths.slice(0, 8).join("/")}…`)].join("\n");
+  }));
+
+  server.registerTool("doc_ops", {
+    title: "문서 구조 고치기(연산)",
+    description: `HTML·DOCX·PPTX·XLSX 작업본에 구조 연산을 적용해 수정본 하나로 저장한다(표 행·열·너비, 블록 넣기·지우기·옮기기, 그림). 대상은 doc_structure로 읽은 eid·id. 버전은 사람이 「버전으로 저장」할 때 생긴다. ${STRUCT_OPS}`,
+    inputSchema: {
+      ref: REF,
+      ops: z.array(z.record(z.string(), z.unknown())).min(1).describe(STRUCT_OPS),
+      baseRev: z.number().int().optional().describe("doc_structure에서 읽은 rev. 없으면 지금 rev"),
+      note: z.string().optional(),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, safe(async ({ ref, ops, baseRev, note }) => {
+    const r = await resolveRef(ref);
+    const rev = baseRev ?? (await api<Structure>(`/docs/${r.menu}/${r.doc}/work/structure`).catch(LOCAL_ONLY)).rev;
+    const res = await api<{ rev: number; changed: boolean }>(`/docs/${r.menu}/${r.doc}/revisions`, json({ baseRev: rev, ops, summary: withPrefix(note, `구조 연산 ${ops.length}개`) })).catch(withFix);
+    return res.changed ? `연산 ${ops.length}개를 적용해 수정본 ${res.rev}로 저장했습니다. eid가 바뀌었으니 더 고치려면 doc_structure를 다시 읽으세요.\n${docUrl(r.category, r.menu, r.doc)}`
+      : "바뀐 것이 없어 수정본을 만들지 않았습니다.";
+  }));
+
+  interface Rev { rev: number; baseVersion: string; source: string; summary: string | null; createdAt: string; author: string | null; publishedAs: string | null }
+  server.registerTool("revision_list", {
+    title: "수정본 목록",
+    description: "문서의 수정본(자동 저장·에이전트 저장) 이력을 최신부터 보여 준다. 출처(human·agent·restore), 작성자, 메모, 버전으로 올린 수정본.",
+    inputSchema: { ref: REF },
+    annotations: { readOnlyHint: true },
+  }, safe(async ({ ref }) => {
+    const r = await resolveRef(ref);
+    const res = await api<{ head: number | null; revisions: Rev[] }>(`/docs/${r.menu}/${r.doc}/revisions`).catch(LOCAL_ONLY);
+    if (!res.revisions.length) return "수정본이 없습니다(지금 버전 그대로).";
+    return res.revisions.map((x) => `r${x.rev}${x.rev === res.head ? " (지금)" : ""} · ${x.source} · ${x.author ?? "-"} · ${x.createdAt.slice(0, 16).replace("T", " ")} · ${x.summary ?? ""}${x.publishedAs ? ` · ${versionLabel(x.publishedAs)}로 올림` : ""}`).join("\n");
+  }));
+
+  server.registerTool("revision_restore", {
+    title: "수정본 되돌리기",
+    description: "예전 수정본(rev, 0이면 기준 버전 내용)의 내용으로 새 수정본을 만든다. 지난 수정본은 지우지 않는다.",
+    inputSchema: { ref: REF, rev: z.number().int().min(0), baseRev: z.number().int().optional().describe("지금 rev(없으면 서버에서 읽는다)") },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, safe(async ({ ref, rev, baseRev }) => {
+    const r = await resolveRef(ref);
+    const cur = baseRev ?? (await api<{ rev: number }>(`/docs/${r.menu}/${r.doc}/work`).catch(LOCAL_ONLY)).rev;
+    const res = await api<{ rev: number; changed: boolean }>(`/docs/${r.menu}/${r.doc}/revisions/${rev}/restore`, json({ baseRev: cur })).catch(withFix);
+    return res.changed ? `${rev === 0 ? "기준 버전" : `수정본 ${rev}`} 내용으로 수정본 ${res.rev}를 만들었습니다.\n${docUrl(r.category, r.menu, r.doc)}` : "이미 그 내용이라 바꾸지 않았습니다.";
   }));
 }

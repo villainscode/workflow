@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot, RotateCcw, User } from "lucide-react";
+import { useState } from "react";
+import { Bot, GitCompare, RotateCcw, User } from "lucide-react";
 import { versionLabel } from "../../lib/api.ts";
 import { listRevisions } from "../../lib/structedit.ts";
 import { IconButton } from "../../components/IconButton.tsx";
+import { RevisionDiff } from "./RevisionDiff.tsx";
 
 const SOURCE: Record<string, string> = { human: "사람", agent: "에이전트", office: "오피스", restore: "되돌림" };
 const time = (iso: string) => new Date(iso).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -12,6 +14,7 @@ export function RevisionPanel({ menu, doc, current, busy, onRestore }: {
   menu: string; doc: string; current: number; busy: boolean; onRestore: (rev: number) => void;
 }) {
   const { data, error } = useQuery({ queryKey: ["revisions", menu, doc], queryFn: () => listRevisions(menu, doc) });
+  const [compare, setCompare] = useState<number | null>(null);
   const list = data?.revisions ?? [];
   const base = list.find((r) => r.rev === current)?.baseVersion;
 
@@ -35,7 +38,10 @@ export function RevisionPanel({ menu, doc, current, busy, onRestore }: {
               {r.author && <p className="truncate text-[11px] text-muted">{r.author}</p>}
             </div>
             {r.rev !== current && (
-              <IconButton icon={RotateCcw} label={`r${r.rev}(으)로 되돌리기`} size={16} disabled={busy} onClick={() => onRestore(r.rev)} />
+              <div className="flex shrink-0 flex-col">
+                <IconButton icon={GitCompare} label={`r${r.rev}과 지금 비교`} size={16} onClick={() => setCompare(r.rev)} />
+                <IconButton icon={RotateCcw} label={`r${r.rev}(으)로 되돌리기`} size={16} disabled={busy} onClick={() => onRestore(r.rev)} />
+              </div>
             )}
           </li>
         ))}
@@ -47,6 +53,7 @@ export function RevisionPanel({ menu, doc, current, busy, onRestore }: {
         )}
         {list.length === 0 && !error && <li className="px-3 py-3 text-xs text-muted">아직 수정본이 없습니다.</li>}
       </ol>
+      {compare !== null && <RevisionDiff menu={menu} doc={doc} rev={compare} current={current} onClose={() => setCompare(null)} />}
     </aside>
   );
 }

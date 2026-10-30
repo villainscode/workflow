@@ -3,7 +3,7 @@ import { wrapForEdit } from "@workflow/core/textedit/html";
 import { wrapSvgForEdit } from "@workflow/core/textedit/svg";
 import { mimeOf } from "@workflow/core/mime";
 import { isSearchable, searchText } from "@workflow/core/search-text";
-import { kindOf, normalizeFiles, nowStamp, pickEntry, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
+import { kindOf, normalizeFiles, nowStamp, pickEntry, prepareDeck, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
 import { nextMajor, nextVersion, VERSION_RE } from "@workflow/core/versions";
 import { slugify } from "@workflow/core/slug";
 import { getBlob, putBlob, sha256Hex } from "./blobs.ts";
@@ -106,10 +106,13 @@ export interface UploadInput {
 export async function upload(env: Bindings, ws: Workspace, input: UploadInput) {
   const db = env.DB;
   const menu = await menuBySlug(db, ws.id, input.menu);
-  const files = normalizeFiles(input.files);
+  let files = normalizeFiles(input.files);
   if (files.length === 0) throw new HttpError(400, "올릴 파일이 없습니다");
   const entry = pickEntry(files.map((f) => f.path), input.entry);
   if (!entry) throw new HttpError(400, `대표 파일 ${input.entry}이(가) 업로드 목록에 없습니다`);
+  const deck = prepareDeck(files, entry);
+  if (deck.error) throw new HttpError(400, deck.error);
+  files = deck.files;
   const vfiles = await Promise.all(files.map(async (f) => ({
     path: f.path, sha256: await sha256Hex(f.data), size: f.data.byteLength, mime: mimeOf(f.path), data: f.data,
   })));

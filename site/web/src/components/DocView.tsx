@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FilePlus2, LayoutPanelTop, Link2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { Download, ExternalLink, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -23,9 +23,13 @@ import { useAction } from "./manage/useAction.ts";
 import { CLOUD, useCan } from "../lib/me.ts";
 import { STRUCT_EDITABLE } from "../lib/structedit.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
+import { PresenceChips } from "./PresenceChips.tsx";
+import { useHere } from "../lib/live.ts";
 
 // 구조 편집(5.0, Cloudflare 전용). 보기 화면에는 싣지 않는다
 const StructEditor = lazy(() => import("../viewers/structedit/StructEditor.tsx").then((m) => ({ default: m.StructEditor })));
+const DeckEditor = lazy(() => import("../viewers/deck/editor/DeckEditor.tsx").then((m) => ({ default: m.DeckEditor })));
+const PdfEditor = lazy(() => import("../viewers/pdf/PdfEditor.tsx").then((m) => ({ default: m.PdfEditor })));
 
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|svg|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
@@ -62,6 +66,8 @@ export function DocView() {
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
 
+  // 접속자 표시(5.0 M7): 이 문서를 보고 있다(편집 화면이면 편집 중)고 알린다
+  useHere(menu, doc, textEditing || structEditing ? "edit" : "view");
   // 외부 문서(출처 있음)의 HTML 스크립트 켜기 상태(3.3). 훅이라 아래 조기 반환보다 먼저 부른다
   const [scripts, setScripts] = useScripts(menu, doc, params.get("v") ?? data?.currentVersion ?? "", !!data?.originUrl);
 
@@ -102,6 +108,7 @@ export function DocView() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
         {can.edit ? <DocTitle key={data.title} menu={menu} doc={doc} title={data.title} />
           : <h1 className="min-w-0 flex-1 text-[2em] leading-tight font-bold">{data.title}</h1>}
+        <PresenceChips menu={menu} doc={doc} />
         {version.createdAt && (
           <span className="font-mono text-xs text-muted" data-tip={`${versionLabel(version.version)} 작성일`}>{version.createdAt}</span>
         )}
@@ -155,6 +162,14 @@ export function DocView() {
             <IconButton icon={LayoutPanelTop} label="구조 편집 (표·그림)" active={structEditing} disabled={structEditing || textEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setStructEditing(true); }} />
           )}
+          {CLOUD && can.edit && entry?.path === "deck.json" && version.version === data.currentVersion && (
+            <IconButton icon={PenLine} label="슬라이드 편집" active={structEditing} disabled={structEditing}
+              onClick={() => setStructEditing(true)} />
+          )}
+          {CLOUD && can.edit && entry && /\.pdf$/i.test(entry.path) && version.version === data.currentVersion && (
+            <IconButton icon={PenLine} label="PDF 편집" active={structEditing} disabled={structEditing}
+              onClick={() => setStructEditing(true)} />
+          )}
           {referable && !cmpVersion && !textEditing && !structEditing && (
             <IconButton icon={Link2} label="참조 복사 (글자를 눌러 Claude Code에 붙여 넣을 주소 복사)" active={refCopy}
               onClick={() => setRefCopy((v) => !v)} />
@@ -193,7 +208,9 @@ export function DocView() {
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
         ) : structEditing ? (
           <Suspense fallback={<EmptyState title="편집기를 불러오는 중…" />}>
-            <StructEditor menu={menu} doc={doc} onExit={onStructExit} />
+            {entry.path === "deck.json" ? <DeckEditor menu={menu} doc={doc} onExit={onStructExit} />
+              : /\.pdf$/i.test(entry.path) ? <PdfEditor menu={menu} doc={doc} onExit={onStructExit} />
+              : <StructEditor menu={menu} doc={doc} onExit={onStructExit} />}
           </Suspense>
         ) : textEditing ? (
           /\.(docx|pptx|xlsx)$/i.test(entry.path) ? (

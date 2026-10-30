@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.6 (2026-10-28). 로컬 사이트: 자동 케이스 153개(실제 테스트 201건: `npm test` 167건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 59건 + Cloudflare 화면 테스트 12건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집 `npm test -w @workflow/core` 14건 통과). Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.6 (2026-10-28). 로컬 사이트: 자동 케이스 156개(실제 테스트 204건: `npm test` 170건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 67건 + Cloudflare 화면 테스트 17건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 23건 통과). Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -176,12 +176,13 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-TREE-03 | 문서 옮기기: 다른 문서 아래로, 메뉴 바로 아래로, 자기 자신·자기 하위로는 400 | D-36 |
 | TC-TREE-04 | 같은 자리 순서: `index`로 옮기면 그 자리 문서들의 `meta.yaml` `order`를 다시 쓰고 트리가 그 순서 | D-34 |
 | TC-TREE-05 | 하위 문서째 다른 메뉴로: 하위 문서 slug가 겹치면 409, 옮기는 문서 slug가 겹치면 `-2`, 하위 문서의 menu·category도 맞춘다 | D-34 |
+| TC-API-DECK-01 | 슬라이드 덱 업로드: kind deck·대표 파일 deck.json, 슬라이드는 eid가 붙은 형식으로 저장, 형식 오류는 400(파일:줄:칸 진단). Cloudflare TC-ED-33과 같은 규칙 | 5.0 M4 |
 
 ### 2.5 workflow-docs MCP (`mcp.test.ts`)
 
 | ID | 확인 내용 | 근거 |
 |---|---|---|
-| TC-MCP-01 | 도구 11개(`focus_in_site` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
+| TC-MCP-01 | 도구 20개(`focus_in_site`, 5.0 덱 도구 `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`, 구조·수정본 도구 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
 | TC-MCP-02 | 사이트 서버가 꺼져 있으면 `npm run dev` 실행 안내 | 3.0 §4 |
 | TC-MCP-03 | `list_documents`: 트리·주소·draft 표시·대분류 필터 | 3.0 §4.2 |
 | TC-MCP-04 | `find_documents`: 본문 검색 결과와 "없음" 안내 | 3.0 §4.2 |
@@ -200,6 +201,8 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-MCP-18 | `get_text`: seg 목록 형식(`0,2-3`)을 해석해 그 조각만 ▶로 표시 | 3.0 7.2 |
 | TC-MCP-19 | 쓰기 도구의 변경 알림에 `by: claude-code`와 바뀐 조각이 담긴다 | 3.0 7.3, D-29 |
 | TC-MCP-20 | `focus_in_site`: 열린 화면이 없으면 주소 안내, 있으면 "열린 사이트 화면 n개" + `focus` 이벤트(버전·seg 포함) | 3.0 7.3 |
+| TC-MCP-22 | 로컬에서 `doc_structure`·`doc_ops`·`revision_list`는 "로컬 사이트는 보기만" 안내(D-51) | 5.0 M7 |
+| TC-MCP-21 | `deck_create`: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성(메모 "Claude Code:"). `deck_get`은 eid가 붙은 HTML(rev 0), 로컬에서 `slide_patch`는 "로컬 사이트는 보기만" 안내(D-51) | 5.0 M4 |
 | TC-MCP-21 | SVG 문서도 `get_text`·`edit_text`로 고치고, 넘칠 수 있으면 "주의:"를 함께 알린다 | 2.0 확장(SVG) |
 | TC-MCP-17 | `release_document`: v1.0 approved, 메모 앞 "Claude Code:", 두 번째는 거부 | 3.0 §4.2 |
 
@@ -292,6 +295,9 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CF-41 | 원격 MCP: 토큰 없이 `/mcp`는 401(Bearer 안내), 동의 화면은 앱 이름·토큰을 보낼 곳(localhost 경고)·내 워크스페이스 고르기 | 4.0 P6 |
 | TC-CF-42 | 동적 등록 → 동의(워크스페이스 고르기) → PKCE 토큰 → 도구 목록이 로컬과 같고(삭제 도구 없음, D-24), list_documents 주소는 워크스페이스 아래, get_text·edit_text(find/replace) 저장, 메모 앞 "Claude Code:"(D-26) | 4.0 P6 |
 | TC-CF-43 | upload_document는 파일 내용(글자·base64)으로 새 문서, viewer로 연결하면 쓰기 도구는 권한 오류·읽기 도구는 됨 | 4.0 5.9 |
+| TC-CF-45 | 접속자: 화면이 "here"(메뉴·문서·보기/편집)를 보내면 모두에게 접속자 목록(같은 사람·같은 문서는 하나, 편집이 앞섬), 창을 닫으면 빠짐. 저장 알림에 저장한 사람 id (`test/live.test.ts`) | 5.0 M7 |
+| TC-CF-46 | `doc_structure`(eid·rev) → `doc_ops`(에이전트 수정본, 메모 "Claude Code:"), 지난 rev는 409 + "→ doc_structure로 다시 읽고", 잘못된 연산은 400 + "→ 쓸 수 있는 연산", `revision_list`(출처·작성자·메모), `revision_restore`(rev 0 = 기준 버전) | 5.0 M7 |
+| TC-CF-44 | 덱 도구: `deck_create` → `deck_get`(eid) → `slide_patch`(수정본 출처 agent, 메모 "Claude Code:") → `slide_put` 형식 오류 진단 → `asset_put`(asset:<sha>·크기) | 5.0 M4 |
 | TC-CF-44 | PDF 변환: 결과는 원본 sha256으로 R2에 캐시(캐시가 있으면 컨테이너를 부르지 않음), 다른 워크스페이스 파일 404, svg 대상·Office가 아닌 형식 400 | 4.0 P7 |
 | TC-CF-45 | 워크스페이스 내보내기(owner): 리포 `docs/` 모양 zip(categories·menus yaml, 하위 문서는 상위 폴더 안, meta.yaml order, 버전 파일 내용), 휴지통 문서 제외, editor는 403 | 4.0 P8 |
 | TC-CF-46 | 요청 수 제한: 같은 IP에서 로그인 API가 분당 20번을 넘으면 429(cf-connecting-ip가 없는 로컬·테스트는 제한 없음) | 4.0 P8 |
@@ -303,6 +309,11 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-10 | 내보내기 → 가져오기 왕복: 내보낸 zip을 풀어 가져오기 CLI로 새 워크스페이스에 넣으면 트리와 모든 문서의 버전·메모·작성 시각·파일 sha256이 같다. `/`는 마지막에 쓴 워크스페이스로 간다 | 4.0 P8 |
 | TC-CFUI-11 | 구조 편집(HTML): 문단 뒤에 표 넣기 → 칸을 골라 행 넣기 → 되돌리기 → 글자 두 번 눌러 고치기 → 버전으로 저장(source revision). 편집 사본에서 문서 스크립트가 돌지 않고, 저장본에는 스크립트가 원본 그대로 | 5.0 M2·M3 |
 | TC-CFUI-12 | 구조 편집(PPTX): 표 끝에 행 넣기 → 수정본, 미리보기는 작업본 PDF(`…/work/pdf`, 변환 컨테이너), 버전으로 저장 | 5.0 M5 |
+| TC-CFUI-13 | 슬라이드 덱 보기: 목록 썸네일, 1920×1080을 창에 맞춰 그림, →로 다음 슬라이드·발표자 노트 | 5.0 M4 |
+| TC-CFUI-14 | 슬라이드 편집: 한글 조합 입력(CDP IME 이벤트) → Esc 확정 → 새로 고침 뒤 유지, 고정 요소 끌기(화면 이동량 ÷ 배율, 맞춤선 6px 안), 표 열 넣기·열 경계 손잡이 끌기(이웃 두 열만, 합 100), ⌘Z, 다른 사람이 지운 요소를 고치면 알림·최신본, 버전으로 저장 | 명세 15절 |
+| TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
+| TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
+| TC-CFUI-15 | 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 놓은 자리 가운데에 고정 위치 그림, 서명 주소(`/c/…/_asset/…`)로 그림 | 명세 08절 |
 | TC-CFUI-01 | `/`는 워크스페이스로, HTML 문서는 콘텐츠 주소 sandbox iframe(allow-same-origin 없음)으로 열리고 상대 경로 CSS까지 읽힘 | 4.0 5.5 |
 | TC-CFUI-02 | HTML 텍스트 편집 저장 → text-edit 새 버전 | 2.0 |
 | TC-CFUI-03 | 새 Markdown 문서 → 편집기에서 이미지 올리기(설정 창 없음, 앱 API → R2) → 저장하면 새 버전, 이미지 주소가 열림 | D-32 |
@@ -342,6 +353,20 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-25 | 구조 편집 API: HTML 구조 목록(`GET …/work/structure`), 편집 사본(`…/work/edit-view`: data-eid, 작업본 `<base>`, CSP `sandbox allow-same-origin`, 2.0 편집 사본도 같은 CSP), 연산 저장(`POST …/revisions {ops}`)은 수정본 하나·메모 자동 (`apps/worker/test/structedit.test.ts`) | 5.0 5.4 |
 | TC-ED-26 | HTML 그림 `asset:<sha>` → 대표 파일 옆 `assets/`에 연결·상대 경로, 에이전트 출처, 없는 자산 400·기준 rev 다름 409·없는 요소 409·빈 ops 400·ops와 put 같이 400, Markdown은 400 | 5.0 5.4 |
 | TC-ED-27 | PPTX 구조 목록, 표 행 넣기·그림 교체(asset)를 한 수정본으로, 버전으로 올리면 새 버전 파일에 행·틀 높이·Content_Types 반영, 마지막 행 빼기 400 | D-47 |
+| TC-ED-28 | 슬라이드 파싱·직렬화: eid를 붙이고(한 번 붙으면 그대로, 새 요소만 다음 번호), tbody는 건너뛰고, 노트는 aside, 왕복 안정 (`packages/core/test/slide.test.ts`) | 명세 04절 |
+| TC-ED-29 | 슬라이드 검증: 허용 밖 태그·속성·CSS마다 진단 하나(줄·칸, margin·z-index·단위 fix), 루트·id·eid 중복 | 명세 03·04절 |
+| TC-ED-30 | 슬라이드 연산(setText·setStyle·setAttr·insert·remove·move·toPinned·tableCols·tableRow·tableCol·setNotes, 묶음) 적용 후 역연산을 적용하면 원본과 같고, 결과는 다시 읽어도 진단 없음 | 명세 04·09절 |
+| TC-ED-31 | 표: 열 너비 합 100%, 열을 넣으면 똑같이 나눔, 새 행은 본문 칸 스타일을 이음. 잘못된 연산 400, 없는 요소 409 | 명세 07절 |
+| TC-ED-32 | 덱 검사: deck.json·order의 슬라이드 파일이 모두 있고 형식에 맞아야 함(글꼴은 Google Fonts만, section id = 파일 이름), 저장본은 eid가 붙은 직렬화 형식 | 5.0 4.3 |
+| TC-ED-33 | 덱 업로드(Worker): kind deck, 대표 파일 deck.json, 슬라이드 eid 형식 저장, 형식 오류 400(파일:줄:칸 [코드] → fix), 빠진 슬라이드 400 (`apps/worker/test/deck.test.ts`) | 5.0 M4 |
+| TC-ED-34 | 슬라이드 연산 → 수정본(그 슬라이드 파일만 새 blob), 돌려받은 역연산을 보내면 원래 내용, 형식 위반은 400·수정본 그대로, 없는 슬라이드 404 | 명세 10절 |
+| TC-ED-35 | rev 충돌: 기준이 지났어도 대상 요소가 있으면 최신본에 다시 적용해 저장(rebased), 지워진 요소면 409 | 명세 10절 |
+| TC-ED-36 | 슬라이드 통째 쓰기(새 id면 순서에 추가), 색인 고치기(제목·순서, 빠진 슬라이드 파일 지움, 없는 id 400), 에이전트 출처, 버전으로 올리기, viewer 403 | 명세 10·11절 |
+| TC-ED-37 | 덱이 아닌 문서는 덱 API 400 | 5.0 M4 |
+| TC-ED-38 | PDF 부분 글꼴: harfbuzz로 쓴 글자만 남겨(원본 2MB의 1/10 미만) 한글 글상자 PDF에 글꼴 하나만, 글꼴 없이 글자를 쓰면 거부 (`packages/core/test/pdfedit.test.ts`) | 5.0 4.5, M0 |
+| TC-ED-39 | PDF 덧그리기: 글상자·그림·형광펜(곱하기 섞기, 화면 왼쪽 위 → PDF 좌표)·펜이 그 쪽 내용에 더해지고, 90도 돌린 쪽의 글자는 회전 행렬로 그려 화면에서 똑바로 | 5.0 4.5 |
+| TC-ED-40 | PDF 쪽: 회전(누적)·지우기·옮기기·다른 PDF 끼워 넣기, 범위 밖·잘못된 각도·PDF 아닌 파일 400, 마지막 쪽은 못 지움, 빈 연산은 원본 그대로 | 5.0 4.5 |
+| TC-ED-41 | PDF 양식: 칸 목록(글자·체크·목록), 한글 글자·체크·목록 채우기(우리 글꼴로 칸 모양), 없는 칸 400 | 5.0 4.5 |
 
 ## 3. 수동 확인 케이스
 
@@ -393,3 +418,6 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-29 | Markdown 저장 직후 다른 문서로 가면 가끔 "저장하지 않은 변경" 경고로 이동이 막힘 | 저장 뒤 새 버전을 다시 불러올 때까지 편집 내용이 원본과 달라 `dirty`가 참으로 남았다(네트워크가 느릴수록 잘 생김) | 방금 저장한 내용(`savedText`)은 변경으로 보지 않음(`MarkdownViewer.tsx`) | TC-CFUI-03 → 04 연속 실행(수정 전 4번 중 2번 실패, 수정 후 4번 모두 통과) |
 | 2026-10-29 | (Cloudflare) PPTX·DOCX를 PDF로 바꾸지 못함(`Container failed to start`) | 이 계정은 컨테이너를 `scheduling_policy: durable_object` + `images` 형식으로만 만들 수 있어 배포 때 설정을 바꿨는데, 그 형식에서는 `start()`에 이미지 이름이 있어야 한다. `@cloudflare/containers` 0.3.7은 넘기지 않는다(로그: `Container.start() requires an image or container snapshot`) | `Converter`가 `ctx.container.start`에 `images.base`를 넣는다(`apps/worker/src/convert.ts`) | TC-CFUI-09 (수정 전 실패 확인), TC-CFUI-12 |
 | 2026-10-29 | 구조 편집에서 문단을 두 번 눌러도 글자 편집이 켜지지 않을 때가 있음 | 글자를 고칠 수 있는 요소 표시(`data-editable`)를 렌더 뒤 effect에서 칠해서, 편집 사본이 아직 다 읽히기 전이면 빠졌다 | 사본의 `load`에서 칠함(`HtmlStructPane.tsx`) | TC-CFUI-11 |
+| 2026-10-30 | 슬라이드 글자를 두 번 눌러 편집기가 열린 직후 친 글자가 들어가지 않음 | Tiptap 편집기 DOM이 붙기 전에 포커스를 요청해 커서가 들어가지 않았다 | `autofocus: "end"` + 다음 프레임에 한 번 더 포커스(`TextEditor.tsx`) | TC-CFUI-14 |
+| 2026-10-30 | PDF 편집에서 글상자 도구로 쪽을 눌러도 글자 칸이 생기지 않음 | 눌렀을 때 생긴 글자 칸이 포커스를 받은 뒤, 같은 누름의 기본 동작(포커스 옮기기)으로 바로 포커스를 잃어 빈 칸으로 지워졌다 | 글상자 도구의 pointerdown 기본 동작을 막음(`PdfEditor.tsx`) | TC-CFUI-16 |
+| 2026-10-30 | 가져오기 CLI로 들어온 덱은 슬라이드 파일에 data-eid가 없어 에이전트가 고칠 요소를 가리킬 수 없음 | 가져오기는 업로드 검사(`prepareDeck`)를 거치지 않는다 | 덱 읽기 API(`readDeck`, 로컬·Worker)가 늘 직렬화 형식(eid 붙은)으로 준다. eid는 문서 순서로 정해져 서버·화면이 같다 | TC-CFUI-14, TC-MCP-21 |

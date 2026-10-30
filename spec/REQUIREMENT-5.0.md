@@ -300,6 +300,32 @@ gantt
 - 테스트: 화면 TC-CFUI-11(HTML)·12(PPTX).
 - 고친 버그: 변환 컨테이너가 배포 설정(`images` 형식)에서 시작되지 않던 문제(`spec/TESTING.md` 5절).
 
+**M4 슬라이드 편집기 (2026-10-30, 명세 14절 1~4단계)**
+- 형식(core `packages/core/src/slide/`): 파서·검증·직렬화(eid 자동, 왕복 안정), 진단(줄·칸·코드·fix), 연산 12종(역연산 포함, 지운 요소는 `restore`로 같은 eid), 덱 검사(`checkDeck`). CSS 값 검사는 직접 만든 허용 문법(css-tree 대신).
+- 저장(D-49 조정안): 덱 = `kind: deck` 문서, 파일은 `deck.json`(색인·대표) + `slides/<id>.html`. 업로드(로컬·Worker)는 `prepareDeck`으로 검증하고 eid 붙은 형식으로 저장. 편집은 수정본으로(슬라이드 한 장 = blob 하나).
+- Worker API: `GET …/deck`, `POST …/deck/slides/:sid {baseRev, ops}`(지난 rev면 최신본에 다시 적용, 대상이 사라졌으면 409), `PUT …/deck/slides/:sid {baseRev, html, index?}`, `PATCH …/deck {baseRev, index}`. 로컬은 읽기 `GET /api/docs/:menu/:doc/deck`만(D-51).
+- 화면: 덱 보기(목록 썸네일·창 맞춤·←→·노트, 로컬·Cloudflare 공통)와 발표(전체 화면). 편집기(Cloudflare, 「슬라이드 편집」): 슬라이드 목록(@dnd-kit 끌기·키보드, 새·복제·지우기), 캔버스(선택·Shift 추가 선택·Esc 부모, 두 번 눌러 Tiptap 글자 편집, react-moveable 이동·크기·맞춤선·8px 격자, 화살표 이동, ⌘D 복제, Delete), 표 열 경계 손잡이·Tab으로 칸 이동, 그림 끌어 놓기·붙여 넣기·파일 선택(3840px 줄임 → 자산), 속성 패널(슬라이드·글자·상자·그림·표·위치), 글 넘침 경고와 「상자 높이 늘리기」, 800ms 묶음 자동 저장·pagehide keepalive, 역연산 되돌리기·다시 하기, 409 알림, 수정본 이력, 버전으로 저장.
+- MCP: `deck_create`, `deck_get`, `slide_put`, `slide_patch`, `asset_put`(쓰기 진단을 그대로 돌려줌, 출처 agent). 로컬 MCP에서 덱 쓰기는 "보기만" 안내.
+- 명세와 다르게 한 것: 저장 위치(D1 행 → R2 수정본, 2절), 상태 관리(zustand·immer → core 역연산), 색 고르기(react-colorful → 팔레트 + 브라우저 색 입력), 그림 자르기 배율(`data-crop`)은 넣지 않음(맞춤·위치만), 표 칸 오른쪽 클릭 메뉴 대신 속성 패널 버튼, 요소 복사·붙여 넣기(⌘C·V)는 ⌘D 복제만, 덱 단위 변경(순서·추가·지우기)은 되돌리기 기록에 넣지 않음(수정본 이력으로 되돌림).
+- 남은 것(M7·M8): 다른 접속자 저장 실시간 반영·접속자 표시, 덱 PDF 내보내기(Browser Rendering)와 `deck_render`, 확대 비율 0.5·0.75·1별 좌표 오차 자동 측정(지금은 한 배율에서 이동량 ÷ 배율 확인).
+- 테스트: core TC-ED-28~32, Worker TC-ED-33~37·TC-CF-44, 로컬 TC-API-DECK-01·TC-MCP-21, 화면 TC-CFUI-13~15.
+
+**M6 PDF 편집 (2026-10-30)**
+- 어디서 적용하나: 브라우저(4.5절 "브라우저 또는 Worker" 중). PDF는 에이전트 편집 대상이 아니라(6절 표) 서버 연산이 필요 없고, 글꼴(2MB)·wasm을 Worker에 싣지 않는다. 결과 PDF를 수정본(`POST …/revisions {put}`)으로 올린다.
+- core `packages/core/src/pdfedit/`: pdf-lib 연산(글상자·그림·형광펜·펜, 쪽 회전·지우기·옮기기·다른 PDF 끼워 넣기, 양식 채우기·칸 목록)과 harfbuzz 부분 글꼴. M0에서 본 대로 pdf-lib 자체 부분 글꼴은 한글이 빠져, harfbuzz `hb-subset`으로 쓴 글자만 자르고(글리프 번호 유지해야 fontkit이 읽는다) 통째로 넣는다. 한글 글상자 한 줄 PDF가 수 KB.
+- 덧그리기는 쪽 내용에 그려 넣는다(PDF 주석 객체가 아니라 어느 뷰어에서나 같게 보인다). 나중에 옮기거나 지우려면 수정본 되돌리기로. 회전된 쪽은 회전만큼 돌려 그려 화면에서 똑바로 보인다.
+- 화면(Cloudflare, 「PDF 편집」): pdf.js로 쪽 그리기, 도구(고르기·글상자·형광펜·펜·그림), 색·글자 크기, 놓은 것 옮기기·크기·지우기(적용 전), 「적용」, 쪽 목록(썸네일)과 회전·지우기·옮기기·끼워 넣기, 양식 채우기 패널, 되돌리기(이 화면에서 저장한 수정본), 수정본 이력, 버전으로 저장. 글꼴은 `/fonts/NanumGothic-Regular.ttf`(OFL, 라이선스 파일 같이 둠).
+- 4.5절에서 다르게 한 것: pdf.js 편집 레이어(annotationEditor) 대신 우리 덧그리기 층 + pdf-lib(pdf.js 글상자는 한글 모양을 다른 뷰어가 못 그린다), 저장은 `saveDocument()` 대신 pdf-lib 결과.
+- 테스트: core TC-ED-38~41, 화면 TC-CFUI-16. 한글 글상자가 저장한 PDF에서 보이는 것은 화면에서 다시 그려 확인.
+
+**M7 에이전트·공유 (2026-10-30, 진행 중)**
+- MCP: 덱 도구(M4)에 더해 `doc_structure`(HTML eid·오피스 표/그림/시트 id·rev), `doc_ops`(구조 연산 → 수정본, 출처 agent), `revision_list`, `revision_restore`. 실패하면 서버 메시지에 고칠 방법을 붙인다(409 → "doc_structure로 다시 읽고", 400 → 쓸 수 있는 연산 목록). 로컬은 "보기만" 안내.
+- 접속자 표시: 워크스페이스 Durable Object가 연결마다 사용자와 보는 문서·보기/편집을 들고 목록을 보낸다. 문서 머리에 같은 문서를 보는 사람(편집 중이면 강조).
+- 실시간 반영: 저장 알림에 저장한 사람 id를 담아, 편집 화면(덱·구조·PDF)이 다른 사람·Claude Code의 저장을 받으면 최신으로 바꾸고 알린다(내 대기 중 편집이 있으면 덱은 보낼 때 서버가 최신본에 다시 얹는다).
+- 수정본 비교: 이력에서 고른 수정본과 지금 작업본. 글자 형식은 줄 단위, 덱은 슬라이드를 이어 붙여 비교, 그 밖은 바뀐 파일 목록.
+- 남은 것(결정 필요): 슬라이드 PDF 내보내기와 `deck_render`(PNG 미리보기). 명세는 Cloudflare Browser Rendering.
+- 테스트: Worker TC-CF-45·46, 로컬 TC-MCP-22, 화면 TC-CFUI-17.
+
 ## 8. 위험과 대응
 
 | 위험 | 영향 | 대응 |

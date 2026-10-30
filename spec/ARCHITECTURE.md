@@ -33,6 +33,8 @@ npm workspaces 모노레포. `npm install`은 리포 루트에서 한 번 한다
 | UI | React 19, React Router 8, TanStack Query 5 |
 | 빌드·스타일 | Vite 8, Tailwind CSS 4, 아이콘 Lucide |
 | Markdown 편집 | CodeMirror 6. MarkFlow 에디터를 가져와 고쳐 썼다(D-30) |
+| PDF 편집(5.0 M6) | 화면 pdf.js(pdfjs-dist 6)로 쪽을 그리고 덧그릴 것을 놓은 뒤, 브라우저에서 pdf-lib로 그려 넣어 수정본으로 올린다. 한글은 나눔고딕(OFL, `web/public/fonts/`)을 harfbuzz wasm(harfbuzzjs)으로 쓴 글자만 잘라 넣는다(pdf-lib 자체 부분 글꼴은 한글이 빠진다, M0). 서버·Worker에는 글꼴·wasm을 싣지 않는다 |
+| 슬라이드 편집(5.0 M4) | 렌더러는 노드 트리 → React 요소(innerHTML 없음). 글자 Tiptap 3(한글 IME), 이동·크기·맞춤선 react-moveable, 슬라이드 순서 @dnd-kit. 되돌리기는 core 역연산(immer·zustand 대신), 색은 덱 팔레트 + 브라우저 색 고르기(react-colorful 대신) |
 | Markdown 미리보기 | unified(remark·rehype), KaTeX, highlight.js, Mermaid |
 | 문서 뷰어 | DOCX는 docx-preview, XLSX·CSV는 SheetJS 0.20(공식 CDN 배포본), 버전 비교는 jsdiff |
 | draw.io 보기 | 로컬은 drawio CLI가 SVG로 바꾼다. Cloudflare는 draw.io 공식 뷰어(viewer.diagrams.net)를 iframe으로 연다 |
@@ -58,7 +60,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | API | Hono 4. 화면 정적 파일은 Workers Static Assets |
 | DB | D1. SQL을 직접 쓰고 마이그레이션은 `migrations/0001~0003` |
 | 파일 | R2. 파일은 sha256 이름으로 한 번만 저장한다. 편집기 이미지와 PDF 캐시도 R2 |
-| 실시간 | Durable Objects, WebSocket Hibernation(쉬는 연결은 시간 요금 없음) |
+| 실시간 | Durable Objects, WebSocket Hibernation(쉬는 연결은 시간 요금 없음). 연결마다 사용자·보는 문서·보기/편집을 붙여(serializeAttachment) 접속자 목록을 보낸다(5.0 M7) |
 | PDF 변환 | Cloudflare Containers(`@cloudflare/containers`, durable_object 스케줄링 + `images` 형식이라 `Converter`가 `start()`에 이미지 이름을 넣는다). 이미지는 Node 22(Debian) + LibreOffice + Noto CJK |
 | 로그인 | Google OIDC를 직접 구현(인가 코드 + PKCE). 세션은 D1, 쿠키는 HttpOnly·SameSite=Lax |
 | 권한 | 초대 링크로만 가입. 역할은 owner·editor·viewer |
@@ -74,7 +76,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | API·권한 | `src/app.ts`(워크스페이스 미들웨어: 로그인·역할·Origin 검사·변경 알림), `src/members.ts` | D1 |
 | 로그인 | `src/auth.ts`(Google OIDC + PKCE, 세션 쿠키, 초대, 개발용 로그인, 원격 MCP 내부 호출 머리글) | D1 |
 | 쓰기·읽기 | `src/write.ts`, `src/manage.ts`, `src/repo.ts`, `src/search.ts`, `src/export.ts` | D1 + R2 |
-| 편집기(5.0) | `src/revisions.ts`(수정본·작업본·버전으로 올리기), `src/structedit.ts`(구조 편집 연산 → 수정본), `src/assets.ts`(편집기 이미지) | D1 + R2 |
+| 편집기(5.0) | `src/revisions.ts`(수정본·작업본·버전으로 올리기), `src/structedit.ts`(구조 편집 연산 → 수정본), `src/deck.ts`(슬라이드 덱 연산·통째 쓰기·색인, rev 다시 적용), `src/assets.ts`(편집기 이미지) | D1 + R2 |
 | 사용자 콘텐츠 | `src/content.ts`(서명 토큰 `/c/…`, `/i/…`), `src/token.ts` | R2, 콘텐츠 도메인 |
 | 실시간 | `src/live.ts` | Durable Object(WebSocket) |
 | 변환 | `src/convert.ts`, `apps/converter` | Containers |
@@ -111,17 +113,19 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | DOCX·PPTX·XLSX·SVG 편집 | htmlparser2(XML 모드)로 위치를 찾고, fflate로 zip을 다시 묶는다 |
 | HTML 구조 편집(5.0) | parse5. 요소 원본 위치로 표 행·열·열 너비·블록·그림을 바꾸고 나머지 바이트는 그대로 둔다(`structedit/html.ts`) |
 | DOCX·PPTX·XLSX 구조 편집(5.0, D-47) | htmlparser2(XML 모드) 위치 트리로 표 행·열·열 너비, 그림 교체, 시트 열 너비. 바뀐 파트만 다시 묶는다(`structedit/ooxml.ts`) |
+| PDF 편집 연산(5.0 M6) | pdf-lib + @pdf-lib/fontkit. 글상자·그림·형광펜·펜·쪽 회전·지우기·옮기기·끼워 넣기·양식 채우기, 회전된 쪽은 회전만큼 돌려 그림. 부분 글꼴은 harfbuzz `hb-subset`(글리프 번호 유지). `pdfedit/` |
+| 슬라이드 형식(5.0 M4) | parse5로 제한된 HTML(덱 = deck.json + slides/<id>.html)을 읽고 허용 목록·CSS 값 문법을 직접 검사(css-tree 대신, 허용 범위가 좁다). 연산은 역연산을 돌려준다(`slide/`) |
 | 해시 | `@noble/hashes`(동기 sha256). Web Crypto는 비동기라 어댑터 API를 그대로 두려고 골랐다 |
 
 ## 6. 테스트·CI
 
 | 대상 | 도구 | 건수 |
 |---|---|---|
-| 로컬 사이트 | node:test(단위·API·MCP) | 167 |
+| 로컬 사이트 | node:test(단위·API·MCP) | 170 |
 | 로컬 화면 | puppeteer(전역 설치) | 34 |
-| 공통 로직 | node:test(구조 편집) | 14 |
-| Cloudflare Worker | Vitest 4 + `@cloudflare/vitest-plugin`(Workers 런타임에서 D1·R2·DO를 로컬로) | 59 |
-| Cloudflare 화면 | puppeteer + `wrangler dev`. 앱·파일 출처를 나누고, 변환 컨테이너는 로컬 Docker로 띄운다 | 12 |
+| 공통 로직 | node:test(구조 편집·슬라이드 형식·PDF) | 23 |
+| Cloudflare Worker | Vitest 4 + `@cloudflare/vitest-plugin`(Workers 런타임에서 D1·R2·DO를 로컬로) | 67 |
+| Cloudflare 화면 | puppeteer + `wrangler dev`. 앱·파일 출처를 나누고, 변환 컨테이너는 로컬 Docker로 띄운다 | 17 |
 
 GitHub Actions(`.github/workflows/workflow-app.yml`):
 

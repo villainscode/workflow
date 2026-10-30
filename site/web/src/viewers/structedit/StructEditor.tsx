@@ -9,6 +9,8 @@ import { EmptyState } from "../../components/EmptyState.tsx";
 import { HtmlStructPane } from "./HtmlStructPane.tsx";
 import { OfficeStructPane } from "./OfficeStructPane.tsx";
 import { RevisionPanel } from "./RevisionPanel.tsx";
+import { useOtherSave } from "../../lib/live.ts";
+import { useMe } from "../../lib/me.ts";
 
 /**
  * 구조 편집(5.0 M2·M3·M5, Cloudflare). 표 행·열·열 너비, 그림 넣기·바꾸기, 블록 넣기·지우기·옮기기.
@@ -92,6 +94,14 @@ export function StructEditor({ menu, doc, onExit }: { menu: string; doc: string;
       bump((n) => n + 1);
     }
   };
+
+  // 다른 사람·Claude Code가 저장하면 최신 작업본으로(되돌리기는 내가 만든 수정본 사이를 오가므로 비운다)
+  const me = useMe().me?.user?.id;
+  useOtherSave(menu, doc, me, s?.rev, (e) => {
+    if (busy) return;
+    undo.current = []; redo.current = [];
+    void refresh().then(() => setMessage(`${e.by === "claude-code" ? "Claude Code가" : "다른 사람이"} 저장해 최신 내용으로 바꿨습니다.`));
+  });
 
   const revisions = useQuery({ queryKey: ["revisions", menu, doc], queryFn: () => listRevisions(menu, doc) });
   const unpublished = !!revisions.data?.head && !revisions.data.revisions.find((r) => r.rev === revisions.data!.head)?.publishedAs;
