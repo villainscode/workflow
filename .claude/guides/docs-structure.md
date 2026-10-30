@@ -1,25 +1,8 @@
-# 프로젝트 구조
+# docs/ 문서 원본 구조
 
-리포 전체 배치와 `docs/` 문서 원본 구조. 문서를 다루는 규칙(버전·slug·원본)은 `.claude/rules/docs-workflow.md`.
+설계 문서 원본(`docs/`)의 폴더·meta.yaml 구조와 지금 있는 문서. 리포 전체 구성은 `spec/ARCHITECTURE.md`, 문서를 다루는 규칙(버전·slug·원본)은 `.claude/rules/docs-workflow.md`.
 
-## 리포 배치
-
-| 경로 | 내용 | 가이드 |
-|---|---|---|
-| `docs/` | 설계 문서 원본(메뉴 → 문서 → 버전). 아래 구조 | 이 문서 |
-| `site/` | 로컬 업무 문서 사이트(Fastify API + React 화면 + SQLite 색인 + stdio MCP) | `site-local.md` |
-| `apps/worker/` | Cloudflare 「문서 탐색 워크플로우」(Hono Worker + D1 + R2 + DO + 원격 MCP) | `cloudflare-app.md` |
-| `apps/converter/` | PDF 변환 컨테이너(LibreOffice) | `cloudflare-app.md` |
-| `packages/core/` | 로컬·Cloudflare 공통 로직(텍스트 편집 어댑터, 버전 규칙, slug, 업로드 규칙) | `cloudflare-app.md` |
-| `packages/mcp-tools/` | workflow-docs MCP 도구 정의(로컬·원격 공용) | `site-local.md` MCP 절 |
-| `packages/cli/` | 리포 `docs/` → Cloudflare 워크스페이스 가져오기 | `cloudflare-app.md` |
-| `REQUIREMENT*.md` | 요구사항·결정(D-n)·단계 계획: 1.x, 2.0(텍스트 편집), 3.0(Claude Code 연결), 4.0(Cloudflare) | |
-| `TESTING.md` | 테스트 케이스 목록(자동·수동)과 테스트로 찾은 버그 | `.claude/rules/testing.md` |
-| `.claude/` | 이 지침(`CLAUDE.md`), 규칙(`rules/`), 가이드(`guides/`), 스킬(`skills/workflow-docs`) | |
-
-npm workspaces(`packages/*` · `apps/*` · `site`)라 `npm install`은 리포 루트에서 한 번 하고, 의존성은 루트 `node_modules`에 모인다.
-
-## 문서 원본 구조 (`docs/`)
+## 폴더와 meta.yaml
 
 문서는 **메뉴 → 문서 → 버전** 단위로 관리한다. 버전은 문서마다 따로 쌓인다.
 
@@ -72,4 +55,4 @@ gdrive_url:
 
 Agent와 Image 대분류는 아직 비어 있다. 문서끼리는 버전 폴더까지 포함한 상대 경로로 연결한다. 예: `process.html`에서 `../../../code-review-automation/review-gate/v0.0/review-gate.html`.
 
-아직 문서가 없는 영역: 개발 도구 가이드, 빌드·배포, 이밸 게이트·골든셋(`eval-gate-draft.md`), 시퀀스·ERD·아키텍처.
+아직 문서가 없는 영역: 개발 도구 가이드, 빌드·배포, 이밸 게이트·골든셋(`doc-authoring.md` 끝), 시퀀스·ERD·아키텍처.

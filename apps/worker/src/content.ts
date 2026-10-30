@@ -1,6 +1,8 @@
 import type { Context } from "hono";
-import { blobKey, type AppEnv } from "./env.ts";
-import { resolveContent } from "./repo.ts";
+import { blobKey, type AppEnv, type Bindings } from "./env.ts";
+import { docPath, resolveContent } from "./repo.ts";
+import { assetRow } from "./assets.ts";
+import { loadManifest } from "./revisions.ts";
 import { verifyContentToken } from "./token.ts";
 
 /**
@@ -13,7 +15,22 @@ export async function serveContent(c: Context<AppEnv>) {
   if (wsId === null) return c.text("주소가 만료되었거나 올바르지 않습니다. 문서를 다시 여세요", 403);
   if (segments.some((s) => s === ".." || s === "." || s === "")) return c.text("Not Found", 404);
 
-  const file = await resolveContent(c.env.DB, wsId, segments);
+  // 편집기 이미지 자산: /c/<토큰>/_asset/<sha256> (메뉴 slug는 _로 시작할 수 없어 겹치지 않는다)
+  if (segments[0] === "_asset" && segments.length === 2) {
+    const a = await assetRow(c.env.DB, wsId, segments[1]);
+    if (!a) return c.text("Not Found", 404);
+    const obj = await c.env.BLOBS.get(blobKey(wsId, a.sha256));
+    if (!obj) return c.text("Not Found", 404);
+    return new Response(obj.body, { headers: {
+      "content-type": a.mime, "content-length": String(a.size), etag: `"${a.sha256}"`, "cache-control": "private, max-age=31536000, immutable",
+      "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
+      ...(c.env.APP_ORIGIN && c.req.header("origin") === c.env.APP_ORIGIN ? { "access-control-allow-origin": c.env.APP_ORIGIN, vary: "Origin" } : {}),
+    } });
+  }
+  // 버전 자리에 r<번호>가 오면 그 수정본(작업본 미리보기). 매니페스트에서 파일을 찾는다
+  const file = segments.some((s, i) => i >= 2 && /^r\d+$/.test(s))
+    ? await resolveRevisionContent(c.env, wsId, segments)
+    : await resolveContent(c.env.DB, wsId, segments);
   if (!file) return c.text("Not Found", 404);
   const etag = `"${file.sha256}"`;
   if (c.req.header("if-none-match") === etag) return c.body(null, 304);
@@ -39,4 +56,19 @@ export async function serveContent(c: Context<AppEnv>) {
     headers.set("content-security-policy", "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads");
   }
   return new Response(obj.body, { headers });
+}
+
+/** 수정본 콘텐츠: 메뉴/상위.../문서/r<번호>/파일 경로. 상위 경로가 실제와 다르면 없는 것으로 본다(버전 경로와 같은 규칙) */
+async function resolveRevisionContent(env: Bindings, wsId: number, segments: string[]) {
+  const ri = segments.findIndex((s, i) => i >= 2 && /^r\d+$/.test(s));
+  if (ri < 0 || ri === segments.length - 1) return null;
+  const [menu, ...chain] = segments.slice(0, ri);
+  const doc = await env.DB.prepare(`SELECT d.id, d.slug, d.parent_id, r.manifest_sha FROM document d JOIN menu m ON m.id = d.menu_id
+      JOIN document_revision r ON r.document_id = d.id
+      WHERE d.workspace_id = ? AND m.slug = ? AND d.slug = ? AND d.deleted_at IS NULL AND r.rev = ?`)
+    .bind(wsId, menu, chain[chain.length - 1], Number(segments[ri].slice(1))).first<{ id: number; slug: string; parent_id: number | null; manifest_sha: string }>();
+  if (!doc || (await docPath(env.DB, doc, menu)) !== `${menu}/${chain.join("/")}`) return null;
+  const path = segments.slice(ri + 1).join("/");
+  const f = (await loadManifest(env, wsId, doc.manifest_sha)).files.find((x) => x.path === path);
+  return f ? { sha256: f.sha256, mime: f.mime, size: f.size } : null;
 }

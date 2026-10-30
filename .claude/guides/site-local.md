@@ -1,6 +1,6 @@
 # 로컬 업무 문서 사이트 (`site/`) 개발 가이드
 
-리포 `docs/`를 메뉴 + 뷰어로 관리하는 로컬 웹사이트(1.x~3.x). 요구사항·결정은 `REQUIREMENT.md`·`REQUIREMENT-2.0.md`·`REQUIREMENT-3.0.md`. 같은 화면 코드를 Cloudflare 앱도 쓴다(`cloudflare-app.md`).
+리포 `docs/`를 메뉴 + 뷰어로 관리하는 로컬 웹사이트(1.x~3.x). 요구사항·결정은 `spec/REQUIREMENT.md`·`spec/REQUIREMENT-2.0.md`·`spec/REQUIREMENT-3.0.md`. 같은 화면 코드를 Cloudflare 앱도 쓴다(`cloudflare-app.md`).
 
 ```bash
 npm install       # 리포 루트에서. npm workspaces(packages/* · apps/* · site)라 의존성은 루트 node_modules에 모인다
@@ -18,7 +18,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
 - **API**: `GET /api/tree`(대분류 → 메뉴 → 문서. 메뉴의 `documents`는 하위 문서까지 모두 담고 하위 문서는 `parent`가 있다), `GET /api/docs/:menu/:doc`(버전과 파일 목록), `POST /api/upload`(multipart, 새 하위 문서는 `parent`), `POST /api/menus`, `POST /api/reindex`, `GET /api/events`(SSE 변경 알림), `GET /api/convert/:to/<docs 기준 경로>`(변환 결과), `POST /api/docs/:menu/:doc/edit`(Markdown 저장), `POST /api/focus`(열린 화면 이동, 3.4). 관리 API는 메뉴(`/api/menus/:slug` PATCH·DELETE, `/move`), 대분류(`/api/categories`), 문서(`/api/docs/:menu/:doc` PATCH·DELETE, `/move`는 `{ menu, parent?, index? }`), 휴지통(`/api/trash`), 검색(`/api/search?q=&category=&kind=`)이다. `docs/` 원본은 `/files/<메뉴>/<문서>/<버전>/<파일>`로 그대로 제공한다. 그래서 HTML 문서의 상대 경로 리소스와 링크가 그대로 동작한다.
 - **web/**: React Router 경로는 `/:category/:menu/:doc?v=<버전>`이다. 뷰어는 대표 파일(entry)의 확장자로 고르며, 그 분기는 `web/src/viewers/Viewer.tsx`에 있다. 색은 `styles.css`의 `:root` 토큰(docs HTML과 같은 값)을 Tailwind `@theme inline`으로 연결한다.
 - **확인 창** (`components/confirm/ConfirmProvider.tsx`, `useConfirm()`, `useAction().run`): 규칙은 `.claude/rules/site-ui.md`.
-- **텍스트 편집 2.0** (`packages/core/src/textedit/`, 4.0 P1에서 `site/server/textedit/`에서 옮김, 계획은 `REQUIREMENT-2.0.md`): HTML·DOCX·PPTX의 태그 안 글자만 고친다.
+- **텍스트 편집 2.0** (`packages/core/src/textedit/`, 4.0 P1에서 `site/server/textedit/`에서 옮김, 계획은 `spec/REQUIREMENT-2.0.md`): HTML·DOCX·PPTX의 태그 안 글자만 고친다.
   - 형식별 어댑터가 "텍스트 조각"(id, 글자, 해시)을 뽑는다. 저장할 때는 바뀐 조각의 **원본 구간만** 교체한다. 그래서 구조·서식·속성과 나머지 바이트는 그대로다.
   - HTML은 parse5의 텍스트 노드 원본 위치를 쓴다. 앞뒤 공백(들여쓰기)은 편집 구간 밖에 남기고, `pre` 안만 줄바꿈을 허용한다.
   - DOCX·PPTX는 zip 안 XML의 `<w:t>`·`<a:t>` 위치를 htmlparser2(xmlMode)로 찾는다. 같은 서식이고 사이에 run 경계만 있는 run은 한 조각으로 합치고, 저장할 때 첫 run에 글자를 넣고 나머지를 비운다. 바뀐 파트만 다시 써서 zip을 다시 묶는다.
@@ -42,7 +42,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - 저장·임시 보관·편집 막대는 `viewers/textedit/session.tsx`의 `useTextSession`과 `EditBar`를 HTML·DOCX 편집기가 함께 쓴다.
   - 어댑터를 고쳤다면 `npm run check:textedit`로 확인한다(검사용 샘플은 `site/scripts/fixtures/`).
 - **workflow-docs MCP** (`site/mcp/server.ts`, `.mcp.json`으로 등록, 3.0): 사이트 REST API를 감싼 stdio MCP 서버다. 도구 정의는 `packages/mcp-tools`에 있고 Cloudflare 원격 MCP(`apps/worker/src/mcp.ts`, OAuth, 4.0 P6)와 같이 쓴다. 도구를 고치면 `site/test/mcp.test.ts`와 `apps/worker/test/mcp.test.ts`를 함께 돌린다.
-  - 도구: `list_documents`(하위 문서는 들여 씀), `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename·parent), `upload_version`, `create_menu`, `release_document`, `focus_in_site`.
+  - 도구: `list_documents`(하위 문서는 들여 씀), `find_documents`, `get_document`, `get_text`, `edit_text`({segment,text} 또는 {find,replace}), `save_markdown`, `upload_document`(origin·filename·parent), `upload_version`, `create_menu`, `release_document`, `focus_in_site`, 슬라이드 덱(5.0 M4) `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`, 구조 연산·수정본(5.0 M7) `doc_structure`·`doc_ops`·`revision_list`·`revision_restore`. 덱 쓰기(`slide_*`·`asset_put`)와 구조·수정본 도구는 Cloudflare만이고 로컬은 보기만이라(D-51) 로컬 서버에는 읽기용 `GET /api/docs/:menu/:doc/deck`만 있다.
   - 모든 요청에 `X-Workflow-Agent: claude-code` 헤더를 붙인다. 서버는 이 헤더가 있으면 변경 알림(SSE)에 `by: claude-code`를 담는다.
   - 문서는 사이트 주소(`?v=`, `&seg=`), `대분류/메뉴/문서`, `대분류 > 메뉴 > 제목`, 제목으로 지정한다.
   - 삭제·휴지통 도구는 두지 않는다(D-24). 쓰기 도구는 변경 메모 앞에 "Claude Code:"를 붙인다(D-26). 외부에서 가져온 문서는 `meta.yaml`의 `origin_url`에 출처를 남긴다.
@@ -54,7 +54,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
 - **프레젠테이션 모드** (`viewers/Presentation.tsx`): 문서 상단 버튼으로 문서 영역만 Fullscreen API로 띄운다. HTML·Markdown은 1280px 기준으로 그린 뒤 화면 너비 비율로 `transform: scale` 한다. 그래서 글자와 레이아웃이 함께 커진다. Markdown은 미리보기만 보여준다. 다른 형식은 그대로 넓힌다.
 - **아이콘·툴팁** (`components/IconButton.tsx`, `components/Tooltip.tsx`): 규칙은 `.claude/rules/site-ui.md`.
 - **문서 화면 머리** (`components/DocView.tsx`): 제목(h1, 32px)을 누르면 그 자리 입력칸으로 고친다(Enter 확인 창, Esc·바깥 클릭 취소, 한글 조합 중 Enter는 건너뜀). 제목 오른쪽에 보고 있는 버전의 작성일(12px), 버전 선택, 비교, 상태 배지, 기능 버튼.
-- **좌측 폴더 트리** (`components/Sidebar.tsx`, `components/sidebar/ContextMenu.tsx`, 계획은 `REQUIREMENT.md` 5.3): MarkFlow 사이드바 방식. 폴더(메뉴) → 하위 폴더 → 문서 → 하위 문서. 폴더 아이콘은 열림·닫힘, 접힌 항목은 localStorage `workflow:sidebar-collapsed`, 지금 연 문서의 상위는 늘 펼친다.
+- **좌측 폴더 트리** (`components/Sidebar.tsx`, `components/sidebar/ContextMenu.tsx`, 계획은 `spec/REQUIREMENT.md` 5.3): MarkFlow 사이드바 방식. 폴더(메뉴) → 하위 폴더 → 문서 → 하위 문서. 폴더 아이콘은 열림·닫힘, 접힌 항목은 localStorage `workflow:sidebar-collapsed`, 지금 연 문서의 상위는 늘 펼친다.
   - 오른쪽 클릭이나 줄의 ⋯로 메뉴: 폴더는 새 문서·하위 폴더 추가·이름 바꾸기·위로·아래로·다른 위치로 옮기기(`MoveMenuDialog`)·폴더 삭제, 문서는 하위 문서 추가(업로드 창 `parent` 고정)·이름 바꾸기·위로·아래로·상위 문서 밖으로 꺼내기·휴지통으로. 이름 입력은 그 자리 입력칸(Enter 확인 창, Esc·바깥 클릭 취소).
   - 끌어서 놓기(D-36): 줄 위쪽 28% 앞, 아래쪽 28% 뒤, 가운데 안. 같은 자리 순서는 확인 없이, 다른 자리로 옮기기는 확인 창(warning). 자기 자신·하위로는 놓을 수 없다. 링크(`NavLink draggable={false}`)가 아니라 줄(`data-row`)이 끌기를 받는다. 바깥 파일을 폴더에 놓으면 업로드 창.
   - 폴더 삭제(`DeleteMenuDialog`, D-13 개정): 폴더 이름을 입력해야 버튼이 켜지고(이 창이 확인 창을 대신한다), 안의 문서는 하위 폴더 것까지 휴지통으로 간다. 문서 휴지통은 하위 문서째 옮기고, 복원은 메뉴 바로 아래로 한다.
@@ -78,7 +78,7 @@ npm run test:ui    # 화면 테스트(전역 puppeteer). npm run test:all은 둘
   - PDF는 브라우저 내장 뷰어로 연다. Chrome은 sandbox iframe에서 PDF를 열지 않아 sandbox를 걸지 않는다.
   - DOCX는 `docx-preview`로 렌더링하고, PDF 변환으로 볼 수도 있다.
   - XLSX·CSV는 SheetJS로 읽는다. SheetJS는 npm 레지스트리 버전이 오래되어 공식 CDN tgz로 설치했다. CSV는 UTF-8 텍스트로 읽는다.
-- **Markdown 편집** (`viewers/MarkdownViewer.tsx`, `viewers/markdown-editor/`, `store.ts`의 `saveEdit`, 계획은 `REQUIREMENT.md` 5.2): MarkFlow 에디터(`~/project/markflow/packages/editor`) 소스를 복사해 고쳐 쓴다(D-30). 원본을 다시 가져올 때는 5.2의 "바꾼 점"을 다시 적용한다.
+- **Markdown 편집** (`viewers/MarkdownViewer.tsx`, `viewers/markdown-editor/`, `store.ts`의 `saveEdit`, 계획은 `spec/REQUIREMENT.md` 5.2): MarkFlow 에디터(`~/project/markflow/packages/editor`) 소스를 복사해 고쳐 쓴다(D-30). 원본을 다시 가져올 때는 5.2의 "바꾼 점"을 다시 적용한다.
   - 화면: 서식 툴바(`Toolbar.tsx`, 제목 1~6·굵게·목록·코드 블록·링크·표·수식 등, IconButton) + 보기 방식(편집만·나란히·미리보기만) + 오른쪽 저장 영역(`MarkdownViewer`가 `toolbarEnd`로 넘김), 편집 창(`EditorPane.tsx`, CodeMirror 6, 사이트 다크 모드를 따름)과 미리보기, 상태 표시줄(줄·글자·커서), Markdown 복사. 커서 위쪽 가장 가까운 제목으로 미리보기를 옮긴다.
   - 미리보기(`MarkdownPreview.tsx` + `markdown-editor/parseMarkdown.ts`, D-31): unified(remark-gfm·remark-breaks·remark-math → rehype-highlight·rehype-katex·rehype-raw·rehype-sanitize). 줄바꿈 한 번이 `<br>`, 수식은 KaTeX, 허용 목록 밖 HTML은 지운다. 사이트에서 더한 것: 상대 경로 이미지·링크를 버전 폴더 기준으로 풀기, `#` 링크는 같은 탭(나머지는 새 탭), `mermaid` 블록은 화면에서 다이어그램으로. 편집기·이전 버전·프레젠테이션이 같은 엔진을 쓴다. 스타일은 `markdown-editor/preview.css`(`.mf-preview`, 사이트 토큰).
   - 이미지(D-32): 툴바 "이미지 올리기", 편집 창 끌어 놓기·붙여넣기 → Cloudflare Worker(`site/cloudflare/r2-uploader`, 배포는 그 README) `POST /upload` → R2 공개 주소를 `![이름](주소)`로 넣는다. Worker 주소는 localStorage `mf-cf-worker-url`, 설정 창(`UploadSettingsDialog.tsx`)에서 테스트 업로드가 성공해야 저장된다. 이미지는 리포 밖에 있고 문서에는 주소만 남는다.

@@ -1,0 +1,14 @@
+title: API BE AWS에 배포하기 - 신규 Stage 서버
+category: sdlc
+menu: onboarding
+kind: html
+status: draft
+current: v0.0
+versions:
+  - version: v0.0
+    entry: aws-be-onboarding.html
+    note:
+    source: upload
+    created: 2026-10-19 19:30:42
+notion_url:
+gdrive_url:

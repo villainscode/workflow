@@ -19,4 +19,4 @@ paths:
 - `code-review-automation/review-gate/v0.0/review-gate.html`의 워크플로는 `push`로 트리거된다(`feature/code-review` 게이트 브랜치와 `develop` 사후 리뷰). `sprint-gitflow/process/v0.0/process.html`은 `pull_request`(base가 `develop`·`main`)로 트리거되는 것으로 정했다. code-review-automation 다음 버전에서 이 차이를 맞춘다.
 - `sprint-gitflow` 문서 D7 단계는 `/ocr-triage <id> <판정>` 명령을 쓰는데, 이 명령을 설치하는 방법을 설명한 문서가 아직 없다.
 
-이밸 게이트·골든셋은 아직 확정되지 않은 이전 설계만 있다(`.claude/guides/eval-gate-draft.md`).
+이밸 게이트·골든셋은 아직 확정되지 않은 이전 설계만 있다(`.claude/guides/doc-authoring.md` 끝).

@@ -7,8 +7,12 @@ export function DiffViewer({ from, to, fromLabel, toLabel }: { from: VersionFile
   const a = useText(fileSrc(from));
   const b = useText(fileSrc(to));
   if (a.data === undefined || b.data === undefined) return <EmptyState title="불러오는 중…" />;
+  return <TextDiff a={a.data} b={b.data} fromLabel={fromLabel} toLabel={toLabel} />;
+}
 
-  const parts = diffLines(a.data, b.data);
+/** 글자 두 개를 줄 단위로 비교해 보여 준다(버전 비교·수정본 비교 공용) */
+export function TextDiff({ a, b, fromLabel, toLabel }: { a: string; b: string; fromLabel: string; toLabel: string }) {
+  const parts = diffLines(a, b);
   const added = parts.filter((p) => p.added).reduce((n, p) => n + (p.count ?? 0), 0);
   const removed = parts.filter((p) => p.removed).reduce((n, p) => n + (p.count ?? 0), 0);
 

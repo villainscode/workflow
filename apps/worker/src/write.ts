@@ -3,7 +3,7 @@ import { wrapForEdit } from "@workflow/core/textedit/html";
 import { wrapSvgForEdit } from "@workflow/core/textedit/svg";
 import { mimeOf } from "@workflow/core/mime";
 import { isSearchable, searchText } from "@workflow/core/search-text";
-import { kindOf, normalizeFiles, nowStamp, pickEntry, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
+import { kindOf, normalizeFiles, nowStamp, pickEntry, prepareDeck, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
 import { nextMajor, nextVersion, VERSION_RE } from "@workflow/core/versions";
 import { slugify } from "@workflow/core/slug";
 import { getBlob, putBlob, sha256Hex } from "./blobs.ts";
@@ -33,7 +33,7 @@ async function docSlugsIn(db: D1Database, menuId: number): Promise<Set<string>> 
   return new Set(results.map((r) => r.slug));
 }
 
-async function versionFiles(db: D1Database, docId: number, version: string): Promise<VersionFileIn[]> {
+export async function versionFiles(db: D1Database, docId: number, version: string): Promise<VersionFileIn[]> {
   const { results } = await db.prepare(`SELECT f.path, f.sha256, f.size, f.mime FROM version_file f JOIN document_version v ON v.id = f.version_id
     WHERE v.document_id = ? AND v.version = ? ORDER BY f.id`).bind(docId, version).all<VersionFileIn>();
   return results;
@@ -42,8 +42,10 @@ async function versionFiles(db: D1Database, docId: number, version: string): Pro
 const isUnique = (e: unknown) => /UNIQUE constraint failed/i.test(String((e as Error)?.message ?? e));
 
 /** 버전 하나를 쓴다. data가 있는 파일만 R2에 올린다(나머지는 이전 버전 blob을 그대로 가리킨다) */
-async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; current: string | null }, input: {
+export async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; current: string | null }, input: {
   version?: string; entry: string; note?: string | null; source: string; files: VersionFileIn[]; origin?: string; status?: string; title?: string;
+  /** 수정본을 버전으로 올릴 때(5.0) 그 수정본 id */
+  revisionId?: number;
 }): Promise<string> {
   const db = env.DB;
   const { results: vs } = await db.prepare("SELECT version FROM document_version WHERE document_id = ?").bind(doc.id).all<{ version: string }>();
@@ -60,8 +62,8 @@ async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; cur
   for (const f of input.files) if (f.data) await putBlob(env.BLOBS, ws.id, f.sha256, f.data);
 
   const stmts: D1PreparedStatement[] = [
-    db.prepare("INSERT INTO document_version (document_id, version, note, source, created_at, entry) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(doc.id, version, input.note?.trim() || null, input.source, nowStamp(new Date(), TZ), input.entry),
+    db.prepare("INSERT INTO document_version (document_id, version, note, source, created_at, entry, revision_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(doc.id, version, input.note?.trim() || null, input.source, nowStamp(new Date(), TZ), input.entry, input.revisionId ?? null),
   ];
   // 파일 행: ?1·?2(문서·버전)를 줄마다 다시 쓰고 한 줄에 5개씩(바인드 값 100개 한도 → 19줄)
   for (let i = 0; i < input.files.length; i += 19) {
@@ -104,10 +106,13 @@ export interface UploadInput {
 export async function upload(env: Bindings, ws: Workspace, input: UploadInput) {
   const db = env.DB;
   const menu = await menuBySlug(db, ws.id, input.menu);
-  const files = normalizeFiles(input.files);
+  let files = normalizeFiles(input.files);
   if (files.length === 0) throw new HttpError(400, "올릴 파일이 없습니다");
   const entry = pickEntry(files.map((f) => f.path), input.entry);
   if (!entry) throw new HttpError(400, `대표 파일 ${input.entry}이(가) 업로드 목록에 없습니다`);
+  const deck = prepareDeck(files, entry);
+  if (deck.error) throw new HttpError(400, deck.error);
+  files = deck.files;
   const vfiles = await Promise.all(files.map(async (f) => ({
     path: f.path, sha256: await sha256Hex(f.data), size: f.data.byteLength, mime: mimeOf(f.path), data: f.data,
   })));

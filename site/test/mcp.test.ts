@@ -51,10 +51,10 @@ before(async () => {
 after(async () => { await client?.close(); await srv?.stop(); ws.cleanup(); });
 
 describe("도구 구성", () => {
-  test("TC-MCP-01 도구 11개(3.4 focus_in_site 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
+  test("TC-MCP-01 도구 21개(3.4 focus_in_site, 5.0 덱·구조 연산·수정본·미리보기 도구 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(names, ["create_menu", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents",
-      "release_document", "save_markdown", "upload_document", "upload_version"]);
+    assert.deepEqual(names, ["asset_put", "create_menu", "deck_create", "deck_get", "deck_render", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents",
+      "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "upload_document", "upload_version"]);
     assert.ok(!names.some((n) => /delete|trash|purge|remove/.test(n)));
   });
 
@@ -239,5 +239,25 @@ describe("정식 확정", () => {
     assert.equal(m.status, "approved");
     assert.equal(m.versions.at(-1).note, "Claude Code: 정식 버전으로 확정 (v0.3 → v1.0)");
     await fail("release_document", { ref: "agent/onboarding/platform-env" }, /이미 정식 버전입니다/);
+  });
+});
+
+describe("슬라이드 덱(5.0 M4)", () => {
+  test("TC-MCP-21 deck_create: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성. deck_get은 eid가 붙은 HTML(rev 0), 로컬에서 slide_patch는 보기만 안내", async () => {
+    await fail("deck_create", { menu: "notes", title: "나쁜 덱", slides: [{ id: "a", html: '<section id="a"><p style="margin-top:8px">x</p></section>' }] },
+      /slides\/a\.html:1:\d+ \[css-prop\] 허용하지 않는 CSS 속성: margin-top → margin은 쓰지 않습니다/);
+    assert.match(await ok("deck_create", { menu: "notes", title: "MCP 덱", slug: "mcp-deck", slides: [{ id: "cover", html: '<section id="cover"><h1>표지</h1></section>' }] }),
+      /슬라이드 덱 "MCP 덱"\(1장\)을 만들었습니다/);
+    assert.equal(meta("notes", "mcp-deck").versions[0].note, "Claude Code: 슬라이드 덱 만듦");
+    const g = await ok("deck_get", { ref: "notes/mcp-deck" });
+    assert.match(g, /rev 0\(기준 draft\)/);
+    assert.match(g, /<h1 data-eid="e1">표지<\/h1>/);
+    await fail("slide_patch", { ref: "notes/mcp-deck", slideId: "cover", ops: [{ t: "setText", eid: "e1", html: "x" }] }, /로컬 사이트는 보기만/);
+  });
+
+  test("TC-MCP-22 로컬에서 doc_structure·doc_ops·revision_list는 보기만 안내(D-51)", async () => {
+    await fail("doc_structure", { ref: "sdlc/notes/mcp-deck" }, /로컬 사이트는 보기만/);
+    await fail("doc_ops", { ref: "sdlc/notes/mcp-deck", ops: [{ t: "remove", eid: "e1" }], baseRev: 0 }, /로컬 사이트는 보기만/);
+    await fail("revision_list", { ref: "sdlc/notes/mcp-deck" }, /로컬 사이트는 보기만/);
   });
 });

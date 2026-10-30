@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FilePlus2, Link2, Minimize, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Download, ExternalLink, FileDown, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -20,8 +20,17 @@ import { SegmentRefList } from "../viewers/SegmentRefList.tsx";
 import { parseSeg } from "../lib/seg.ts";
 import { manage } from "../lib/manage.ts";
 import { useAction } from "./manage/useAction.ts";
-import { useCan } from "../lib/me.ts";
+import { CLOUD, useCan } from "../lib/me.ts";
+import { API } from "../lib/base.ts";
+import { STRUCT_EDITABLE } from "../lib/structedit.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
+import { PresenceChips } from "./PresenceChips.tsx";
+import { useHere } from "../lib/live.ts";
+
+// 구조 편집(5.0, Cloudflare 전용). 보기 화면에는 싣지 않는다
+const StructEditor = lazy(() => import("../viewers/structedit/StructEditor.tsx").then((m) => ({ default: m.StructEditor })));
+const DeckEditor = lazy(() => import("../viewers/deck/editor/DeckEditor.tsx").then((m) => ({ default: m.DeckEditor })));
+const PdfEditor = lazy(() => import("../viewers/pdf/PdfEditor.tsx").then((m) => ({ default: m.PdfEditor })));
 
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|svg|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
@@ -44,7 +53,12 @@ export function DocView() {
   const [savedNotice, setSavedNotice] = useState("");
   // 참조 복사 모드(3.2): 글자를 눌러 참조 주소를 복사한다
   const [refCopy, setRefCopy] = useState(false);
-  useEffect(() => { setTextEditing(false); setRefCopy(false); }, [menu, doc]);
+  // 구조 편집(5.0): 표·그림·블록을 고쳐 수정본으로 자동 저장하고, 버전으로 저장하면 새 버전
+  const [structEditing, setStructEditing] = useState(false);
+  // HTML PDF 내보내기(5.0 M8, Cloudflare Browser Rendering): 진행·오류 안내
+  const [exporting, setExporting] = useState("");
+  const [exportPct, setExportPct] = useState<number | null>(null);
+  useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); setExporting(""); }, [menu, doc]);
   useEffect(() => {
     if (!savedNotice) return;
     const t = setTimeout(() => setSavedNotice(""), 5000);
@@ -56,6 +70,8 @@ export function DocView() {
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
 
+  // 접속자 표시(5.0 M7): 이 문서를 보고 있다(편집 화면이면 편집 중)고 알린다
+  useHere(menu, doc, textEditing || structEditing ? "edit" : "view");
   // 외부 문서(출처 있음)의 HTML 스크립트 켜기 상태(3.3). 훅이라 아래 조기 반환보다 먼저 부른다
   const [scripts, setScripts] = useScripts(menu, doc, params.get("v") ?? data?.currentVersion ?? "", !!data?.originUrl);
 
@@ -81,6 +97,46 @@ export function DocView() {
       setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다${warnings?.length ? ` · 주의: ${warnings.join(" · ")}` : ""}`);
     }
   };
+  const onStructExit = (saved?: string) => {
+    setStructEditing(false);
+    if (saved) { setParam("v", null); setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다`); }
+  };
+  const exportPdf = async () => {
+    const ok = await confirm({ title: "PDF로 내보낼까요?", confirmText: "내보내기",
+      details: [`문서: ${data.title}`, `버전: ${versionLabel(version.version)}`, "A4 크기로 인쇄합니다"] });
+    if (!ok) return;
+    // 서버가 그리는 동안(보통 5~10초)은 크기를 알 수 없어 경과 시간으로 80%까지 채우고, 받는 동안은 받은 바이트로 채운다
+    let pct = 0;
+    const show = (p: number) => { pct = p; setExportPct(Math.round(p)); };
+    show(0); setExporting("PDF를 만드는 중…");
+    const t0 = Date.now();
+    const timer = setInterval(() => show(80 * (1 - Math.exp(-(Date.now() - t0) / 6000))), 200);
+    try {
+      const res = await fetch(`${API}/docs/${menu}/${doc}/pdf-export?v=${encodeURIComponent(version.version)}`);
+      clearInterval(timer);
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status}`);
+      setExporting("PDF를 내려받는 중…");
+      const total = Number(res.headers.get("content-length")) || 0;
+      const start = pct;
+      const reader = res.body!.getReader();
+      const chunks: Uint8Array[] = [];
+      for (let got = 0; ;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        if (total) show(start + (100 - start) * Math.min(1, got / total));
+      }
+      show(100);
+      const url = URL.createObjectURL(new Blob(chunks as BlobPart[], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.title} ${version.version}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setExporting("");
+    } catch (e) { setExporting(`내보내지 못했습니다: ${(e as Error).message}`); }
+    finally { clearInterval(timer); setExportPct(null); }
+  };
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params);
     if (v) next.set(k, v); else next.delete(k);
@@ -92,6 +148,7 @@ export function DocView() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
         {can.edit ? <DocTitle key={data.title} menu={menu} doc={doc} title={data.title} />
           : <h1 className="min-w-0 flex-1 text-[2em] leading-tight font-bold">{data.title}</h1>}
+        <PresenceChips menu={menu} doc={doc} />
         {version.createdAt && (
           <span className="font-mono text-xs text-muted" data-tip={`${versionLabel(version.version)} 작성일`}>{version.createdAt}</span>
         )}
@@ -136,12 +193,27 @@ export function DocView() {
               a.click();
             }} />
           )}
+          {CLOUD && entry && /\.html?$/i.test(entry.path) && (
+            <IconButton icon={FileDown} label="PDF로 내보내기" disabled={exportPct !== null} onClick={() => void exportPdf()} />
+          )}
           {can.edit && <IconButton icon={FilePlus2} label="새 버전 올리기" onClick={() => openUpload({ menu, doc })} />}
           {can.edit && entry && /\.(html?|svg|docx|pptx|xlsx)$/i.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
-            <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing}
+            <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing || structEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setTextEditing(true); }} />
           )}
-          {referable && !cmpVersion && !textEditing && (
+          {CLOUD && can.edit && entry && STRUCT_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+            <IconButton icon={LayoutPanelTop} label="구조 편집 (표·그림)" active={structEditing} disabled={structEditing || textEditing}
+              onClick={() => { setRefCopy(false); setParam("seg", null); setStructEditing(true); }} />
+          )}
+          {CLOUD && can.edit && entry?.path === "deck.json" && version.version === data.currentVersion && (
+            <IconButton icon={PenLine} label="슬라이드 편집" active={structEditing} disabled={structEditing}
+              onClick={() => setStructEditing(true)} />
+          )}
+          {CLOUD && can.edit && entry && /\.pdf$/i.test(entry.path) && version.version === data.currentVersion && (
+            <IconButton icon={PenLine} label="PDF 편집" active={structEditing} disabled={structEditing}
+              onClick={() => setStructEditing(true)} />
+          )}
+          {referable && !cmpVersion && !textEditing && !structEditing && (
             <IconButton icon={Link2} label="참조 복사 (글자를 눌러 Claude Code에 붙여 넣을 주소 복사)" active={refCopy}
               onClick={() => setRefCopy((v) => !v)} />
           )}
@@ -160,6 +232,16 @@ export function DocView() {
           )}
         </div>
         {settingsOpen && <DocSettingsDialog doc={data} onClose={() => setSettingsOpen(false)} />}
+        {exporting && (
+          <div role="status" className="basis-full rounded-md bg-sunken px-3 py-1 text-xs text-muted">
+            <p>{exporting}{exportPct !== null && ` ${exportPct}%`}</p>
+            {exportPct !== null && (
+              <div role="progressbar" aria-label="PDF 내보내기 진행" aria-valuemin={0} aria-valuemax={100} aria-valuenow={exportPct} className="mt-1 h-1.5 overflow-hidden rounded-sm bg-line">
+                <div className="h-full bg-accent transition-[width] duration-150" style={{ width: `${exportPct}%` }} />
+              </div>
+            )}
+          </div>
+        )}
         {savedNotice && <p className="basis-full rounded-md bg-ok-soft px-3 py-1 text-xs text-ok">{savedNotice}</p>}
       </div>
       <div>
@@ -177,6 +259,12 @@ export function DocView() {
           </>
         ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
+        ) : structEditing ? (
+          <Suspense fallback={<EmptyState title="편집기를 불러오는 중…" />}>
+            {entry.path === "deck.json" ? <DeckEditor menu={menu} doc={doc} onExit={onStructExit} />
+              : /\.pdf$/i.test(entry.path) ? <PdfEditor menu={menu} doc={doc} onExit={onStructExit} />
+              : <StructEditor menu={menu} doc={doc} onExit={onStructExit} />}
+          </Suspense>
         ) : textEditing ? (
           /\.(docx|pptx|xlsx)$/i.test(entry.path) ? (
             <OfficeTextEditor menu={menu} doc={doc} version={version.version}

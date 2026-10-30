@@ -1,14 +1,18 @@
 # workflow — SDLC 설계 문서 리포와 업무 문서 사이트
 
-SDLC(요구사항 → 설계 → 개발 → 리뷰 → 빌드·배포 → 운영) 업무·관리 솔루션을 만들기 위한 설계 문서를 모아 두는 리포입니다. 문서는 `docs/`에 **메뉴 → 문서 → 버전** 단위로 쌓고, `site/`의 로컬 웹사이트에서 메뉴와 뷰어로 보고 고칩니다.
+SDLC(요구사항 → 설계 → 개발 → 리뷰 → 빌드·배포 → 운영) 업무·관리 솔루션을 만들기 위한 설계 문서를 모아 두는 리포입니다. 문서는 `docs/`에 **메뉴 → 문서 → 버전** 단위로 쌓고, 두 가지 방법으로 보고 고칩니다.
+
+- **로컬 사이트**(`site/`): 리포 `docs/` 파일을 그대로 원본으로 쓰는 웹사이트. 아래 "로컬에서 띄우기"
+- **문서 탐색 워크플로우**(`apps/worker/`): 팀용 Cloudflare 서비스 https://workflow.simplite.net (Google 로그인, 초대제). 배포·운영은 [`apps/worker/README.md`](apps/worker/README.md)
 
 | 경로 | 내용 |
 |---|---|
-| `docs/` | 문서 원본(`_site/*.yaml` 메뉴 정의, 문서별 `meta.yaml`, 버전 폴더) |
-| `site/` | 업무 문서 사이트(React + Vite 화면, Fastify API, SQLite 색인, workflow-docs MCP) |
-| `REQUIREMENT*.md` | 사이트 요구사항·결정 사항(D-n)·단계별 계획 |
-| `TESTING.md` | 테스트 케이스 목록 |
-| `.claude/` | Claude Code 지침(`CLAUDE.md`), 규칙(`rules/`), 구조·개발 가이드(`guides/`) |
+| `docs/` | 설계 문서 원본 |
+| `spec/` | 요구사항·결정(`REQUIREMENT*.md`), 테스트 케이스(`TESTING.md`), **구성·기술 스택(`ARCHITECTURE.md`)** |
+| `site/`, `apps/`, `packages/` | 로컬 사이트, Cloudflare 앱·변환 컨테이너, 공통 패키지 |
+| `.claude/` | Claude Code 지침·규칙·작업 가이드 |
+
+폴더별 역할과 기술 선택은 [`spec/ARCHITECTURE.md`](spec/ARCHITECTURE.md)에 한곳으로 모았습니다.
 
 ## 로컬에서 띄우기
 
@@ -107,16 +111,4 @@ npm run test:ui     # 화면 테스트 (전역 puppeteer 필요)
 
 ## 문서 원본 구조
 
-```
-docs/
-  _site/categories.yaml     # 상단 메뉴(대분류)
-  _site/menus.yaml          # 대분류별 좌측 메뉴 트리
-  <메뉴 slug>/
-    <문서 slug>/
-      meta.yaml             # 제목·분류·상태·버전 목록
-      v0.0/ v0.1/ v1.0/     # 버전 폴더
-      <하위 문서 slug>/     # 하위 문서
-  _trash/                   # 휴지통
-```
-
-원본은 파일(yaml과 버전 폴더)이고 git으로 추적합니다. 사이트에서 한 작업도 이 파일들에 그대로 기록되므로, 사이트에서 바꾼 뒤 커밋하면 됩니다. 상세 규칙은 [`.claude/rules/docs-workflow.md`](.claude/rules/docs-workflow.md), 구조는 [`.claude/guides/project-structure.md`](.claude/guides/project-structure.md)에 있습니다.
+원본은 파일(yaml과 버전 폴더)이고 git으로 추적합니다. 로컬 사이트에서 한 작업도 이 파일들에 그대로 기록되므로, 사이트에서 바꾼 뒤 커밋하면 됩니다. 폴더 구조와 `meta.yaml`은 [`.claude/guides/docs-structure.md`](.claude/guides/docs-structure.md), 다루는 규칙은 [`.claude/rules/docs-workflow.md`](.claude/rules/docs-workflow.md)에 있습니다.

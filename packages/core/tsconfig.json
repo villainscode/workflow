@@ -8,7 +8,7 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": []
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

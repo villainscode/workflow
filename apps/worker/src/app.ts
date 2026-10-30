@@ -12,11 +12,18 @@ import {
   addCategory, addMenu, deleteCategory, deleteMenu, listTrash, moveDoc, moveMenu, purgeDoc, renameMenu, restoreDoc, trashDoc,
   updateCategory, updateDoc,
 } from "./manage.ts";
-import { docDetail, docPath, tree, workspaceBySlug } from "./repo.ts";
+import { docDetail, docPath, findDoc, tree, workspaceBySlug } from "./repo.ts";
 import { search } from "./search.ts";
 import { sha256Hex } from "./blobs.ts";
 import { toPdf } from "./convert.ts";
 import { exportWorkspace } from "./export.ts";
+import { getRevision, listRevisions, publish, restoreRevision, saveRevision, workState } from "./revisions.ts";
+import { assetRow, putAsset } from "./assets.ts";
+import { applyStructOps, readStructure, structEditView, type StructOp } from "./structedit.ts";
+import { checkDeckPut, patchDeck, patchSlide, putSlide, readDeck } from "./deck.ts";
+import { htmlPdf, slidePng } from "./render.ts";
+import { usage } from "./usage.ts";
+import { StructEditError } from "@workflow/core/structedit/html";
 import { agentOf, liveStub, reasonOf } from "./live.ts";
 
 import { contentToken } from "./token.ts";
@@ -30,7 +37,7 @@ import { editView, previewTextEdit, readSegments, release, saveEdit, saveTextEdi
 export const app = new Hono<AppEnv>();
 
 app.onError((err, c) => {
-  if (err instanceof HttpError) return c.json({ error: err.message }, err.status as 400);
+  if (err instanceof HttpError || err instanceof StructEditError) return c.json({ error: err.message }, err.status as 400);
   console.error(err);
   return c.json({ error: err.message }, 500);
 });
@@ -61,19 +68,20 @@ app.get("/i/:ws/:name", async (c) => {
 // 요청 위조(CSRF) 막기: 쿠키로 인증하는 API는 상태를 바꾸는 요청이 이 앱 화면에서 온 것만 받는다.
 // 콘텐츠 도메인도 같은 사이트(simplite.net)라 SameSite 쿠키만으로는 막히지 않는다(5.5). 가져오기 API는 Bearer 토큰이라 제외
 app.use("/api/*", async (c, next) => {
-  const unsafe = !["GET", "HEAD", "OPTIONS"].includes(c.req.method);
+  // WebSocket 업그레이드(GET /live)도 쿠키가 따라가므로 같은 검사를 받는다(교차 사이트 WebSocket 막기, 5.0 M8)
+  const unsafe = !["GET", "HEAD", "OPTIONS"].includes(c.req.method) || c.req.header("upgrade")?.toLowerCase() === "websocket";
   if (unsafe && !c.req.path.startsWith("/api/admin/") && c.req.header("origin") !== new URL(c.req.url).origin) {
     return c.json({ error: "허용되지 않은 요청입니다" }, 403);
   }
   await next();
 });
 
-// 요청 수 제한(4.0 P8, Workers Rate Limiting): 로그인은 IP마다 분당 20번, 상태를 바꾸는 워크스페이스 API는 IP마다 분당 120번
+// 요청 수 제한(4.0 P8, Workers Rate Limiting): 로그인은 IP마다 분당 20번, 상태를 바꾸는 워크스페이스 API와 덱 PDF·PNG(Browser Rendering, 5.0 M8)는 IP마다 분당 120번
 app.use("/api/*", async (c, next) => {
   // 운영에서는 Cloudflare가 늘 cf-connecting-ip를 넣는다. 없으면(로컬·테스트) 제한하지 않는다
   const ip = c.req.header("cf-connecting-ip");
   const limiter = !ip ? undefined : c.req.path.startsWith("/api/auth/") ? c.env.LIMIT_AUTH
-    : c.req.method !== "GET" && c.req.path.startsWith("/api/w/") ? c.env.LIMIT_WRITE : undefined;
+    : c.req.path.startsWith("/api/w/") && (c.req.method !== "GET" || /\/(pdf-export|deck\/png)$/.test(c.req.path)) ? c.env.LIMIT_WRITE : undefined;
   if (limiter && ip && !(await limiter.limit({ key: ip })).success) return c.json({ error: "요청이 너무 많습니다. 잠시 뒤 다시 시도하세요" }, 429);
   await next();
 });
@@ -109,7 +117,7 @@ const ws = new Hono<AppEnv>();
  */
 const OWNER_ONLY: [string, RegExp][] = [
   ["DELETE", /^\/menus\/[^/]+$/], ["DELETE", /^\/trash\/[^/]+$/], ["*", /^\/categories(\/|$)/], ["*", /^\/invites(\/|$)/],
-  ["PATCH", /^\/members\//], ["DELETE", /^\/members\//], ["GET", /^\/export$/],
+  ["PATCH", /^\/members\//], ["DELETE", /^\/members\//], ["GET", /^\/export$/], ["GET", /^\/usage$/],
 ];
 function needed(method: string, path: string): Role {
   if (OWNER_ONLY.some(([m, re]) => (m === "*" || m === method) && re.test(path))) return "owner";
@@ -148,8 +156,8 @@ async function afterChange(c: Context<AppEnv>, reason: string, sub: string) {
     : null;
   const segs = reason === "text-edit" ? ((await c.req.json<{ changes?: { id: number }[] }>().catch(() => ({}) as { changes?: { id: number }[] })).changes ?? []).map((x) => x.id) : undefined;
   const event = {
-    type: "changed", reason, by: agentOf(c), category: (body.category as string | undefined) ?? info?.category, menu, doc, title: info?.title,
-    version: body.version as string | undefined, segs,
+    type: "changed", reason, by: agentOf(c), userId: c.var.user?.id, category: (body.category as string | undefined) ?? info?.category, menu, doc, title: info?.title,
+    version: body.version as string | undefined, rev: body.rev as number | undefined, segs,
   };
   await Promise.all([
     liveStub(c.env, c.var.ws.id).broadcast(event),
@@ -161,7 +169,11 @@ async function afterChange(c: Context<AppEnv>, reason: string, sub: string) {
 /** 실시간 연결(WebSocket). 워크스페이스 DO로 넘긴다 */
 ws.get("/live", async (c) => {
   if (c.req.header("upgrade")?.toLowerCase() !== "websocket") return c.json({ error: "WebSocket으로 연결하세요" }, 426);
-  return liveStub(c.env, c.var.ws.id).fetch(c.req.raw);
+  // 접속자 표시(5.0 M7)용으로 누구인지 DO에 넘긴다
+  const u = c.var.user;
+  const headers = new Headers(c.req.raw.headers);
+  headers.set("x-live-user", JSON.stringify(u ? { id: u.id, email: u.email, name: u.name } : null));
+  return liveStub(c.env, c.var.ws.id).fetch(new Request(c.req.raw, { headers }));
 });
 
 /** 열린 화면을 문서·버전·조각으로 옮긴다(3.4 focus_in_site). 받은 화면 수를 돌려준다 */
@@ -173,6 +185,120 @@ ws.post("/focus", async (c) => {
   if (seg && !/^[\d,-]+$/.test(seg)) throw new HttpError(400, "seg는 12, 12-15, 3,10-12 형식입니다");
   const clients = await liveStub(c.env, c.var.ws.id).broadcast({ type: "focus", by: agentOf(c), category: info.category, menu, doc, title: info.title, version, seg });
   return c.json({ clients });
+});
+
+// ---------- 수정본(5.0 M1): 작업본 열기·저장·이력·되돌리기·버전으로 올리기 ----------
+/** 작업본 주소: 수정본이면 /r<번호>/, 아니면 버전 폴더 */
+async function workFileUrl(c: Context<AppEnv>, doc: { id: number; parent_id: number | null; slug: string; menu_slug: string }, folder: string) {
+  const base = await contentBase(c);
+  const dir = await docPath(c.env.DB, doc, doc.menu_slug);
+  return (path: string) => `${base}/${encPath(dir)}/${folder}/${encPath(path)}`;
+}
+
+ws.get("/docs/:menu/:doc/work", async (c) => {
+  const doc = await findDoc(c.env.DB, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
+  const st = await workState(c.env, c.var.ws, doc);
+  const url = await workFileUrl(c, doc, st.fromRevision ? `r${st.rev}` : st.baseVersion);
+  return c.json({ baseVersion: st.baseVersion, rev: st.rev, fromRevision: st.fromRevision, entry: st.manifest.entry,
+    files: st.manifest.files.map((f) => ({ ...f, url: url(f.path) })) });
+});
+
+/** 저장: { baseRev, put: [{ path, text | base64 }], remove?, entry?, summary? } 또는 구조 편집 { baseRev, ops, summary? } → 새 수정본 */
+ws.post("/docs/:menu/:doc/revisions", async (c) => {
+  const b = await c.req.json<{ baseRev: number; put?: { path: string; text?: string; base64?: string }[]; remove?: string[]; entry?: string; summary?: string; ops?: StructOp[] }>();
+  if (typeof b.baseRev !== "number") throw new HttpError(400, "baseRev가 필요합니다");
+  if (b.ops !== undefined) {
+    if (b.put || b.remove || b.entry) throw new HttpError(400, "ops와 파일 교체(put·remove·entry)는 함께 보낼 수 없습니다");
+    return c.json(await applyStructOps(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), {
+      baseRev: b.baseRev, ops: b.ops, summary: b.summary, source: agentOf(c) ? "agent" : "human",
+    }));
+  }
+  const put = (b.put ?? []).map((f) => ({
+    path: f.path,
+    data: f.base64 !== undefined ? Uint8Array.from(atob(f.base64), (ch) => ch.charCodeAt(0)) : new TextEncoder().encode(f.text ?? ""),
+  }));
+  // 크기 상한(업로드 화면과 비슷하게)과 덱 파일 검사(업로드와 같은 규칙)
+  if (put.length > 200 || put.reduce((n, f) => n + f.data.byteLength, 0) > 25 * 1024 * 1024) throw new HttpError(413, "한 번에 파일 200개·25MB까지 저장할 수 있습니다");
+  await checkDeckPut(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), put);
+  return c.json(await saveRevision(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), {
+    baseRev: b.baseRev, put, remove: b.remove, entry: b.entry, summary: b.summary, source: agentOf(c) ? "agent" : "human",
+  }));
+});
+
+// 구조 편집(5.0 M3·M5): 작업본의 표·그림·블록 목록, HTML 편집 사본(data-eid, 스크립트 없이 sandbox="allow-same-origin"으로 연다)
+ws.get("/docs/:menu/:doc/work/structure", async (c) =>
+  c.json(await readStructure(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"))));
+ws.get("/docs/:menu/:doc/work/edit-view", async (c) => {
+  const view = await structEditView(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"),
+    async (doc, folder, dir) => (await workFileUrl(c, doc, folder))(dir));
+  return c.body(view.body, 200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-workflow-rev": String(view.rev),
+    "content-security-policy": "sandbox allow-same-origin" });
+});
+
+// 작업본 미리보기 PDF(PPTX 구조 편집 화면). 변환 결과는 내용(sha)으로 캐시된다
+ws.get("/docs/:menu/:doc/work/pdf", async (c) => {
+  const doc = await findDoc(c.env.DB, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
+  const st = await workState(c.env, c.var.ws, doc);
+  const f = st.manifest.files.find((x) => x.path === st.manifest.entry)!;
+  const pdf = await toPdf(c.env, c.var.ws.id, null, f.path.slice(f.path.lastIndexOf(".")), f.sha256);
+  return new Response(pdf, { headers: { "content-type": "application/pdf", "cache-control": "no-store" } });
+});
+
+// 슬라이드 덱(5.0 M4): 작업본 읽기, 슬라이드 연산·통째 쓰기, 색인(순서·제목) 고치기. 모두 수정본으로 저장
+ws.get("/docs/:menu/:doc/deck", async (c) => c.json(await readDeck(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"))));
+ws.post("/docs/:menu/:doc/deck/slides/:sid", async (c) =>
+  c.json(await patchSlide(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), c.req.param("sid"), await c.req.json(), agentOf(c) ? "agent" : "human")));
+ws.put("/docs/:menu/:doc/deck/slides/:sid", async (c) =>
+  c.json(await putSlide(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), c.req.param("sid"), await c.req.json(), agentOf(c) ? "agent" : "human")));
+ws.patch("/docs/:menu/:doc/deck", async (c) =>
+  c.json(await patchDeck(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), await c.req.json(), agentOf(c) ? "agent" : "human")));
+
+// HTML 문서 PDF 내보내기·슬라이드 PNG(5.0 M7·M8, Browser Rendering). ?v=버전(없으면 지금 버전). PNG는 ?work=1이면 작업본, ?format=json이면 base64(MCP)
+ws.get("/docs/:menu/:doc/pdf-export", async (c) => {
+  const r = await htmlPdf(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), c.req.query("v"), await contentBase(c));
+  return new Response(r.body, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(r.name)}`, "cache-control": "no-store" } });
+});
+ws.get("/docs/:menu/:doc/deck/png", async (c) => {
+  const slide = c.req.query("slide") ?? "";
+  const png = await slidePng(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), slide, { version: c.req.query("v"), work: c.req.query("work") === "1" }, await contentBase(c));
+  if (c.req.query("format") === "json") {
+    let s = "";
+    for (let i = 0; i < png.length; i += 0x8000) s += String.fromCharCode(...png.subarray(i, i + 0x8000));
+    return c.json({ png: btoa(s), width: 960, height: 540 });
+  }
+  return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
+});
+
+ws.get("/docs/:menu/:doc/revisions", async (c) => {
+  const before = c.req.query("before");
+  return c.json(await listRevisions(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), before ? Number(before) : undefined));
+});
+
+ws.get("/docs/:menu/:doc/revisions/:rev", async (c) => {
+  const r = await getRevision(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), Number(c.req.param("rev")));
+  const url = await workFileUrl(c, r.doc, `r${r.rev}`);
+  return c.json({ rev: r.rev, baseVersion: r.baseVersion, source: r.source, summary: r.summary, createdAt: r.createdAt, entry: r.manifest.entry,
+    files: r.manifest.files.map((f) => ({ ...f, url: url(f.path) })) });
+});
+
+ws.post("/docs/:menu/:doc/revisions/:rev/restore", async (c) => {
+  const { baseRev } = await c.req.json<{ baseRev: number }>();
+  return c.json(await restoreRevision(c.env, c.var.ws, c.var.user, c.req.param("menu"), c.req.param("doc"), Number(c.req.param("rev")), baseRev));
+});
+
+ws.post("/docs/:menu/:doc/publish", async (c) =>
+  c.json(await publish(c.env, c.var.ws, c.req.param("menu"), c.req.param("doc"), await c.req.json())));
+
+// ---------- 편집기 이미지 자산(5.0 M1) ----------
+ws.post("/assets", async (c) => {
+  const file = (await c.req.formData()).get("file");
+  if (!file || typeof file === "string") throw new HttpError(400, "file 필드가 없습니다");
+  return c.json(await putAsset(c.env, c.var.ws, c.var.user, file));
+});
+ws.get("/assets/:sha/url", async (c) => {
+  const a = await assetRow(c.env.DB, c.var.ws.id, c.req.param("sha"));
+  if (!a) throw new HttpError(404, "없는 이미지입니다");
+  return c.json({ url: `${await contentBase(c)}/_asset/${a.sha256}`, width: a.width, height: a.height, mime: a.mime });
 });
 
 /** 워크스페이스 내보내기(owner): docs/ 모양 zip. 가져오기 CLI로 다시 넣을 수 있다 */
@@ -187,6 +313,9 @@ ws.get("/activity", async (c) => {
     LEFT JOIN app_user u ON u.id = a.user_id WHERE a.workspace_id = ? ORDER BY a.id DESC LIMIT 100`).bind(c.var.ws.id).all();
   return c.json(results);
 });
+
+/** 사용량(5.0 M8, owner): ?days=30 */
+ws.get("/usage", async (c) => c.json(await usage(c.env, c.var.ws.id, Math.min(365, Math.max(1, Number(c.req.query("days") ?? 30) || 30)))));
 
 ws.route("/", members);
 
@@ -270,6 +399,8 @@ ws.get("/docs/:menu/:doc/edit-view", async (c) => {
   });
   return c.body(view.body, 200, {
     "content-type": view.type === "svg" ? "image/svg+xml; charset=utf-8" : "text/html; charset=utf-8", "cache-control": "no-store",
+    // 앱 출처라 주소를 직접 열어도 문서 스크립트가 돌지 않게 한다(화면은 같은 출처로 DOM을 고쳐야 해서 allow-same-origin만)
+    "content-security-policy": "sandbox allow-same-origin",
   });
 });
 

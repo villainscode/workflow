@@ -32,6 +32,10 @@ admin.post("/workspaces", async (c) => {
   if (reset) {
     await db.batch([
       db.prepare("DELETE FROM search WHERE workspace_id = ?").bind(ws.id),
+      // 수정본(5.0)이 버전·문서를 가리키므로 먼저 지운다
+      db.prepare("UPDATE document_version SET revision_id = NULL WHERE document_id IN (SELECT id FROM document WHERE workspace_id = ?)").bind(ws.id),
+      db.prepare("DELETE FROM document_head WHERE document_id IN (SELECT id FROM document WHERE workspace_id = ?)").bind(ws.id),
+      db.prepare("DELETE FROM document_revision WHERE document_id IN (SELECT id FROM document WHERE workspace_id = ?)").bind(ws.id),
       db.prepare("DELETE FROM version_file WHERE version_id IN (SELECT v.id FROM document_version v JOIN document d ON d.id = v.document_id WHERE d.workspace_id = ?)").bind(ws.id),
       db.prepare("DELETE FROM document_version WHERE document_id IN (SELECT id FROM document WHERE workspace_id = ?)").bind(ws.id),
       // 하위 문서가 상위를 가리키므로 관계를 먼저 끊고 지운다

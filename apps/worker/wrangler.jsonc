@@ -1,4 +1,4 @@
-// 문서 탐색 워크플로우 앱 Worker. 계획·진행: REQUIREMENT-4.0.md, 배포 절차: README.md
+// 문서 탐색 워크플로우 앱 Worker. 계획·진행: spec/REQUIREMENT-4.0.md, 배포 절차: README.md
 // 한 Worker가 앱(workflow.simplite.net)과 사용자 콘텐츠(workflow-files.simplite.net) 두 도메인을 받는다. 호스트로 나눈다(src/app.ts)
 // 맨 위 설정은 로컬(wrangler dev·테스트)용이다. 배포는 env.staging(workers.dev) · env.production(simplite.net)
 // 바인딩·vars는 환경마다 따로 적어야 한다(wrangler가 상속하지 않는다).
@@ -24,6 +24,8 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Live"] }, { "tag": "v2", "new_sqlite_classes": ["Converter"] }],
   // PPTX·DOCX·XLSX → PDF(LibreOffice, Workers Paid 전용). 이미지는 apps/converter
   "containers": [{ "class_name": "Converter", "scheduling_policy": "durable_object", "images": { "base": { "dockerfile": "../converter/Dockerfile" } } }],
+  // 덱 PDF 내보내기·슬라이드 미리보기(5.0 M7, Browser Rendering)
+  "browser": { "binding": "BROWSER" },
   // 원격 MCP OAuth(클라이언트·코드·토큰)
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "00000000000000000000000000000000" }],
   "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs" }],
@@ -47,6 +49,7 @@
       "d1_databases": [{ "binding": "DB", "database_name": "workflow-staging", "database_id": "f11fb8fc-07ff-404f-b07d-4640264c357b", "migrations_dir": "migrations" }],
       "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
       "containers": [{ "class_name": "Converter", "scheduling_policy": "durable_object", "images": { "base": { "dockerfile": "../converter/Dockerfile" } } }],
+      "browser": { "binding": "BROWSER" },
       "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "560faab4f7444de98522f5faa43b53aa" }],
       "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs-staging" }],
       "ratelimits": [
@@ -71,6 +74,7 @@
       "d1_databases": [{ "binding": "DB", "database_name": "workflow", "database_id": "8a7c5f2c-dd8a-4c4c-959c-c1706471f2de", "migrations_dir": "migrations" }],
       "durable_objects": { "bindings": [{ "name": "LIVE", "class_name": "Live" }, { "name": "CONVERTER", "class_name": "Converter" }] },
       "containers": [{ "class_name": "Converter", "scheduling_policy": "durable_object", "images": { "base": { "dockerfile": "../converter/Dockerfile" } } }],
+      "browser": { "binding": "BROWSER" },
       "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "cf0123eb317844e495240aa43c65f729" }],
       "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "workflow-docs" }],
       "ratelimits": [

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SemVer 버전 관리 가이드</title>
+<!-- 글꼴: IBM Plex Sans KR / Plex Mono. 한글·영문·숫자가 같은 설계 계열이라 버전 번호와 본문이 한 줄에 섞여도 높이와 굵기가 어긋나지 않는다. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 14mm; }
+  :root{
+    --ink:#1a1a1a;      /* 본문 */
+    --sub:#555555;      /* 보조 텍스트, 흰 배경 대비 7.4:1 */
+    --line:#d4d4d4;     /* 1px 구분선 */
+    --tint:#f4f4f4;     /* 표 머리 */
+    --bg:#ffffff;
+    --accent:#a3261c;   /* 단일 강조색: 규칙 위반(Worst) 표시에만 사용, 흰 배경 대비 7.0:1 */
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-size:11.5px;line-height:1.55}
+  .page{max-width:210mm;margin:0 auto;padding:14mm}
+  code,.v{font-family:"IBM Plex Mono",Consolas,monospace;font-size:.95em}
+
+  header{border-bottom:1px solid var(--ink);padding-bottom:8px;margin-bottom:14px;
+    display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.2px}
+  header p{margin:0;font-size:10.5px;color:var(--sub)}
+  h2{font-size:13.5px;font-weight:700;margin:18px 0 6px}
+  h2 span{color:var(--sub);font-weight:400;margin-right:6px}
+
+  .format{display:grid;grid-template-columns:auto 1fr;gap:4px 20px;align-items:start}
+  .format .big{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:600;line-height:1.2;grid-row:span 3}
+  .format div{font-size:11.5px}
+  .format b{display:inline-block;width:52px}
+
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  thead th{background:var(--tint);font-weight:600}
+  th.worst{color:var(--accent)}
+  tbody th{width:15%;font-weight:700}
+  tbody th small{display:block;font-weight:400;color:var(--sub);font-size:10px;margin-top:2px}
+  td p{margin:0 0 5px} td p:last-child{margin:0}
+  .v{font-weight:600;white-space:nowrap;margin-right:4px}
+  .note{color:var(--sub)}
+
+  ol.rules{margin:0;padding-left:18px;columns:2;column-gap:26px;font-size:11px}
+  ol.rules li{break-inside:avoid;margin-bottom:3px}
+
+  footer{margin-top:14px;padding-top:6px;border-top:1px solid var(--line);font-size:10px;color:var(--sub)}
+
+  @media print{ .page{padding:0;max-width:none} }
+  @media (max-width:720px){
+    .page{padding:16px}
+    header{flex-direction:column}
+    .format{grid-template-columns:1fr}
+    .big{grid-row:auto;margin-bottom:6px}
+    ol.rules{columns:1}
+    table{display:block;overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>SemVer 버전 관리 가이드</h1>
+    <p>기준 문서: Semantic Versioning 2.0.0 (semver.org/lang/ko)</p>
+  </header>
+
+  <h2><span>1</span>판단 순서</h2>
+  <div class="format">
+    <div class="big">MAJOR.MINOR.PATCH</div>
+    <div><b>MAJOR</b>대규모 기능 변경/정식버전의 소프트웨어 출시/하위버전 호환 보장 안되는 주 업데이트</div>
+    <div><b>MINOR</b>새로운 기능을 추가할 때, 하위 호환 보장</div>
+    <div><b>PATCH</b>기존 버전 호환되며 버그 패치, 소규모 수정(기능 동작이 바뀌면 Minor)</div>
+  </div>
+
+  <h2><span>2</span>단위별 예시</h2>
+  <table>
+    <thead>
+      <tr><th>구분</th><th>Best 예시</th><th class="worst">Worst 예시</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th>MAJOR (주(主) 버전)<small>호환이 깨지는 변경</small></th>
+        <td>
+          <p><span class="v">1.4.2 → 2.0.0</span>응답 필드 <code>userName</code>을 <code>name</code>으로 변경하고 마이그레이션 문서를 같이 배포.</p>
+          <p><span class="v">1.9.0 → 2.0.0</span> 1.x 동안 Deprecated로 예고한 API를 삭제.</p>
+        </td>
+        <td>
+          <p><span class="v"></span> <span class="note"><code></code></span></p>
+          <p><span class="v">1.4.2 → 2.0.0</span>코드 변경 없이 연도나 홍보 일정에 맞춰 올림.</p>
+        </td>
+      </tr>
+      <tr>
+        <th>MINOR (부(副) 버전) <small>호환되는 기능 추가</small></th>
+        <td>
+          <p><span class="v">2.0.3 → 2.1.0</span>검색 API에 <code>sort</code> 옵션 추가. 옵션을 안 쓰면 이전과 같은 결과.</p>
+        </td>
+        <td>
+          <p><span class="v">2.1.3 → 2.2.3</span>MINOR를 올리면서 PATCH를 0으로 되돌리지 않음.</p>
+          <p><span class="v">2.1.0 → 2.1.1</span>버그 수정 릴리스에 신규 기능을 함께 넣음. <span class="note">패치만 받으려던 사용자에게 예상하지 못한 변화가 생긴다.</span></p>
+        </td>
+      </tr>
+      <tr>
+        <th>PATCH (수(修) 버전)<small>호환되는 버그 수정</small></th>
+        <td>
+          <p><span class="v">2.1.0 → 2.1.1</span>빈 문자열 입력 시 500 오류가 나던 문제 수정.</p>
+          <p><span class="v">2.1.9 → 2.1.10</span>두 자리를 넘어도 그대로 증가.</p>
+        </td>
+        <td>
+          <p><span class="v">2.1.1 → 2.1.2</span>버그 수정이라며 타임아웃 기본값을 30초에서 10초로 변경. <span class="note">동작이 바뀌면 MINOR 이상이다.</span></p>
+          <p><span class="v">2.1.1</span>이미 배포한 2.1.1을 같은 번호로 다시 올림.</p>
+          <p><span class="v">2.01.03</span>앞자리에 0을 붙임. 명세 2항 위반.</p>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><span>3</span>공통 규칙</h2>
+  <ol class="rules">
+    <li>각 자리는 음이 아닌 정수이고 앞자리 0을 붙이지 않는다.</li>
+    <li>상위 번호를 올리면 하위 번호는 0으로 되돌린다.</li>
+    <li>배포한 버전의 내용은 바꾸지 않는다. 수정은 새 번호로 낸다.</li>
+    <li><code>0.y.z</code>는 초기 개발 단계다. 공개 API가 확정되면 <code>1.0.0</code>.</li>
+    <li>사전 배포판 순서: <code>1.0.0-alpha.1</code> &lt; <code>1.0.0-rc.1</code> &lt; <code>1.0.0</code></li>
+    <li>빌드 정보는 <code>+</code> 뒤에 붙인다(<code>1.0.0+20261016</code>). 버전 비교에는 쓰이지 않는다.</li>
+    <li>Git 태그는 <code>v1.2.3</code>. <code>v.1.2.3</code>은 쓰지 않는다.</li>
+    <li>번호를 올릴 때마다 CHANGELOG에 변경 내용을 적는다.</li>
+  </ol>
+
+  <footer>표준 참고 : Semantic Versioning 2.0.0 — https://semver.org/lang/ko/</footer>
+</div>
+</body>
+</html>

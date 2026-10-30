@@ -1,0 +1,25 @@
+title: 01. 콘솔 클라우드 개발 플랜
+category: markdown
+menu: v1-0
+kind: markdown
+status: draft
+current: v0.2
+versions:
+  - version: v0.0
+    entry: doc.md
+    note: 새 문서
+    source: upload
+    created: 2026-10-13
+  - version: v0.1
+    entry: doc.md
+    note:
+    source: edit
+    created: 2026-10-13
+  - version: v0.2
+    entry: doc.md
+    note:
+    source: edit
+    created: 2026-10-13 16:55:43
+notion_url:
+gdrive_url:
+order: 0

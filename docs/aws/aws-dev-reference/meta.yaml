@@ -1,0 +1,14 @@
+title: AWS 레퍼런스
+category: docs
+menu: aws
+kind: pdf
+status: draft
+current: v0.0
+versions:
+  - version: v0.0
+    entry: aws-dev-reference.pdf
+    note:
+    source: upload
+    created: 2026-10-28 14:29:34
+notion_url:
+gdrive_url:

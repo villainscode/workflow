@@ -1,6 +1,6 @@
 # 문서(docs/) 다루기 규칙
 
-모든 작업에 적용한다(파일을 열기 전에 지켜야 해서 경로 조건 없음). 구조와 meta.yaml 예시는 `.claude/guides/project-structure.md`.
+모든 작업에 적용한다(파일을 열기 전에 지켜야 해서 경로 조건 없음). 구조와 meta.yaml 예시는 `.claude/guides/docs-structure.md`.
 
 - **사이트 문서는 `docs/` 파일을 직접 고치지 말고 workflow-docs MCP 도구를 쓴다**(`.mcp.json`, 사용법은 `.claude/skills/workflow-docs/SKILL.md`). 로컬 사이트 서버(`cd site && npm run dev`)가 켜져 있어야 한다. Cloudflare 워크스페이스는 원격 MCP(`https://workflow.simplite.net/mcp`)로 다룬다.
 - 사이트에서 사람이 만들거나 바꾼 `docs/` 파일을 커밋할 때는 먼저 사용자에게 알리고, 넣을지 확인한다.

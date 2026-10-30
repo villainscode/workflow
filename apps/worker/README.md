@@ -1,16 +1,8 @@
 # 문서 탐색 워크플로우 — Cloudflare 앱 (`apps/worker`)
 
-업무 문서 사이트(`site/`)를 Cloudflare 위 팀용 서비스로 옮긴 것. 설계·단계 결과는 루트 `REQUIREMENT-4.0.md`, 테스트 케이스는 `TESTING.md` 2.7절.
+업무 문서 사이트(`site/`)를 Cloudflare 위 팀용 서비스로 옮긴 것. 설계·단계 결과는 `spec/REQUIREMENT-4.0.md`, 테스트 케이스는 `spec/TESTING.md` 2.7절.
 
-| 부분 | 위치 | Cloudflare |
-|---|---|---|
-| 화면 | `site/web`(같은 코드, `VITE_CLOUD=1` 빌드) | Workers Static Assets |
-| API·로그인·권한 | `src/app.ts`, `src/auth.ts`, `src/members.ts` | Worker(Hono) + D1 |
-| 문서 파일 | `src/write.ts`, `src/content.ts` | R2(내용 주소) + 콘텐츠 도메인 |
-| 실시간 | `src/live.ts` | Durable Object(WebSocket) |
-| PDF 변환 | `src/convert.ts`, `../converter` | Containers(LibreOffice) |
-| 원격 MCP | `src/mcp.ts`, `src/consent.ts` | OAuthProvider + KV |
-| 정리 | `src/cleanup.ts` | Cron Trigger(매일) |
+구성·파일별 역할·기술 선택은 `spec/ARCHITECTURE.md`. 이 문서는 띄우기·배포·백업 절차만 다룬다.
 
 ## 로컬에서 띄우기
 
@@ -23,6 +15,7 @@ npm run dev                       # 화면 빌드 → 로컬 D1 마이그레이�
 - 비밀값은 `.dev.vars`(git 제외): `SIGNING_KEY`, `ADMIN_TOKEN`, `GOOGLE_CLIENT_SECRET`, `DEV_LOGIN=1`(로그인 화면에 개발용 이메일 로그인), `SUPERADMIN_EMAILS`.
 - 문서 넣기: 리포 루트에서 `npx tsx packages/cli/src/import.ts --url http://127.0.0.1:8787 --token <ADMIN_TOKEN> --ws <주소> --name <이름> --owner <내 이메일>` (리포 `docs/`를 그 워크스페이스로).
 - PDF 변환은 로컬 Docker가 있으면 `wrangler dev`가 컨테이너를 띄운다(처음엔 이미지를 만드느라 1분쯤 걸린다).
+- HTML 문서 PDF 내보내기·슬라이드 미리보기(Browser Rendering, `BROWSER` 바인딩)는 로컬에서 `wrangler dev`가 Chrome(headless shell)을 내려받아 흉내 낸다. 운영은 Workers Paid의 Browser Rendering을 쓴다(포함 사용량을 넘으면 브라우저 사용 시간만큼 과금).
 - 테스트: `npm test`(Workers 런타임, D1·R2·DO 로컬), `npm run test:ui`(전역 puppeteer, 앱·콘텐츠 출처를 나눠 띄움, 변환은 Docker).
 
 ## 처음 배포하기 (한 번)

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { exports } from "cloudflare:workers";
-import { addMember, login, seed } from "./helpers.ts";
+import { addMember, getJson, login, seed, useSession } from "./helpers.ts";
 
 /** 원격 MCP(4.0 P6): OAuth(동적 등록 → 동의 화면에서 워크스페이스 고르기 → PKCE 토큰) 뒤 /mcp에서 로컬과 같은 도구 */
 
@@ -61,7 +61,7 @@ describe("원격 MCP", () => {
     const { token } = await connect("owner@test.com");
     await rpc(token, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
     const names = (await rpc(token, "tools/list")).body.result.tools.map((t: any) => t.name).sort();
-    expect(names).toEqual(["create_menu", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents", "release_document", "save_markdown", "upload_document", "upload_version"]);
+    expect(names).toEqual(["asset_put", "create_menu", "deck_create", "deck_get", "deck_render", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents", "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "upload_document", "upload_version"]);
     expect((await tool(token, "list_documents", {})).text).toContain(`${O}/team/sdlc/process/guide`);
     const t = await tool(token, "get_text", { ref: `${O}/team/sdlc/process/guide` });
     expect(t.text).toContain("둘째 판");
@@ -83,5 +83,47 @@ describe("원격 MCP", () => {
     expect(denied.isError).toBe(true);
     expect(denied.text).toContain("보기 권한만");
     expect((await tool(v.token, "find_documents", { query: "MCP" })).text).toContain("MCP 문서");
+  });
+
+  it("TC-CF-44 덱 도구: deck_create → deck_get(eid) → slide_patch(에이전트 수정본) → slide_put 형식 오류 진단 → asset_put", async () => {
+    const { token } = await connect("owner@test.com");
+    const c = await tool(token, "deck_create", { menu: "notes", title: "에이전트 덱", slug: "agent-deck", slides: [{ id: "cover", html: '<section id="cover"><h1>표지</h1></section>' }] });
+    expect(c.isError).toBe(false);
+    const g = await tool(token, "deck_get", { ref: "notes/agent-deck" });
+    expect(g.text).toContain('<h1 data-eid="e1">표지</h1>');
+    const p = await tool(token, "slide_patch", { ref: "notes/agent-deck", slideId: "cover", ops: [{ t: "setText", eid: "e1", html: "에이전트 표지" }] });
+    expect(p.isError).toBe(false);
+    expect(p.text).toMatch(/수정본 1/);
+    useSession((await login("owner@test.com")).cookie);
+    const revs = await getJson(`/api/w/team/docs/notes/agent-deck/revisions`);
+    expect(revs.revisions[0]).toMatchObject({ source: "agent", summary: "Claude Code: 슬라이드 cover 연산 1개" });
+    const bad = await tool(token, "slide_put", { ref: "notes/agent-deck", slideId: "two", html: '<section id="two"><div style="z-index:3">x</div></section>' });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toMatch(/1:\d+ \[css-prop\] 허용하지 않는 CSS 속성: z-index → z-index는 쓰지 않습니다/);
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const a = await tool(token, "asset_put", { base64: png, mime: "image/png" });
+    expect(a.text).toMatch(/^asset:[0-9a-f]{64} \(1×1px\)$/);
+  });
+
+  it("TC-CF-46 doc_structure·doc_ops(에이전트 수정본), 잘못된 연산은 진단과 고칠 방법(→), revision_list·revision_restore", async () => {
+    const { token } = await connect("owner@test.com");
+    const st = await tool(token, "doc_structure", { ref: "process/guide" });
+    expect(st.isError).toBe(false);
+    const p = /^(e\d+) <p> /m.exec(st.text)!;
+    expect(st.text).toMatch(/guide\.html \(html\) · rev 0/);
+    const ok = await tool(token, "doc_ops", { ref: "process/guide", ops: [{ t: "insert", ref: p[1], where: "after", node: { kind: "table", rows: 2, cols: 2 } }] });
+    expect(ok.isError).toBe(false);
+    expect(ok.text).toMatch(/수정본 1로 저장했습니다/);
+    // 지난 eid로 다시 보내면(그사이 위치가 바뀌지는 않았지만 rev가 지남) 409 + 고칠 방법
+    const stale = await tool(token, "doc_ops", { ref: "process/guide", baseRev: 0, ops: [{ t: "remove", eid: p[1] }] });
+    expect(stale.isError).toBe(true);
+    expect(stale.text).toMatch(/→ doc_structure로 최신 eid·id와 rev를 다시 읽고/);
+    const bad = await tool(token, "doc_ops", { ref: "process/guide", ops: [{ t: "tableRow", eid: p[1], at: 0, op: "add" }] });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toMatch(/→ 쓸 수 있는 연산: HTML 연산/);
+    const list = await tool(token, "revision_list", { ref: "process/guide" });
+    expect(list.text).toMatch(/^r1 \(지금\) · agent · owner@test\.com · .* · Claude Code: 구조 연산 1개$/m);
+    const back = await tool(token, "revision_restore", { ref: "process/guide", rev: 0 });
+    expect(back.text).toMatch(/기준 버전 내용으로 수정본 2를 만들었습니다/);
   });
 });

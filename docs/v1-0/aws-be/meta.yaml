@@ -1,0 +1,24 @@
+title: AWS 배포 (BE)
+category: markdown
+menu: v1-0
+kind: markdown
+status: draft
+current: v0.2
+versions:
+  - version: v0.0
+    entry: aws-be.md
+    note: 새 문서
+    source: upload
+    created: 2026-10-16 13:26:10
+  - version: v0.1
+    entry: aws-be.md
+    note:
+    source: edit
+    created: 2026-10-16 13:26:26
+  - version: v0.2
+    entry: aws-be.md
+    note:
+    source: edit
+    created: 2026-10-19 19:28:53
+notion_url:
+gdrive_url:

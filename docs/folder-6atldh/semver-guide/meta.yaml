@@ -1,0 +1,19 @@
+title: 소프트웨어 버전관리 (SemVer)
+category: sdlc
+menu: folder-6atldh
+kind: html
+status: draft
+current: v0.1
+versions:
+  - version: v0.0
+    entry: semver-guide.html
+    note:
+    source: upload
+    created: 2026-10-16 17:03:29
+  - version: v0.1
+    entry: semver-guide.html
+    note: 텍스트 14곳 수정
+    source: text-edit
+    created: 2026-10-16 17:18:59
+notion_url:
+gdrive_url:

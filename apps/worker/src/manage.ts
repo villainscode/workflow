@@ -311,15 +311,37 @@ export async function purgeDoc(env: { DB: D1Database; BLOBS: R2Bucket }, ws: Wor
   const marks = ids.map(() => "?").join(", ");
   const { results: shas } = await db.prepare(`SELECT DISTINCT f.sha256 FROM version_file f JOIN document_version v ON v.id = f.version_id
     WHERE v.document_id IN (${marks})`).bind(...ids).all<{ sha256: string }>();
+  // 지울 문서의 수정본(5.0)이 쓰던 매니페스트와 파일도 후보에 넣는다
+  const { results: mans } = await db.prepare(`SELECT DISTINCT manifest_sha FROM document_revision WHERE document_id IN (${marks})`).bind(...ids).all<{ manifest_sha: string }>();
+  const candidates = new Set(shas.map((x) => x.sha256));
+  for (const { manifest_sha } of mans) {
+    candidates.add(manifest_sha);
+    const obj = await env.BLOBS.get(blobKey(ws.id, manifest_sha));
+    if (obj) for (const f of (JSON.parse(await obj.text()) as { files: { sha256: string }[] }).files) candidates.add(f.sha256);
+  }
   await db.batch([
+    db.prepare(`UPDATE document_version SET revision_id = NULL WHERE document_id IN (${marks})`).bind(...ids),
+    db.prepare(`DELETE FROM document_head WHERE document_id IN (${marks})`).bind(...ids),
+    db.prepare(`DELETE FROM document_revision WHERE document_id IN (${marks})`).bind(...ids),
     db.prepare(`DELETE FROM version_file WHERE version_id IN (SELECT id FROM document_version WHERE document_id IN (${marks}))`).bind(...ids),
     db.prepare(`DELETE FROM document_version WHERE document_id IN (${marks})`).bind(...ids),
     db.prepare(`UPDATE document SET parent_id = NULL WHERE id IN (${marks})`).bind(...ids),
     db.prepare(`DELETE FROM document WHERE id IN (${marks})`).bind(...ids),
   ]);
-  for (const { sha256 } of shas) {
+  // 다른 문서의 버전·수정본, 편집기 이미지 자산이 쓰는 blob은 남긴다
+  const keep = new Set<string>();
+  const { results: others } = await db.prepare(`SELECT DISTINCT r.manifest_sha FROM document_revision r JOIN document d ON d.id = r.document_id
+    WHERE d.workspace_id = ?`).bind(ws.id).all<{ manifest_sha: string }>();
+  for (const { manifest_sha } of others) {
+    keep.add(manifest_sha);
+    const obj = await env.BLOBS.get(blobKey(ws.id, manifest_sha));
+    if (obj) for (const f of (JSON.parse(await obj.text()) as { files: { sha256: string }[] }).files) keep.add(f.sha256);
+  }
+  for (const sha256 of candidates) {
+    if (keep.has(sha256)) continue;
     const used = await db.prepare(`SELECT 1 FROM version_file f JOIN document_version v ON v.id = f.version_id JOIN document d ON d.id = v.document_id
-      WHERE d.workspace_id = ? AND f.sha256 = ? LIMIT 1`).bind(ws.id, sha256).first();
+      WHERE d.workspace_id = ? AND f.sha256 = ? LIMIT 1`).bind(ws.id, sha256).first()
+      ?? await db.prepare("SELECT 1 FROM asset WHERE workspace_id = ? AND sha256 = ?").bind(ws.id, sha256).first();
     if (!used) await env.BLOBS.delete(blobKey(ws.id, sha256));
   }
 }

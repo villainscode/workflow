@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>슬라이드 편집기 구현 명세</title>
+<!-- Noto Sans KR: 한글 본문 가독성과 굵기 단계가 충분하다. JetBrains Mono: 코드·경로·타입을 본문과 구분한다. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f8f8f6; --surface:#ffffff; --text:#1d2127; --muted:#5a616b; --line:#dcdcd6;
+  --accent:#0f6b58; --accent-soft:#e7f1ed; --code-bg:#f1f1ee; --warn:#9a3412;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16191d; --surface:#1d2126; --text:#e8e9e6; --muted:#a3a9b1; --line:#343a42;
+    --accent:#6cc4a9; --accent-soft:#1f2f2a; --code-bg:#22272d; --warn:#f0a070;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16191d; --surface:#1d2126; --text:#e8e9e6; --muted:#a3a9b1; --line:#343a42;
+  --accent:#6cc4a9; --accent-soft:#1f2f2a; --code-bg:#22272d; --warn:#f0a070;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Noto Sans KR',system-ui,sans-serif;font-size:16px;line-height:1.7;word-break:keep-all}
+main{max-width:1040px;margin:0 auto;padding:48px 16px 96px}
+header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px}
+h1{font-size:32px;line-height:1.3;margin:0 0 12px;font-weight:700}
+h2{font-size:24px;line-height:1.35;margin:56px 0 16px;font-weight:700;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:32px 0 8px;font-weight:600}
+p,li{max-width:68ch}
+p{margin:0 0 12px}
+ul,ol{margin:0 0 16px;padding-left:24px}
+li{margin:4px 0}
+.meta{color:var(--muted);font-size:14px;margin:0}
+.n{font-family:'JetBrains Mono',monospace;color:var(--accent);font-size:16px;margin-right:12px;font-weight:500}
+code{font-family:'JetBrains Mono',monospace;font-size:14px;background:var(--code-bg);padding:1px 4px;border-radius:4px}
+pre{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:16px;overflow-x:auto;margin:0 0 20px}
+pre code{background:none;padding:0}
+.c{color:var(--muted)}
+.table-wrap{overflow-x:auto;margin:0 0 20px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px;border-bottom:1px solid var(--line)}
+th{font-weight:600;color:var(--muted);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+.note{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:12px 16px;margin:0 0 20px}
+.note b{display:block;margin-bottom:4px}
+.note.warn b{color:var(--warn)}
+.toc{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 24px}
+.toc ol{margin:0;columns:2;column-gap:32px}
+.toc a{color:var(--text);text-decoration:none}
+.toc a:hover{color:var(--accent);text-decoration:underline}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.flow{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;white-space:pre;overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;margin:0 0 20px}
+@media (max-width:640px){ .toc ol{columns:1} h1{font-size:26px} }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>슬라이드 편집기 구현 명세</h1>
+  <p>에이전트가 만든 16:9 슬라이드를 업무 문서 사이트(Cloudflare 앱)에서 사람이 클릭해 고치는 기능의 기술 선택과 구현 순서. 이 문서를 개발 에이전트에 그대로 넣는 것을 전제로, 결정은 하나로 정하고 이유를 붙였다.</p>
+  <p class="meta">기준: TECH-STACK.md (2026-10-29) · 대상: <code>apps/worker</code>, <code>packages/core</code>, <code>packages/mcp-tools</code>, 화면(React 19)</p>
+</header>
+
+<nav class="toc" aria-label="목차">
+  <ol>
+    <li><a href="#scope">범위</a></li>
+    <li><a href="#decisions">결정 요약</a></li>
+    <li><a href="#format">슬라이드 형식</a></li>
+    <li><a href="#core">core: 파서·검증·직렬화</a></li>
+    <li><a href="#render">렌더링</a></li>
+    <li><a href="#edit">편집 상호작용</a></li>
+    <li><a href="#table">표 편집</a></li>
+    <li><a href="#image">이미지 업로드</a></li>
+    <li><a href="#state">상태·되돌리기</a></li>
+    <li><a href="#save">저장·동시 편집</a></li>
+    <li><a href="#agent">에이전트(MCP) 연동</a></li>
+    <li><a href="#export">내보내기</a></li>
+    <li><a href="#security">보안</a></li>
+    <li><a href="#phases">구현 순서</a></li>
+    <li><a href="#tests">테스트 기준</a></li>
+    <li><a href="#not">하지 않는 것</a></li>
+  </ol>
+</nav>
+
+<section id="scope">
+<h2><span class="n">01</span>범위</h2>
+<p>에이전트는 MCP 도구로 덱을 만들고, 사람은 화면에서 다음을 한다.</p>
+<ul>
+  <li>요소를 클릭해 선택하고, 더블클릭으로 글자를 고친다(굵게·기울임·밑줄·링크·글자색).</li>
+  <li>왼쪽 패널에서 슬라이드 목록을 보고 순서를 바꾸고, 오른쪽 속성 패널에서 크기·색·여백·간격을 바꾼다.</li>
+  <li>고정 위치 요소를 끌어 옮기고 크기를 바꾼다. 흐름 배치 요소는 순서와 크기만 바꾼다.</li>
+  <li>표의 열 너비를 끌어 바꾸고, 행·열을 넣고 뺀다.</li>
+  <li>이미지를 올리고(파일 선택·끌어 놓기·붙여 넣기), 맞춤 방식과 자르기 위치를 고른다.</li>
+  <li>되돌리기·다시 하기, 자동 저장, 다른 사람이 바꾼 슬라이드의 실시간 반영.</li>
+  <li>발표 모드와 PDF 내보내기.</li>
+</ul>
+</section>
+
+<section id="decisions">
+<h2><span class="n">02</span>결정 요약</h2>
+<p>기존 스택에 더하는 것만 적는다. 버전은 설치 시점의 최신 안정판을 쓰고, React 19와 함께 동작하는지 설치 직후 확인한다.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>영역</th><th>선택</th><th>이유</th></tr></thead>
+  <tbody>
+    <tr><td>저장 형식</td><td>슬라이드마다 제한된 HTML 한 조각 + 덱 색인 JSON</td><td>에이전트가 가장 잘 쓰는 형식이고, 사람이 diff로 읽을 수 있다. 지금 쓰는 데크 형식과 같다(§03)</td></tr>
+    <tr><td>파싱·검증·직렬화</td><td><code>parse5</code>(이미 사용) + <code>css-tree</code>, <code>packages/core/slide/</code></td><td>Node·Workers·브라우저 공통. 화면·API·MCP가 같은 검증기를 쓴다</td></tr>
+    <tr><td>렌더링</td><td>노드 트리를 React 요소로 그린다. <code>innerHTML</code> 금지</td><td>허용 목록 밖은 그릴 방법이 없어 XSS가 구조적으로 막히고, 요소마다 <code>data-eid</code>를 붙이기 쉽다</td></tr>
+    <tr><td>선택·이동·크기</td><td><code>react-moveable</code> (+ 여러 개 선택은 <code>selecto</code>)</td><td>확대·축소된 캔버스 안에서 끌기·크기·맞춤선을 한 번에 준다. 직접 만들면 변환 행렬 처리에 시간이 든다</td></tr>
+    <tr><td>글자 편집</td><td>Tiptap(ProseMirror). 확장은 Document·Paragraph·Text·Bold·Italic·Underline·Link·TextStyle·Color만</td><td>한글 IME 조합 입력을 안정적으로 처리한다. 순수 <code>contentEditable</code>은 조합 중 커서·중복 입력 문제가 잦다</td></tr>
+    <tr><td>슬라이드 순서</td><td><code>@dnd-kit/core</code> + <code>@dnd-kit/sortable</code></td><td>목록 재정렬, 키보드 접근성 포함</td></tr>
+    <tr><td>편집 상태</td><td><code>zustand</code> + <code>immer</code>(<code>produceWithPatches</code>)</td><td>역패치로 되돌리기를 만든다. 서버 데이터는 TanStack Query가 계속 맡는다</td></tr>
+    <tr><td>색 고르기</td><td><code>react-colorful</code></td><td>작고 의존성이 없다. 덱 팔레트 견본을 먼저 보여 준다</td></tr>
+    <tr><td>저장 위치</td><td>D1(덱·슬라이드·수정본), R2(이미지·글꼴·PDF)</td><td>슬라이드 HTML은 수 KB~수십 KB라 D1 행에 둔다. 파일은 기존 sha256 저장을 그대로 쓴다</td></tr>
+    <tr><td>실시간</td><td>Durable Object 하나가 덱 하나를 맡는다(기존 WebSocket Hibernation)</td><td>저장 알림·접속자 표시만 보낸다. 내용 병합은 서버의 수정본 번호로 한다</td></tr>
+    <tr><td>PDF</td><td>Cloudflare Browser Rendering(<code>@cloudflare/puppeteer</code>)으로 발표 화면을 인쇄</td><td>화면과 같은 렌더러를 쓰므로 결과가 같다. 안 되면 변환 컨테이너에 Chromium을 추가한다</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<section id="format">
+<h2><span class="n">03</span>슬라이드 형식</h2>
+<p>캔버스는 1920×1080px로 고정한다. 화면 크기와 상관없이 같은 좌표계를 쓰고, 보여 줄 때만 축소한다.</p>
+
+<h3>덱 색인</h3>
+<pre><code>{
+  "v": 1,
+  "title": "Platform팀 업무 소개",
+  "order": ["cover", "agenda", "team"],
+  "sections": { "s1": { "description": "팀 소개", "start": "team" } },
+  "faces": { "ibm-plex-sans-kr": { "family": "IBM Plex Sans KR",
+             "href": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700" } },
+  "palette": ["#1c2026", "#f7f7f4", "#0e6b57"]   <span class="c">// 속성 패널 색 견본</span>
+}</code></pre>
+
+<h3>슬라이드 한 장</h3>
+<pre><code>&lt;section id="team" data-eid="team" style="background:#f7f7f4;padding:128px;display:flex;flex-direction:column;gap:48px"&gt;
+  &lt;h2 data-eid="e1" style="font-size:64px;font-weight:700;color:#1c2026"&gt;팀 소개&lt;/h2&gt;
+  &lt;img data-eid="e2" src="asset:3f9a…" alt="콘솔 화면"
+       style="position:absolute;left:896px;top:292px;width:896px;height:525px;object-fit:contain"&gt;
+  &lt;aside&gt;발표자 노트&lt;/aside&gt;
+&lt;/section&gt;</code></pre>
+
+<h3>허용 목록</h3>
+<div class="table-wrap"><table>
+  <thead><tr><th>구분</th><th>허용</th></tr></thead>
+  <tbody>
+    <tr><td>블록</td><td><code>section</code> <code>div</code> <code>h1</code> <code>h2</code> <code>h3</code> <code>p</code> <code>ul</code> <code>ol</code> <code>li</code> <code>table</code> <code>tr</code> <code>th</code> <code>td</code> <code>img</code> <code>hr</code> <code>aside</code></td></tr>
+    <tr><td>인라인</td><td><code>b</code> <code>i</code> <code>u</code> <code>a[href^=https]</code> <code>span[style=color]</code> <code>br</code></td></tr>
+    <tr><td>속성</td><td><code>id</code>(section만) <code>data-eid</code> <code>style</code> <code>src</code>(<code>asset:</code>만) <code>alt</code> <code>href</code></td></tr>
+    <tr><td>CSS</td><td>위치(<code>position</code> absolute·relative, <code>left</code> <code>top</code> <code>right</code> <code>bottom</code> <code>width</code> <code>height</code>), 배치(<code>display</code> flex·grid, <code>flex-*</code>, <code>grid-template-columns</code>, <code>gap</code>, <code>align-*</code>, <code>justify-*</code>, <code>padding</code>), 글자(<code>font-*</code>, <code>line-height</code>, <code>letter-spacing</code>, <code>color</code>, <code>text-align</code>, <code>text-decoration</code>), 상자(<code>background</code> 단색, <code>border*</code>, <code>border-radius</code>), 이미지(<code>object-fit</code>, <code>object-position</code>). 단위는 px·%·fr만</td></tr>
+    <tr><td>금지</td><td><code>script</code>, <code>on*</code> 속성, <code>style</code> 태그(글꼴은 덱 색인으로), 외부 <code>url()</code>, <code>margin</code>(간격은 <code>gap</code>·<code>padding</code>으로), <code>z-index</code>(그리는 순서 = 문서 순서)</td></tr>
+  </tbody>
+</table></div>
+<div class="note"><b>요소 두 종류</b>
+<p><code>position:absolute</code>인 <em>고정 요소</em>는 끌어서 옮기고 크기를 바꾼다. 나머지 <em>흐름 요소</em>는 부모의 flex·grid가 위치를 정하므로 순서와 너비·높이만 바꾼다. 속성 패널에 「고정 위치로 전환」을 두어, 현재 화면상 상자를 계산해 <code>left/top/width/height</code>로 바꾼다.</p></div>
+</section>
+
+<section id="core">
+<h2><span class="n">04</span>core: 파서·검증·직렬화</h2>
+<p><code>packages/core/slide/</code>에 둔다. <code>node:*</code>를 쓰지 않는다는 기존 규칙을 지킨다.</p>
+<pre><code><span class="c">// packages/core/slide/types.ts</span>
+export type Eid = string;
+export type Style = Partial&lt;Record&lt;AllowedProp, string&gt;&gt;;
+
+export type SlideNode =
+  | { kind: "el"; eid: Eid; tag: BlockTag; style: Style; attrs: Attrs; children: SlideNode[] }
+  | { kind: "text"; html: string }            <span class="c">// 인라인 마크만 들어 있는 텍스트 조각</span>
+  | { kind: "img"; eid: Eid; src: `asset:${string}`; alt: string; style: Style; crop?: Crop };
+
+export type Slide = { id: string; root: SlideNode; notes: string };
+
+export function parseSlide(html: string): { slide?: Slide; diagnostics: Diagnostic[] };
+export function serializeSlide(slide: Slide): string;   <span class="c">// 항상 같은 속성 순서·형식으로 출력</span>
+export function validateStyle(prop: string, value: string): Diagnostic | null;  <span class="c">// css-tree로 값 문법 검사</span>
+export function applyOps(slide: Slide, ops: SlideOp[]): { slide: Slide; inverse: SlideOp[] };
+
+export type Diagnostic = { line: number; col: number; code: string; message: string; fix?: string };</code></pre>
+<ul>
+  <li><code>data-eid</code>가 없는 요소에는 파싱할 때 붙이고 저장한다. 한 번 붙은 eid는 바뀌지 않는다. 에이전트의 부분 수정과 사람의 편집이 이 번호로 같은 요소를 가리킨다.</li>
+  <li>검증 실패는 저장을 막고, <code>fix</code>에 가장 가까운 허용 표현을 적는다(예: <code>margin-top:24px</code> → 「부모 gap을 쓰세요」).</li>
+  <li><code>parse → serialize → parse</code> 결과가 같아야 한다(왕복 안정성). 이 성질을 테스트로 묶는다.</li>
+</ul>
+
+<h3>편집 연산</h3>
+<p>사람과 에이전트가 같은 연산으로 슬라이드를 바꾼다. 연산은 eid로 대상을 가리켜, 다른 사람이 같은 슬라이드를 먼저 저장했어도 다시 적용할 수 있다.</p>
+<pre><code>export type SlideOp =
+  | { t: "setText";   eid: Eid; html: string }                       <span class="c">// 인라인 마크만 허용</span>
+  | { t: "setStyle";  eid: Eid; set: Style; unset?: AllowedProp[] }
+  | { t: "setAttr";   eid: Eid; name: "alt" | "href" | "src"; value: string }
+  | { t: "insert";    parent: Eid; index: number; node: SlideNode }
+  | { t: "remove";    eid: Eid }
+  | { t: "move";      eid: Eid; parent: Eid; index: number }
+  | { t: "toPinned";  eid: Eid; box: { left: number; top: number; width: number; height: number } }
+  | { t: "tableCols"; eid: Eid; widths: number[] }                   <span class="c">// 합 100(%)</span>
+  | { t: "tableRow";  eid: Eid; at: number; op: "add" | "remove" }
+  | { t: "tableCol";  eid: Eid; at: number; op: "add" | "remove" }
+  | { t: "setNotes";  text: string };</code></pre>
+</section>
+
+<section id="render">
+<h2><span class="n">05</span>렌더링</h2>
+<pre><code>&lt;SlideCanvas scale={s}&gt;            <span class="c">// 1920×1080 div, transform: scale(s), transform-origin: 0 0</span>
+  &lt;SlideRenderer slide={slide} mode="edit" | "view" | "thumb" | "print" /&gt;
+  &lt;SelectionLayer /&gt;               <span class="c">// Moveable, 표 손잡이, 맞춤선. 캔버스와 같은 변환 안에 둔다</span>
+&lt;/SlideCanvas&gt;</code></pre>
+<ul>
+  <li><code>SlideRenderer</code>는 노드를 재귀로 React 요소로 만든다. <code>style</code> 문자열이 아니라 검증된 객체를 React <code>style</code>로 넘긴다. 인라인 텍스트 조각만 core가 다시 검증한 뒤 <code>dangerouslySetInnerHTML</code>로 넣는다(허용 마크 5개뿐).</li>
+  <li>썸네일·발표·인쇄·편집이 모두 이 컴포넌트를 쓴다. 화면마다 다르게 그려지는 문제가 없다.</li>
+  <li>Tailwind preflight가 <code>h1</code> 크기와 목록 기호를 지우므로, 캔버스 안에만 적용되는 기본 스타일 파일(<code>slide-base.css</code>)을 둔다. 형식의 태그 기본값(h1 96px·600, h2 64px, h3 44px, p 32px, 목록 기호·들여쓰기)을 여기서 정한다.</li>
+  <li>Shadow DOM은 쓰지 않는다. ProseMirror 선택 영역과 Moveable 좌표 계산이 shadow root에서 브라우저마다 다르게 동작한 사례가 있다. 스타일 격리는 위 기본 스타일 파일과 인라인 스타일로 충분하다.</li>
+  <li>글꼴은 덱 색인의 Google Fonts 링크를 <code>&lt;head&gt;</code>에 넣는다. <code>document.fonts.ready</code> 뒤에 선택 상자를 다시 잰다.</li>
+  <li><code>asset:</code> 주소는 그릴 때만 서명된 콘텐츠 도메인 주소로 바꾼다(§08).</li>
+</ul>
+</section>
+
+<section id="edit">
+<h2><span class="n">06</span>편집 상호작용</h2>
+<div class="flow">┌ 왼쪽 패널 ─────┐ ┌ 캔버스 ───────────────────────────┐ ┌ 속성 패널 ──────┐
+│ 슬라이드 목록   │ │ 클릭: 선택  더블클릭: 글자 편집     │ │ 선택 요소 종류별 │
+│ (dnd-kit 정렬) │ │ Esc: 부모 선택  Shift+클릭: 추가 선택 │ │ 입력 칸          │
+│ 섹션 묶음       │ │ 화살표: 1px, Shift+화살표: 8px 이동  │ │ (허용 목록 기반) │
+└────────────────┘ └────────────────────────────────────┘ └──────────────────┘</div>
+
+<h3>선택</h3>
+<ul>
+  <li>캔버스에서 <code>pointerdown</code>이 난 요소에서 위로 올라가며 가장 가까운 <code>[data-eid]</code>를 찾는다. 같은 자리를 다시 누르면 한 단계 안쪽 자식을 고른다(겹친 요소 고르기).</li>
+  <li>선택 상태는 eid 배열로 둔다. 화면 좌표는 매번 <code>getBoundingClientRect() / scale</code>로 구한다. 좌표를 상태에 저장하지 않는다.</li>
+  <li>여러 개 선택: Shift+클릭, 빈 곳에서 끌기(<code>selecto</code>).</li>
+</ul>
+
+<h3>이동·크기</h3>
+<ul>
+  <li><code>react-moveable</code>에 선택 요소를 넘긴다. 고정 요소는 <code>draggable</code>·<code>resizable</code>, 흐름 요소는 <code>resizable</code>만 켠다.</li>
+  <li>맞춤선: 캔버스 가장자리, 여백선(128px), 형제 요소의 가장자리·가운데. 8px 단위 격자에 붙인다.</li>
+  <li>끌기 중에는 DOM 스타일만 바꾸고, 놓을 때 <code>setStyle</code> 연산 하나로 확정한다. 되돌리기 한 번에 이동 하나가 취소된다.</li>
+  <li>흐름 요소 순서는 속성 패널의 「앞으로·뒤로」 버튼과 같은 부모 안 끌어 놓기로 바꾼다(<code>move</code> 연산).</li>
+</ul>
+
+<h3>글자</h3>
+<ul>
+  <li>더블클릭한 텍스트 요소의 자식 자리에 Tiptap 편집기를 붙인다. 편집기는 그 요소의 계산된 글꼴·크기·줄 간격을 그대로 물려받는다.</li>
+  <li>도구 막대: 굵게·기울임·밑줄·링크·글자색(덱 팔레트 견본 + 직접 입력). 글자 크기·글꼴은 블록 단위로만 속성 패널에서 바꾼다(형식이 <code>span</code>에 크기를 허용하지 않는다).</li>
+  <li>Esc 또는 바깥 클릭으로 끝내면 HTML을 core 검증기에 통과시켜 <code>setText</code>로 확정한다. Tiptap 자체 기록(History 확장)은 끄고 앱 되돌리기만 쓴다.</li>
+  <li>글이 상자보다 길어지면 글자를 자동으로 줄이지 않는다. 상자 테두리를 경고색으로 바꾸고 「상자 높이 늘리기」 버튼을 보인다. 크기가 슬라이드마다 제각각이 되는 문제를 막는다.</li>
+</ul>
+
+<h3>속성 패널</h3>
+<p>패널 입력 칸은 허용 CSS 목록에서 만든다. 요소 종류별로 보여 줄 묶음만 고른다.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>요소</th><th>묶음</th></tr></thead>
+  <tbody>
+    <tr><td>텍스트(h1~h3, p, ul)</td><td>글꼴, 크기(덱 글자 크기 단계 선택 + 직접 입력), 굵기, 색, 정렬, 줄 간격</td></tr>
+    <tr><td>상자(div)</td><td>배치(flex·grid), 방향, 간격, 안쪽 여백, 배경, 테두리, 모서리</td></tr>
+    <tr><td>이미지</td><td>맞춤(cover·contain), 자르기 위치, 대체 글, 테두리, 모서리, 교체</td></tr>
+    <tr><td>표</td><td>글자 크기, 칸 안쪽 여백, 열 너비(숫자), 행 배경</td></tr>
+    <tr><td>공통</td><td>위치·크기(고정 요소), 고정 위치로 전환, 앞뒤 순서, 삭제</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<section id="table">
+<h2><span class="n">07</span>표 편집</h2>
+<ul>
+  <li>열 너비는 첫 행 칸의 <code>width:N%</code>로만 정한다. 선택된 표의 열 경계마다 손잡이를 캔버스 위 레이어에 그리고, 끌면 이웃 두 열의 비율만 주고받는다. 놓을 때 <code>tableCols</code> 연산 하나로 확정한다.</li>
+  <li>행 높이는 내용과 칸 안쪽 여백으로 정해진다. 행 높이를 직접 끄는 손잡이는 두지 않고, 속성 패널에서 표 전체의 칸 여백을 바꾼다.</li>
+  <li>칸 하나를 클릭하면 그 칸의 글자를 Tiptap(문단 하나, 인라인 마크만)으로 편집한다. Tab·Shift+Tab으로 다음·이전 칸으로 옮긴다.</li>
+  <li>칸 오른쪽 클릭 메뉴: 위·아래 행 넣기, 왼쪽·오른쪽 열 넣기, 행·열 삭제. 열을 넣으면 너비를 균등하게 다시 나눈다.</li>
+  <li>칸 병합(colspan·rowspan)은 형식에서 허용하지 않으므로 메뉴에도 두지 않는다.</li>
+</ul>
+</section>
+
+<section id="image">
+<h2><span class="n">08</span>이미지 업로드</h2>
+<ol>
+  <li>입력: 파일 선택, 캔버스에 끌어 놓기, 클립보드 붙여 넣기.</li>
+  <li>브라우저에서 긴 변 3840px 넘는 이미지는 줄이고(<code>createImageBitmap</code> + <code>OffscreenCanvas</code>), PNG·JPEG·WebP만 받는다. SVG는 받지 않는다(스크립트 위험).</li>
+  <li><code>@noble/hashes</code>로 sha256을 계산해 서버에 이미 있는지 먼저 묻는다. 없을 때만 기존 업로드 API로 R2에 올린다.</li>
+  <li>슬라이드에는 <code>src="asset:&lt;sha256&gt;"</code>만 저장한다. 서명 토큰이 12~24시간 뒤 만료되므로 서명 주소를 HTML에 저장하면 안 된다.</li>
+  <li>그릴 때 <code>GET /api/w/:ws/assets/:sha/url</code>로 서명 주소를 받는다. TanStack Query의 <code>staleTime</code>을 토큰 유효 시간보다 짧게 둔다.</li>
+  <li>자르기: <code>object-fit</code>과 <code>object-position</code>, 확대는 <code>data-crop="배율 X% Y%"</code>로 저장하고 렌더러가 <code>transform: scale()</code>로 그린다.</li>
+</ol>
+</section>
+
+<section id="state">
+<h2><span class="n">09</span>상태·되돌리기</h2>
+<pre><code>type EditorState = {
+  deckId: string;
+  slides: Record&lt;string, { slide: Slide; rev: number; pending: SlideOp[] }&gt;;
+  current: string;              <span class="c">// 보고 있는 슬라이드 id</span>
+  selection: Eid[];
+  undo: HistoryEntry[]; redo: HistoryEntry[];
+};
+type HistoryEntry = { slideId: string; ops: SlideOp[]; inverse: SlideOp[] };</code></pre>
+<ul>
+  <li><code>applyOps</code>가 역연산을 돌려준다. 되돌리기는 역연산을 새 연산으로 적용하고 저장한다. 서버 쪽에는 「되돌리기」라는 개념이 없다.</li>
+  <li>되돌리기 기록은 슬라이드별이 아니라 편집기 전체에 하나. 다른 사람이 저장해 슬라이드가 바뀌면 그 슬라이드의 기록 중 적용할 수 없는 항목(eid가 사라진 것)은 지운다.</li>
+  <li>단축키: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z, Cmd/Ctrl+D(복제), Delete, Cmd/Ctrl+C·V(요소 복사, eid는 새로 붙임).</li>
+</ul>
+</section>
+
+<section id="save">
+<h2><span class="n">10</span>저장·동시 편집</h2>
+<h3>D1 테이블</h3>
+<pre><code><span class="c">-- migrations/0004_decks.sql</span>
+CREATE TABLE decks (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT NOT NULL,
+  index_json TEXT NOT NULL,             <span class="c">-- order, sections, faces, palette</span>
+  rev INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE slides (
+  deck_id TEXT NOT NULL, id TEXT NOT NULL,
+  html TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 1,
+  updated_by TEXT NOT NULL, updated_at INTEGER NOT NULL,
+  PRIMARY KEY (deck_id, id)
+);
+CREATE TABLE slide_revisions (
+  deck_id TEXT NOT NULL, slide_id TEXT NOT NULL, rev INTEGER NOT NULL,
+  html TEXT NOT NULL, author TEXT NOT NULL, source TEXT NOT NULL,   <span class="c">-- 'human' | 'agent'</span>
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (deck_id, slide_id, rev)
+);</code></pre>
+
+<h3>API (Hono)</h3>
+<div class="table-wrap"><table>
+  <thead><tr><th>요청</th><th>내용</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/w/:ws/decks/:id</code></td><td>색인과 모든 슬라이드(HTML, rev)</td></tr>
+    <tr><td><code>PATCH /api/w/:ws/decks/:id/slides/:sid</code></td><td><code>{ baseRev, ops }</code>. 서버가 현재 HTML에 연산을 적용·검증하고 rev+1로 저장</td></tr>
+    <tr><td><code>PUT /api/w/:ws/decks/:id/slides/:sid</code></td><td><code>{ baseRev, html }</code> 통째 교체(에이전트용)</td></tr>
+    <tr><td><code>PATCH /api/w/:ws/decks/:id</code></td><td><code>{ baseRev, index }</code> 순서·섹션·제목·글꼴</td></tr>
+    <tr><td><code>GET …/slides/:sid/revisions</code></td><td>수정본 목록, 특정 rev로 되돌리기(새 rev로 저장)</td></tr>
+  </tbody>
+</table></div>
+
+<h3>충돌 처리</h3>
+<ul>
+  <li>화면은 연산을 모아 두었다가 마지막 편집 800ms 뒤에 한 번 보낸다. 슬라이드를 바꾸거나 창을 닫을 때는 바로 보낸다(<code>visibilitychange</code>, <code>pagehide</code>에서 <code>fetch keepalive</code>).</li>
+  <li><code>baseRev</code>가 서버 rev와 다르면 서버는 연산을 최신 HTML에 다시 적용해 본다. 모든 대상 eid가 있으면 저장하고, 없으면 409와 최신 HTML을 돌려준다.</li>
+  <li>409를 받으면 화면은 최신본을 받아 남은 연산을 다시 적용하고, 적용 못 한 연산은 「다른 사람이 지운 요소라 반영하지 못했다」고 알린다.</li>
+  <li>저장이 끝나면 덱의 Durable Object에 <code>{ slideId, rev, by }</code>를 알리고, 다른 접속자는 그 슬라이드만 다시 받는다. 접속자 표시(누가 어느 슬라이드에 있는지)도 같은 연결로 보낸다.</li>
+  <li>글자 단위 동시 편집(Yjs 등)은 1차 범위에 넣지 않는다. 같은 슬라이드를 동시에 고치는 일이 드물다는 전제다. 필요해지면 슬라이드 단위 Yjs 문서 + Durable Object로 옮긴다.</li>
+</ul>
+</section>
+
+<section id="agent">
+<h2><span class="n">11</span>에이전트(MCP) 연동</h2>
+<p><code>packages/mcp-tools</code>에 도구를 더한다. 로컬 stdio와 원격 MCP가 같은 코드를 쓰는 기존 구조를 따른다.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>도구</th><th>입력</th><th>용도</th></tr></thead>
+  <tbody>
+    <tr><td><code>deck_create</code></td><td>title, index</td><td>빈 덱 생성</td></tr>
+    <tr><td><code>deck_get</code></td><td>deckId, slideIds?</td><td>색인과 슬라이드 HTML·rev 읽기. 사람이 고친 뒤에는 반드시 다시 읽는다</td></tr>
+    <tr><td><code>slide_put</code></td><td>deckId, slideId, html, baseRev?</td><td>새 슬라이드나 통째 교체</td></tr>
+    <tr><td><code>slide_patch</code></td><td>deckId, slideId, ops, baseRev</td><td>작은 수정. eid로 대상을 가리켜 사람의 다른 편집을 덮지 않는다</td></tr>
+    <tr><td><code>asset_put</code></td><td>bytes 또는 url, mime</td><td>이미지 올리기, <code>asset:</code> 주소 반환</td></tr>
+    <tr><td><code>deck_render</code></td><td>deckId, slideId</td><td>PNG 미리보기(배치 확인용)</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li>모든 쓰기 도구는 core 검증 결과(<code>Diagnostic[]</code>)를 그대로 돌려준다. 에이전트가 오류 위치와 <code>fix</code>를 보고 스스로 고친다.</li>
+  <li>도구 설명에 형식 요약(§03 허용 목록, 캔버스 1920×1080, 여백 128px, 글자 최소 24px)을 넣는다. 에이전트가 처음부터 맞는 HTML을 쓰게 한다.</li>
+  <li><code>slide_revisions.source</code>에 <code>agent</code>를 남겨, 사람이 수정본 목록에서 에이전트 변경을 구분하고 되돌릴 수 있게 한다.</li>
+</ul>
+</section>
+
+<section id="export">
+<h2><span class="n">12</span>내보내기</h2>
+<ul>
+  <li>발표 모드: <code>/w/:ws/decks/:id/present</code>. 같은 <code>SlideRenderer</code>를 화면 크기에 맞춰 축소, 방향키·스페이스로 넘김, 발표자 노트 창.</li>
+  <li>PDF: Worker가 Browser Rendering으로 <code>/present?print=1</code>(서비스용 단기 토큰)을 열어 1920×1080 페이지로 인쇄하고 R2에 캐시한다. 키는 덱 rev 묶음의 해시. 인쇄 전에 <code>document.fonts.ready</code>와 모든 이미지 <code>decode()</code>를 기다린다.</li>
+  <li>PPTX: 2차 범위. 넣는다면 PptxGenJS로 고정 요소는 위치 그대로, 흐름 요소는 화면에서 잰 상자로 바꿔 내보낸다. 편집 가능한 PPTX를 완벽히 재현하려 하지 않는다.</li>
+</ul>
+</section>
+
+<section id="security">
+<h2><span class="n">13</span>보안</h2>
+<ul>
+  <li>렌더러는 허용 목록 노드만 그린다. 서버는 저장 전에 같은 검증기를 다시 돌린다(화면 검증만 믿지 않는다).</li>
+  <li>링크는 <code>https:</code>만, 그릴 때 <code>rel="noopener noreferrer" target="_blank"</code>를 붙인다.</li>
+  <li>이미지는 기존 규칙대로 콘텐츠 도메인에서만 준다. 앱 CSP의 <code>img-src</code>에 콘텐츠 도메인을, <code>style-src</code>·<code>font-src</code>에 Google Fonts 두 도메인을 더한다.</li>
+  <li>슬라이드 쓰기 API는 기존 Origin 검사와 쓰기 제한(분당 120회)을 그대로 받는다. 자동 저장 묶음(800ms) 덕에 보통 편집은 이 한도에 닿지 않는다.</li>
+  <li>viewer 역할은 편집기를 열 수 없고 발표 모드만 본다.</li>
+</ul>
+</section>
+
+<section id="phases">
+<h2><span class="n">14</span>구현 순서</h2>
+<p>단계마다 앞 단계 테스트가 통과한 상태에서 시작한다.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>단계</th><th>내용</th><th>끝난 기준</th></tr></thead>
+  <tbody>
+    <tr><td>1. 형식과 보기</td><td>core 파서·검증·직렬화·연산, D1 마이그레이션, 덱 API, <code>SlideRenderer</code>, 발표 모드, MCP <code>deck_create</code>·<code>deck_get</code>·<code>slide_put</code></td><td>에이전트가 만든 덱을 브라우저에서 볼 수 있다. 왕복 테스트 통과</td></tr>
+    <tr><td>2. 선택과 글자</td><td>선택, 속성 패널(텍스트·상자), Tiptap 글자 편집, 자동 저장, rev 충돌 처리, 되돌리기</td><td>한글 입력·저장·새로 고침 뒤 유지, 두 창에서 409 경로 확인</td></tr>
+    <tr><td>3. 배치</td><td>Moveable 이동·크기·맞춤선, 고정 위치로 전환, 흐름 순서, 슬라이드 목록 정렬·복제·삭제</td><td>확대 비율 0.5·0.75·1에서 좌표 오차 1px 이내</td></tr>
+    <tr><td>4. 표와 이미지</td><td>표 손잡이·행열 편집, 이미지 업로드·교체·자르기, <code>slide_patch</code>·<code>asset_put</code></td><td>표 열 비율 합 100 유지, 서명 만료 후에도 이미지 표시</td></tr>
+    <tr><td>5. 공유</td><td>Durable Object 저장 알림·접속자 표시, 수정본 목록·되돌리기, PDF 내보내기, <code>deck_render</code></td><td>다른 창 반영 2초 이내, PDF 글꼴 일치</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<section id="tests">
+<h2><span class="n">15</span>테스트 기준</h2>
+<ul>
+  <li><b>core(Vitest)</b>: 형식 예제 덱 전체의 왕복 안정성, 허용 목록 밖 태그·속성·CSS마다 진단 1건, 연산마다 적용 후 역연산 적용 시 원본과 같음.</li>
+  <li><b>Worker(Vitest + vitest-plugin)</b>: rev 충돌(같은 eid 수정, 지워진 eid 수정), 검증 실패 시 저장 안 됨, viewer 쓰기 거부, Origin 거부.</li>
+  <li><b>화면(puppeteer)</b>: 더블클릭 → 한글 조합 입력(「한글 입력」을 IME 이벤트로) → Esc → 새로 고침 후 유지. 이미지 끌어 놓기. 열 손잡이 끌기 후 비율. 두 탭 동시 저장.</li>
+  <li><b>MCP</b>: 잘못된 HTML을 <code>slide_put</code>하면 줄·칸·fix가 담긴 진단이 돌아오는지.</li>
+</ul>
+</section>
+
+<section id="not">
+<h2><span class="n">16</span>하지 않는 것</h2>
+<ul>
+  <li>자유 HTML·CSS 편집 창. 형식을 벗어난 슬라이드가 생기고 검증기와 어긋난다. 필요하면 「HTML 보기」는 읽기 전용으로만 둔다.</li>
+  <li>글이 넘칠 때 글자 크기 자동 축소. 슬라이드마다 크기가 달라지는 원인이 된다(§06).</li>
+  <li>z-index, margin, 그라데이션·그림자 같은 장식 속성. 형식이 허용하지 않고, 속성 패널에도 두지 않는다.</li>
+  <li>PPTX 원본 편집 재현. 원본은 항상 HTML 형식이고 PPTX는 내보내기 결과일 뿐이다.</li>
+</ul>
+</section>
+
+</main>
+</body>
+</html>

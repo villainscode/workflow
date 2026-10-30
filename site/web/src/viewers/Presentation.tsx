@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { fileSrc, useText, type VersionFile } from "../lib/api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
@@ -50,8 +50,11 @@ const ext = (p: string) => p.slice(p.lastIndexOf(".") + 1).toLowerCase();
  * - HTML·Markdown: 기준 너비로 그린 뒤 화면 너비에 비례해 확대 (Markdown은 편집기 없이 미리보기만)
  * - 이미지·PDF·표 등: 원래 화면을 채우는 뷰어라 그대로 넓힌다
  */
+const DeckShow = lazy(() => import("./deck/DeckViewer.tsx").then((m) => ({ default: m.DeckShow })));
+
 export function PresentationContent({ file, ctx }: { file: VersionFile; ctx: DocContext }) {
   const e = ext(file.path);
+  if (file.path === "deck.json") return <Suspense fallback={null}><DeckShow menu={ctx.menu} doc={ctx.doc} version={ctx.version} /></Suspense>;
   if (e === "html" || e === "htm") {
     return (
       <ScaledBox>
