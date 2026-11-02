@@ -11,6 +11,7 @@ import { createServer, type Server } from "node:http";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
+import { officeProxyPath } from "@workflow/core/office";
 import { call, freePort, makeWorkspace, startServer, upload, waitFor, type TestServer } from "./helpers.ts";
 
 const REAL = process.env.ONLYOFFICE_REAL_URL ?? "";
@@ -47,6 +48,10 @@ describe("실제 오피스 서버 왕복(6.0 VO)", { skip }, () => {
       </script></body></html>`);
     }).listen(port, "127.0.0.1");
     const tab = await browser.newPage();
+    // 편집기가 오피스 서버에 보내는 경로를 모은다: Worker 프록시 허용 목록(officeProxyPath) 밖이면 Cloudflare에서 막힌다(V6 보안 점검)
+    const paths = new Set<string>();
+    const officeOrigin = new URL(REAL).origin;
+    tab.on("request", (r: any) => { try { const u = new URL(r.url()); if (u.origin === officeOrigin) paths.add(u.pathname); } catch { /* data: 등 */ } });
     await tab.setViewport({ width: 1200, height: 800 });
     await tab.goto(`http://127.0.0.1:${port}/`, { waitUntil: "domcontentloaded" });
     await tab.waitForFunction(() => (window as any).ready === true, { timeout: 90_000 });
@@ -64,5 +69,8 @@ describe("실제 오피스 서버 왕복(6.0 VO)", { skip }, () => {
     const f = w.files.find((x: { path: string }) => x.path === "report.docx");
     const saved = new Uint8Array(await (await fetch(srv.url + f.url)).arrayBuffer());
     assert.match(strFromU8(unzipSync(saved)["word/document.xml"]), /VO round trip/);
+    const blocked = [...paths].filter((p) => !officeProxyPath(p));
+    assert.deepEqual(blocked, [], `프록시가 막는 편집기 경로: ${blocked.join(", ")}`);
+    assert.ok(paths.size > 5, `모은 경로 ${paths.size}개`);
   });
 });

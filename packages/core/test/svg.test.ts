@@ -83,7 +83,7 @@ describe("SVG 소독", () => {
     assert.match(svg, /xlink:href="#s1-p"/);
     assert.match(svg, /#s1 \.st0\{fill:url\(#s1-g\)\},?#s1 #s1-p,#s1 rect\{stroke:red\}/);
     const at = scopeSvg(`<svg xmlns="http://www.w3.org/2000/svg"><style>@media print{rect{fill:red}}</style><rect width="1" height="1"/></svg>`, "s2");
-    assert.ok(at.removed.includes("style(@규칙)"));
+    assert.ok(at.removed.includes("style(@규칙·중첩)"));
     assert.doesNotMatch(at.svg, /@media/);
     assert.throws(() => scopeSvg(src, "Bad Prefix"), SvgError);
   });

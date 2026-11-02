@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS revision (id INTEGER PRIMARY KEY AUTOINCREMENT, doc T
   manifest_sha TEXT NOT NULL, source TEXT NOT NULL, summary TEXT, created_at TEXT NOT NULL, published_as TEXT, UNIQUE(doc, rev));
 CREATE TABLE IF NOT EXISTS head (doc TEXT PRIMARY KEY, rev INTEGER NOT NULL, base_version TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS asset (sha256 TEXT PRIMARY KEY, mime TEXT NOT NULL, size INTEGER NOT NULL, width INTEGER, height INTEGER, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS office_session (doc TEXT PRIMARY KEY, doc_key TEXT NOT NULL, rev INTEGER NOT NULL, base_version TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS office_session (doc TEXT PRIMARY KEY, doc_key TEXT NOT NULL, rev INTEGER NOT NULL, base_version TEXT NOT NULL, expires_at INTEGER NOT NULL,
+  started_at INTEGER NOT NULL DEFAULT 0);
 `;
 
 export interface AssetRow { sha256: string; mime: string; size: number; width: number | null; height: number | null }
@@ -47,6 +48,9 @@ export class LocalWork {
     this.db = new Database(join(dataDir, "work.db"));
     this.db.pragma("journal_mode = WAL");
     this.db.exec(SCHEMA);
+    // VO 때 만든 work.db에는 started_at이 없다(V6에서 더함)
+    if (!(this.db.prepare("PRAGMA table_info(office_session)").all() as { name: string }[]).some((c) => c.name === "started_at"))
+      this.db.exec("ALTER TABLE office_session ADD COLUMN started_at INTEGER NOT NULL DEFAULT 0");
   }
 
   // ---------- 내용 주소 blob ----------
@@ -152,14 +156,15 @@ export class LocalWork {
     const key = `${menu}/${doc}`;
     return {
       get: async () => {
-        const r = this.db.prepare("SELECT doc_key, rev, base_version, expires_at FROM office_session WHERE doc = ?").get(key) as
-          { doc_key: string; rev: number; base_version: string; expires_at: number } | undefined;
-        return r ? { key: r.doc_key, rev: r.rev, baseVersion: r.base_version, userId: null, expiresAt: r.expires_at } : null;
+        const r = this.db.prepare("SELECT doc_key, rev, base_version, expires_at, started_at FROM office_session WHERE doc = ?").get(key) as
+          { doc_key: string; rev: number; base_version: string; expires_at: number; started_at: number } | undefined;
+        return r ? { key: r.doc_key, rev: r.rev, baseVersion: r.base_version, userId: null, expiresAt: r.expires_at, startedAt: r.started_at } : null;
       },
       put: async (s) => {
-        this.db.prepare(`INSERT INTO office_session (doc, doc_key, rev, base_version, expires_at) VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT (doc) DO UPDATE SET doc_key = excluded.doc_key, rev = excluded.rev, base_version = excluded.base_version, expires_at = excluded.expires_at`)
-          .run(key, s.key, s.rev, s.baseVersion, s.expiresAt);
+        this.db.prepare(`INSERT INTO office_session (doc, doc_key, rev, base_version, expires_at, started_at) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT (doc) DO UPDATE SET doc_key = excluded.doc_key, rev = excluded.rev, base_version = excluded.base_version,
+          expires_at = excluded.expires_at, started_at = excluded.started_at`)
+          .run(key, s.key, s.rev, s.baseVersion, s.expiresAt, s.startedAt);
       },
       remove: async (k) => { this.db.prepare("DELETE FROM office_session WHERE doc = ? AND doc_key = ?").run(key, k); },
     };

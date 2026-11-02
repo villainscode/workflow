@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FileDown, FilePen, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { Download, ExternalLink, FileDown, FilePen, FilePlus2, LayoutPanelTop, Link2, LockOpen, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { officeState, unlockOffice } from "../lib/office.ts";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -62,6 +64,14 @@ export function DocView() {
   // 오피스 편집기(6.0 VO): DOCX·PPTX·XLSX 서식 편집(ONLYOFFICE). 닫으면 수정본이 되고 구조 편집 화면에서 버전으로 저장한다
   const [officeEditing, setOfficeEditing] = useState(false);
   const editorCfg = useEditorConfig();
+  // 오피스 잠금(편집 세션) 상태: owner가 풀 수 있다(V6 보안 점검, 편집자가 연장만 보내 잠금을 붙드는 경우)
+  const qc = useQueryClient();
+  const officeLock = useQuery({
+    queryKey: ["office-state", menu, doc],
+    enabled: can.own && editorCfg.office && !officeEditing,
+    queryFn: () => officeState(menu, doc),
+    refetchInterval: 60_000,
+  });
   // HTML PDF 내보내기(5.0 M8, Cloudflare Browser Rendering): 진행·오류 안내
   const [exporting, setExporting] = useState("");
   const [exportPct, setExportPct] = useState<number | null>(null);
@@ -109,6 +119,13 @@ export function DocView() {
       message: "편집하는 동안 이 문서의 다른 편집(구조 편집·Claude Code)은 막힙니다. 닫으면 수정본으로 저장되고, 버전은 따로 저장합니다.",
       details: [`문서: ${data!.title}`, "편집 서버가 쉬고 있었다면 깨우는 데 1분쯤 걸립니다"] });
     if (ok) { setRefCopy(false); setParam("seg", null); setOfficeEditing(true); }
+  };
+  const unlock = async () => {
+    const ok = await confirm({ title: "오피스 잠금을 풀까요?", confirmText: "잠금 풀기", tone: "warning",
+      message: "오피스 편집기에서 아직 저장하지 않은 편집은 반영되지 않습니다. 이 문서의 다른 편집이 다시 됩니다." });
+    if (!ok) return;
+    try { await unlockOffice(menu, doc); setSavedNotice("오피스 잠금을 풀었습니다"); } catch (e) { setSavedNotice(`잠금을 풀지 못했습니다: ${(e as Error).message}`); }
+    void qc.invalidateQueries({ queryKey: ["office-state", menu, doc] });
   };
   const onOfficeExit = (savedRev?: number) => {
     setOfficeEditing(false);
@@ -221,6 +238,9 @@ export function DocView() {
           {can.edit && entry && STRUCT_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={LayoutPanelTop} label="구조 편집 (표·그림)" active={structEditing} disabled={structEditing || textEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setStructEditing(true); }} />
+          )}
+          {can.own && officeLock.data?.active && !officeEditing && (
+            <IconButton icon={LockOpen} label="오피스 잠금 풀기 (편집 세션이 이 문서를 잠그고 있습니다)" onClick={() => void unlock()} />
           )}
           {can.edit && editorCfg.office && entry && OFFICE_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={FilePen} label="오피스 편집기로 열기 (서식)" active={officeEditing} disabled={officeEditing || structEditing || textEditing}

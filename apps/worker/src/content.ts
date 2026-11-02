@@ -4,6 +4,7 @@ import { docPath, resolveContent } from "./repo.ts";
 import { assetRow } from "./assets.ts";
 import { loadManifest } from "./revisions.ts";
 import { verifyContentToken } from "./token.ts";
+import { SVG_ASSET_CSP } from "@workflow/core/svg";
 
 /**
  * 사용자 콘텐츠: GET /c/<토큰>/<메뉴>/<상위...>/<문서>/<버전>/<파일 경로>
@@ -25,7 +26,7 @@ export async function serveContent(c: Context<AppEnv>) {
       "content-type": a.mime, "content-length": String(a.size), etag: `"${a.sha256}"`, "cache-control": "private, max-age=31536000, immutable",
       "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
       // SVG 자산(소독함)도 직접 열리면 스크립트가 출처 권한을 갖지 못하게(아래 버전 파일과 같은 규칙)
-      ...(a.mime === "image/svg+xml" ? { "content-security-policy": "sandbox" } : {}),
+      ...(a.mime === "image/svg+xml" ? { "content-security-policy": SVG_ASSET_CSP } : {}),
       // Vary는 늘 붙인다(아래 버전 파일과 같은 이유)
       vary: "Origin",
       ...(c.env.APP_ORIGIN && c.req.header("origin") === c.env.APP_ORIGIN ? { "access-control-allow-origin": c.env.APP_ORIGIN } : {}),

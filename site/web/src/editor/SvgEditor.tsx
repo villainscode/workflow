@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Minus, MousePointer2, Redo2, Save, Square, Trash2, Type, Undo2, X } from "lucide-react";
-import { svgSize, tidySvgEdit } from "@workflow/core/svg";
+import { svgForEditor, svgSize, tidySvgEdit } from "@workflow/core/svg";
 import { IconButton } from "../components/IconButton.tsx";
 
 /**
@@ -49,7 +49,9 @@ export function SvgEditor({ svg, title, onSave, onClose }: {
   const [sel, setSel] = useState<{ fill: string; stroke: string; width: string; text: string | null } | null>(null);
   const [status, setStatus] = useState("편집기를 여는 중…");
   const [, redraw] = useState(0);
-  const size = svgSize(svg);
+  // 앱 화면에 붙이기 전에 소독하고 <style>을 편집 뿌리 아래로 좁힌다(버전 업로드로 들어온 SVG는 소독 전이다, V6 보안 점검)
+  const safe = useMemo(() => { try { return svgForEditor(svg).svg; } catch { return null; } }, [svg]);
+  const size = svgSize(safe ?? svg);
   const viewBox = /<svg\b[^>]*\sviewBox="([^"]+)"/.exec(svg)?.[1];
 
   useEffect(() => { dialog.current?.showModal(); }, []);
@@ -65,7 +67,7 @@ export function SvgEditor({ svg, title, onSave, onClose }: {
       }) as unknown as Canvas;
       c.updateCanvas(size.width, size.height);
       if (input.current) c.textActions.setInputElem(input.current);
-      if (!c.setSvgString(svg)) { setStatus("이 SVG는 편집기로 읽을 수 없습니다"); return; }
+      if (!safe || !c.setSvgString(safe)) { setStatus("이 SVG는 편집기로 읽을 수 없습니다"); return; }
       c.bind("selected", (_w, elems) => {
         const el = (elems as (Element | null)[]).filter(Boolean)[0] ?? null;
         setSel(el ? { fill: el.getAttribute("fill") ?? "", stroke: el.getAttribute("stroke") ?? "", width: el.getAttribute("stroke-width") ?? "1",
@@ -77,7 +79,7 @@ export function SvgEditor({ svg, title, onSave, onClose }: {
       setStatus("");
     })().catch((e) => setStatus(`편집기를 열지 못했습니다: ${(e as Error).message}`));
     return () => { off = true; if (host.current) host.current.innerHTML = ""; canvas.current = null; };
-  }, [svg, size.width, size.height]);
+  }, [safe, size.width, size.height]);
 
   const c = canvas.current;
   const setMode = (m: string) => { c?.setMode(m); setModeState(m); };

@@ -187,7 +187,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
           res.end();
           const body = { key: u.searchParams.get("key"), status: 2, url: `${OFFICE}/cache/out.docx`, users: ["1"] };
           const cb = new URL(u.searchParams.get("cb")!);
-          setTimeout(() => void signJwt({ payload: body }, OFFICE_SECRET).then((t) => fetch(`${BASE}${cb.pathname}${cb.search}`, {
+          setTimeout(() => void signJwt({ payload: body, exp: Math.floor(Date.now() / 1000) + 300 }, OFFICE_SECRET).then((t) => fetch(`${BASE}${cb.pathname}${cb.search}`, {
             method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${t}` }, body: JSON.stringify(body),
           })), 300);
           return;

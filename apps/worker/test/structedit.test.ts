@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { call, getJson, json, seed, upload } from "./helpers.ts";
+import { SVG_ASSET_CSP } from "@workflow/core/svg";
 
 /** 5.0 M3·M5: 구조 편집 연산을 수정본으로 저장(HTML 원본 패치, OOXML 직접 편집 D-47 C) */
 
@@ -117,7 +118,7 @@ describe("구조 편집", () => {
     const u = await getJson(`${W}/assets/${a.sha256}/url`);
     const res = await call(pathOf(u.url));
     expect([res.status, res.headers.get("content-type"), res.headers.get("content-security-policy"), res.headers.get("x-content-type-options")])
-      .toEqual([200, "image/svg+xml", "sandbox", "nosniff"]);
+      .toEqual([200, "image/svg+xml", SVG_ASSET_CSP, "nosniff"]);
     const body = await res.text();
     expect(body).not.toMatch(/script|onclick|alert/);
     expect(body).toContain("라벨");

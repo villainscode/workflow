@@ -15,6 +15,7 @@ import { noteUsage } from "./usage.ts";
  *   화면  POST /api/w/:ws/docs/:menu/:doc/office/session  편집 설정(JWT) + 작업본 잠금, editor 이상
  *         GET  …/office/config?mode=view                    보기 설정(잠금 없음), viewer 이상
  *         POST …/office/keepalive, GET …/office              세션 연장·상태
+ *         POST …/office/unlock                              잠금 풀기(owner)
  *         GET  /api/w/:ws/office/status                      편집 서버 준비 여부(콜드 스타트 동안 화면이 기다린다)
  *   오피스 서버  GET /api/office/file?t=, POST /api/office/callback?t=   세션 쿠키 없이 서명 토큰(SIGNING_KEY)으로
  * OFFICE 바인딩(컨테이너)이 없고 OFFICE_ORIGIN만 있으면(로컬 wrangler dev + docker) 편집 서버에 바로 간다.
@@ -49,15 +50,21 @@ export function isOfficeRequest(request: Request, env: Bindings) {
   return !!env.OFFICE && !!officeHost(env) && new URL(request.url).host === officeHost(env);
 }
 
-export async function officeProxy(request: Request, env: Bindings): Promise<Response> {
+/** 컨테이너로 넘길 요청. 허용 밖 경로면 null. 쿠키·Authorization·클라이언트가 보낸 X-Forwarded-*는 지운다 */
+export function officeForward(request: Request): Request | null {
   const url = new URL(request.url);
+  if (!office.officeProxyPath(url.pathname)) return null;
   const headers = new Headers(request.headers);
-  headers.delete("cookie");
+  for (const k of [...headers.keys()]) if (k === "cookie" || k === "authorization" || k.startsWith("x-forwarded-") || k === "forwarded") headers.delete(k);
   headers.set("x-forwarded-proto", "https");
   headers.set("x-forwarded-host", url.host);
-  return getContainer(env.OFFICE!, "main").fetch(new Request(`http://office${url.pathname}${url.search}`, {
-    method: request.method, headers, body: request.body, redirect: "manual",
-  }));
+  return new Request(`http://office${url.pathname}${url.search}`, { method: request.method, headers, body: request.body, redirect: "manual" });
+}
+
+export async function officeProxy(request: Request, env: Bindings): Promise<Response> {
+  const fwd = officeForward(request);
+  if (!fwd) return new Response("Not Found", { status: 404 });
+  return getContainer(env.OFFICE!, "main").fetch(fwd);
 }
 
 /** 편집 서버에 요청(컨테이너가 있으면 컨테이너, 없으면 OFFICE_ORIGIN) */
@@ -70,14 +77,14 @@ async function toOffice(env: Bindings, path: string, init?: RequestInit) {
 export function officeSessions(db: D1Database, docId: number): OfficeSessions {
   return {
     get: async () => {
-      const r = await db.prepare("SELECT doc_key, rev, base_version, user_id, expires_at FROM office_session WHERE document_id = ?").bind(docId)
-        .first<{ doc_key: string; rev: number; base_version: string; user_id: number | null; expires_at: number }>();
-      return r ? { key: r.doc_key, rev: r.rev, baseVersion: r.base_version, userId: r.user_id, expiresAt: r.expires_at } : null;
+      const r = await db.prepare("SELECT doc_key, rev, base_version, user_id, expires_at, started_at FROM office_session WHERE document_id = ?").bind(docId)
+        .first<{ doc_key: string; rev: number; base_version: string; user_id: number | null; expires_at: number; started_at: number }>();
+      return r ? { key: r.doc_key, rev: r.rev, baseVersion: r.base_version, userId: r.user_id, expiresAt: r.expires_at, startedAt: r.started_at } : null;
     },
     put: async (s) => {
-      await db.prepare(`INSERT INTO office_session (document_id, doc_key, rev, base_version, user_id, expires_at) VALUES (?, ?, ?, ?, ?, ?)
+      await db.prepare(`INSERT INTO office_session (document_id, doc_key, rev, base_version, user_id, expires_at, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (document_id) DO UPDATE SET doc_key = excluded.doc_key, rev = excluded.rev, base_version = excluded.base_version,
-        user_id = excluded.user_id, expires_at = excluded.expires_at`).bind(docId, s.key, s.rev, s.baseVersion, s.userId, s.expiresAt).run();
+        user_id = excluded.user_id, expires_at = excluded.expires_at, started_at = excluded.started_at`).bind(docId, s.key, s.rev, s.baseVersion, s.userId, s.expiresAt, s.startedAt).run();
     },
     remove: async (key) => { await db.prepare("DELETE FROM office_session WHERE document_id = ? AND doc_key = ?").bind(docId, key).run(); },
   };
@@ -118,6 +125,14 @@ export function officeRoutes(ws: Hono<AppEnv>) {
     const { key } = await c.req.json<{ key: string }>();
     const doc = await findDocRow(c.env, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
     return c.json({ alive: await office.keepAlive(officeSessions(c.env.DB, doc.id), String(key)) });
+  });
+  // owner만(app.ts OWNER_ONLY). 오피스 서버에 남은 편집은 그 뒤 콜백이 와도 반영하지 않는다(handleCallback rejected)
+  ws.post("/docs/:menu/:doc/office/unlock", async (c) => {
+    const doc = await findDocRow(c.env, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
+    const released = await office.releaseSession(officeSessions(c.env.DB, doc.id));
+    if (released) await c.env.DB.prepare("INSERT INTO activity (workspace_id, user_id, agent, action, target, version, at) VALUES (?, ?, NULL, 'office-unlock', ?, NULL, ?)")
+      .bind(c.var.ws.id, c.var.user?.id ?? null, `${doc.menu_slug}/${doc.slug}`, new Date().toISOString()).run();
+    return c.json({ released });
   });
   ws.get("/docs/:menu/:doc/office", async (c) => {
     const doc = await findDocRow(c.env, c.var.ws.id, c.req.param("menu"), c.req.param("doc"));
@@ -176,10 +191,15 @@ officeServer.post("/callback", async (c) => {
       const u = new URL(url);
       const res = await toOffice(c.env, `${u.pathname}${u.search}`);
       if (!res.ok) throw new HttpError(502, `저장 파일을 받지 못했습니다(${res.status})`);
-      if (Number(res.headers.get("content-length") ?? 0) > office.MAX_OFFICE_FILE) throw new HttpError(413, "저장 파일이 너무 큽니다");
-      return new Uint8Array(await res.arrayBuffer());
+      return office.readCapped(res);
     },
   });
+  if (r.rejected) {
+    // 늦게 온 저장(세션 끝남·그 사이 다른 수정본): 반영하지 않고 활동에 남긴다
+    await c.env.DB.prepare("INSERT INTO activity (workspace_id, user_id, agent, action, target, version, at) VALUES (?, ?, NULL, 'office-reject', ?, NULL, ?)")
+      .bind(ws.id, user?.id ?? null, `${doc.menu_slug}/${doc.slug}`, new Date().toISOString()).run();
+    console.warn("오피스 저장 거부", `${doc.menu_slug}/${doc.slug}`, r.rejected);
+  }
   if (r.saved?.changed) {
     const event = { type: "changed", reason: "revision", by: undefined, userId: user?.id, category: doc.category, menu: doc.menu_slug, doc: doc.slug, title: doc.title, rev: r.saved.rev };
     await Promise.all([

@@ -45,6 +45,11 @@ const isData = (n: string) => /^data-[a-z0-9_.-]+$/i.test(n) || /^aria-[a-z]+$/.
 const PAINT_REF = /^(fill|stroke|filter|clip-path|mask|marker-(start|mid|end))$/;
 
 export const MAX_SVG = 5_000_000;
+/**
+ * 소독한 SVG 자산 응답의 CSP(Worker 콘텐츠 도메인·로컬 서버 같게). 직접 열려도 스크립트가 돌지 않고(sandbox),
+ * 소독을 빠져나간 CSS가 있어도 바깥 그림·글꼴·연결을 부르지 못한다(V6 보안 점검)
+ */
+export const SVG_ASSET_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; sandbox";
 
 // 공백·제어 문자(href 판정 전에 지운다: "java\tscript:" 같은 우회)
 const WS_RANGES: [number, number][] = [[0, 32], [127, 160], [5760, 5760], [6158, 6158], [8192, 8233], [8287, 8287], [12288, 12288], [65279, 65279]];
@@ -58,9 +63,20 @@ function hrefOk(tag: string, v: string): boolean {
   if (tag === "image" && /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=]*$/i.test(clean(v))) return true;
   return tag === "a" && /^https?:\/\//.test(s);
 }
-/** CSS: 바깥 주소 url()은 none으로, 위험한 구문이 있으면 null(스타일을 버린다) */
-function cssOk(css: string): string | null {
+// CSS 함수 허용 목록: 주소를 받지 않는 것만. image-set·src·cross-fade·element·paint·local 같은 함수는 문자열 주소로 바깥을 부른다(V6 보안 점검)
+const CSS_FUNCS = new Set(["url", "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix", "light-dark",
+  "calc", "min", "max", "clamp", "var", "translate", "translatex", "translatey", "translate3d", "rotate", "scale", "scalex", "scaley",
+  "matrix", "skew", "skewx", "skewy", "cubic-bezier", "steps", "linear-gradient", "radial-gradient",
+  "blur", "brightness", "contrast", "drop-shadow", "grayscale", "hue-rotate", "invert", "opacity", "saturate", "sepia",
+  "inset", "circle", "ellipse", "polygon", "rect",
+  // 선택자 의사 클래스
+  "not", "is", "where", "has", "nth-child", "nth-of-type", "nth-last-child", "nth-last-of-type", "lang", "dir"]);
+/** CSS: 주석을 지우고, 바깥 주소 url()은 none으로. 위험한 구문·허용 밖 함수가 있으면 null(스타일을 버린다) */
+function cssOk(raw: string): string | null {
+  const css = raw.replace(/\/\*[\s\S]*?(\*\/|$)/g, "");
   if (/\\|@import|expression\s*\(|behavior\s*:|-moz-binding|javascript:/i.test(css)) return null;
+  // 함수 토큰은 이름 바로 뒤에 (가 온다. @media( 같은 규칙 이름은 함수가 아니다
+  for (const m of css.matchAll(/(?<![@\w-])(-?[a-z_][a-z0-9_-]*)\(/gi)) if (!CSS_FUNCS.has(m[1].toLowerCase())) return null;
   return css.replace(/url\(\s*(['"]?)\s*([^)'"]*)\1\s*\)/gi, (m, _q, u: string) => (u.trim().startsWith("#") ? m : "none"));
 }
 
@@ -166,6 +182,27 @@ export function svgSize(svg: string): { width: number; height: number } {
 }
 
 /**
+ * <style> 글을 "선택자{선언}" 한 단계 규칙 목록으로 읽는다. 주석은 먼저 지운다(주석으로 접두어를 삼키는 우회, V6 보안 점검).
+ * @규칙·중첩 규칙·짝이 맞지 않는 중괄호·따옴표 안 중괄호·규칙 밖 글자가 있으면 null(범위를 좁힐 수 없다)
+ */
+function flatRules(raw: string): { sel: string; body: string }[] | null {
+  const css = raw.replace(/\/\*[\s\S]*?(\*\/|$)/g, "");
+  if (css.includes("@") || /["'][^"']*[{}][^"']*["']/.test(css)) return null;
+  const out: { sel: string; body: string }[] = [];
+  let i = 0;
+  while (i < css.length) {
+    const open = css.indexOf("{", i);
+    if (open < 0) return css.slice(i).trim() ? null : out;
+    const close = css.indexOf("}", open + 1);
+    const sel = css.slice(i, open);
+    if (close < 0 || sel.includes("}") || css.slice(open + 1, close).includes("{") || !sel.trim()) return null;
+    out.push({ sel, body: css.slice(open + 1, close) });
+    i = close + 1;
+  }
+  return out;
+}
+
+/**
  * HTML 안에 인라인으로 넣을 SVG(D-60 예외 경로). SVG 안의 id와 <style>은 문서 전체에 걸리므로 범위를 좁힌다:
  * id는 접두어를 붙이고(참조 #id·url(#id)도 바꾼다), 루트 id를 접두어로 두고 <style> 선택자 앞에 #접두어를 붙인다.
  * 중첩 규칙(@media 등)이 있는 <style>은 범위를 좁힐 수 없어 지운다. 입력은 소독한 SVG여야 한다(여기서도 한 번 더 소독한다).
@@ -195,18 +232,46 @@ export function scopeSvg(src: string, prefix: string): { svg: string; removed: s
       if (k !== "content" && v.includes("url(")) el.attribs[k] = swapRefs(v);
     }
     if (el.name === "style") {
-      const css = swapRefs(textOf(el));
-      if (/[@{}][^{}]*\{[^{}]*\{/.test(css) || css.includes("@")) { el.children = []; removed.add("style(@규칙)"); continue; }
-      const scoped = css.replace(/([^{}]+)\{([^{}]*)\}/g, (_m, sel: string, body: string) => {
+      const rules = flatRules(swapRefs(textOf(el)));
+      if (!rules) { el.children = []; removed.add("style(@규칙·중첩)"); continue; }
+      const scoped = rules.map(({ sel, body }) => {
         const sels = sel.split(",").map((s) => s.trim()).filter(Boolean)
           .map((s) => `#${prefix} ${s.replace(/#([A-Za-z_][\w-]*)/g, (m2, id: string) => (ids.has(id) ? `#${ids.get(id)}` : m2))}`);
         return `${sels.join(",")}{${body}}`;
-      });
+      }).join("");
       const t = el.children.find((c) => c.type === "text") as Text | undefined;
       if (t) { t.data = scoped; el.children = [t]; }
     }
   }
   root.attribs.id = prefix;
+  return { svg: render(root), removed: [...removed] };
+}
+
+/** svgedit(svgcanvas)이 그리는 내용 뿌리 id. 편집 중에는 <style> 규칙을 이 아래로만 걸리게 한다 */
+export const SVGEDIT_SCOPE = "#svgcontent";
+
+/**
+ * 앱 화면(svgedit)에 올리기 전 SVG: 소독하고, <style> 규칙을 scope 아래로 좁힌다(V6 보안 점검).
+ * svgcanvas는 SVG를 앱 문서에 그대로 붙이므로 <style>이 앱 화면 전체에 걸린다. 범위를 좁힐 수 없는 <style>은 비운다.
+ * 꺼낼 때 tidySvgEdit가 scope를 다시 뗀다.
+ */
+export function svgForEditor(src: string, scope = SVGEDIT_SCOPE): { svg: string; removed: string[] } {
+  const first = sanitizeSvg(src);
+  const doc = parse(first.svg);
+  const root = rootOf(doc);
+  const removed = new Set(first.removed);
+  const each = (el: Element) => {
+    if (el.name === "style") {
+      const rules = flatRules(textOf(el));
+      if (!rules) { el.children = []; removed.add("style(@규칙·중첩)"); return; }
+      const t = new Text(rules.map(({ sel, body }) => `${sel.split(",").map((x) => x.trim()).filter(Boolean).map((x) => `${scope} ${x}`).join(",")}{${body}}`).join(""));
+      t.parent = el;
+      el.children = [t];
+      return;
+    }
+    for (const c of el.children) if (isElement(c)) each(c);
+  };
+  each(root);
   return { svg: render(root), removed: [...removed] };
 }
 
@@ -237,5 +302,14 @@ export function tidySvgEdit(src: string, original?: { viewBox?: string }): strin
     for (const c of el.children) if (isElement(c)) round(c);
   };
   round(root);
+  // svgForEditor가 붙인 범위(#svgcontent)를 뗀다
+  const unscope = (el: Element) => {
+    if (el.name === "style") {
+      for (const c of el.children) if (c.type === "text") (c as Text).data = (c as Text).data.split(`${SVGEDIT_SCOPE} `).join("");
+      return;
+    }
+    for (const c of el.children) if (isElement(c)) unscope(c);
+  };
+  unscope(root);
   return render(root);
 }

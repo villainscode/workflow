@@ -7,6 +7,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse } from "yaml";
 import { call, makeWorkspace, readText, startServer, upload, type TestServer } from "./helpers.ts";
+import { SVG_ASSET_CSP } from "@workflow/core/svg";
 
 const ws = makeWorkspace();
 let srv: TestServer;
@@ -141,7 +142,7 @@ describe("로컬 수정본(6.0 VL)", () => {
     assert.deepEqual([a.width, a.height, a.removed.sort()], [80, 40, ["@onload", "script"]]);
     const u = await call(U, "GET", `/api/assets/${a.sha256}/url`);
     const raw = await fetch(U + u.body.url);
-    assert.deepEqual([raw.headers.get("content-type"), raw.headers.get("content-security-policy")], ["image/svg+xml", "sandbox"]);
+    assert.deepEqual([raw.headers.get("content-type"), raw.headers.get("content-security-policy")], ["image/svg+xml", SVG_ASSET_CSP]);
     assert.doesNotMatch(await raw.text(), /script|onload/);
     const s = await call(U, "GET", "/api/docs/process/guide/work/structure");
     const h1 = s.body.blocks.find((b: { tag: string }) => b.tag === "h1");

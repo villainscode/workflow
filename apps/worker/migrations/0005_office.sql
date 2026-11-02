@@ -5,5 +5,6 @@ CREATE TABLE office_session (
   rev INTEGER NOT NULL,
   base_version TEXT NOT NULL,
   user_id INTEGER REFERENCES app_user(id),
-  expires_at INTEGER NOT NULL
+  expires_at INTEGER NOT NULL,
+  started_at INTEGER NOT NULL          -- 세션을 처음 연 시각(ms). 연장은 MAX_SESSION까지(V6 보안 점검)
 );

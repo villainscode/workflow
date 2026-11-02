@@ -308,7 +308,7 @@ gantt
 - MCP: `deck_create`, `deck_get`, `slide_put`, `slide_patch`, `asset_put`(쓰기 진단을 그대로 돌려줌, 출처 agent). 로컬 MCP에서 덱 쓰기는 "보기만" 안내.
 - 명세와 다르게 한 것: 저장 위치(D1 행 → R2 수정본, 2절), 상태 관리(zustand·immer → core 역연산), 색 고르기(react-colorful → 팔레트 + 브라우저 색 입력), 그림 자르기 배율(`data-crop`)은 넣지 않음(맞춤·위치만), 표 칸 오른쪽 클릭 메뉴 대신 속성 패널 버튼, 요소 복사·붙여 넣기(⌘C·V)는 ⌘D 복제만, 덱 단위 변경(순서·추가·지우기)은 되돌리기 기록에 넣지 않음(수정본 이력으로 되돌림).
 - 남은 것(M7·M8): 다른 접속자 저장 실시간 반영·접속자 표시, 덱 PDF 내보내기(Browser Rendering)와 `deck_render`, 확대 비율 0.5·0.75·1별 좌표 오차 자동 측정(지금은 한 배율에서 이동량 ÷ 배율 확인).
-- 테스트: core TC-ED-28~32, Worker TC-ED-33~37·TC-CF-44, 로컬 TC-API-DECK-01·TC-MCP-21, 화면 TC-CFUI-13~15.
+- 테스트: core TC-ED-28~32, Worker TC-ED-33~37·TC-CF-44, 로컬 TC-API-DECK-01·TC-MCP-25, 화면 TC-CFUI-13~15.
 
 **M6 PDF 편집 (2026-10-30)**
 - 어디서 적용하나: 브라우저(4.5절 "브라우저 또는 Worker" 중). PDF는 에이전트 편집 대상이 아니라(6절 표) 서버 연산이 필요 없고, 글꼴(2MB)·wasm을 Worker에 싣지 않는다. 결과 PDF를 수정본(`POST …/revisions {put}`)으로 올린다.

@@ -19,9 +19,11 @@ export const MAX_OFFICE_FILE = 64 * 1024 * 1024;
 /** 세션 만료(화면이 KEEPALIVE마다 연장한다) */
 export const SESSION_TTL = 15 * 60_000;
 export const KEEPALIVE = 5 * 60_000;
+/** 세션 최대 길이: 연장(keepalive)으로도 이보다 오래 잠그지 못한다(V6 보안 점검). 편집 설정 JWT의 만료도 같다 */
+export const MAX_SESSION = 8 * 3600_000;
 
 export type OfficeMode = "edit" | "view";
-export interface OfficeSession { key: string; rev: number; baseVersion: string; userId: number | null; expiresAt: number }
+export interface OfficeSession { key: string; rev: number; baseVersion: string; userId: number | null; expiresAt: number; startedAt: number }
 /** 문서 하나의 편집 세션 저장소(Worker: D1 office_session, 로컬: work.db office_session) */
 export interface OfficeSessions {
   get(): Promise<OfficeSession | null>;
@@ -43,7 +45,7 @@ export async function signJwt(payload: object, secret: string): Promise<string> 
   return `${head}.${body}.${b64url(sig)}`;
 }
 
-/** JWT(HS256) 검사. 서명이 맞고 만료(exp)가 지나지 않았으면 내용, 아니면 null */
+/** JWT(HS256) 검사. 서명이 맞고 만료(exp)가 있고 지나지 않았으면 내용, 아니면 null. exp가 없는 토큰은 받지 않는다(오피스 서버가 보내는 토큰에도 exp가 있다) */
 export async function verifyJwt<T = Record<string, unknown>>(token: string, secret: string, now = Date.now()): Promise<T | null> {
   const parts = token.split(".");
   if (parts.length !== 3 || !secret) return null;
@@ -54,7 +56,7 @@ export async function verifyJwt<T = Record<string, unknown>>(token: string, secr
     const ok = await crypto.subtle.verify("HMAC", await hmacKey(secret, "verify"), fromB64url(parts[2]) as Uint8Array<ArrayBuffer>, enc.encode(`${parts[0]}.${parts[1]}`));
     if (!ok) return null;
     const body = JSON.parse(dec.decode(fromB64url(parts[1]))) as T & { exp?: number };
-    if (typeof body.exp === "number" && body.exp * 1000 < now) return null;
+    if (typeof body.exp !== "number" || body.exp * 1000 < now) return null;
     return body;
   } catch {
     return null;
@@ -93,16 +95,31 @@ export async function openSession(store: DocStore, sessions: OfficeSessions, o: 
     const cur = await sessions.get();
     const live = cur && cur.expiresAt > now;
     if (live && cur.key !== key) throw new WorkError(409, "오피스 편집기에서 다른 내용을 편집하고 있습니다. 잠시 뒤 다시 여세요");
-    await sessions.put({ key, rev: st.rev, baseVersion: st.baseVersion, userId: live ? cur.userId : o.userId, expiresAt: now + SESSION_TTL });
+    const startedAt = live && cur.startedAt ? cur.startedAt : now;
+    if (now - startedAt >= MAX_SESSION) throw new WorkError(409, "오피스 편집 세션이 너무 오래 열려 있습니다. 편집기를 닫고 다시 여세요");
+    await sessions.put({ key, rev: st.rev, baseVersion: st.baseVersion, userId: live ? cur.userId : o.userId, startedAt, expiresAt: Math.min(now + SESSION_TTL, startedAt + MAX_SESSION) });
   }
   return { key, rev: st.rev, baseVersion: st.baseVersion, entry: entry.path, sha256: entry.sha256, size: entry.size };
 }
 
-/** 화면이 열어 둔 세션을 연장한다. 이미 닫혔거나 다른 세션이면 false */
+/** 화면이 열어 둔 세션을 연장한다(최대 길이까지). 이미 닫혔거나 다른 세션이거나 최대 길이를 넘었으면 false */
 export async function keepAlive(sessions: OfficeSessions, key: string, now = Date.now()) {
   const cur = await sessions.get();
   if (!cur || cur.key !== key || cur.expiresAt <= now) return false;
-  await sessions.put({ ...cur, expiresAt: now + SESSION_TTL });
+  const end = cur.startedAt + MAX_SESSION;
+  if (now >= end) {
+    await sessions.put({ ...cur, expiresAt: Math.min(cur.expiresAt, end) });
+    return false;
+  }
+  await sessions.put({ ...cur, expiresAt: Math.min(now + SESSION_TTL, end) });
+  return true;
+}
+
+/** 잠금 풀기(owner, 화면의 「오피스 잠금 풀기」). 열린 세션이 있었으면 true. 오피스 서버에 남은 편집은 그 뒤 콜백이 와도 저장하지 않는다 */
+export async function releaseSession(sessions: OfficeSessions) {
+  const cur = await sessions.get();
+  if (!cur) return false;
+  await sessions.remove(cur.key);
   return true;
 }
 
@@ -135,7 +152,8 @@ export async function editorConfig(c: ConfigInput, secret: string) {
       customization: { autosave: true, forcesave: false, compactHeader: true, close: { visible: true, text: "닫기" }, uiTheme: "default-light" },
     },
   };
-  return { ...config, token: await signJwt(config, secret) };
+  // 서명 내용에만 만료를 넣는다(설정 칸에는 없는 값이라 편집기는 무시한다)
+  return { ...config, token: await signJwt({ ...config, exp: Math.floor(Date.now() / 1000) + MAX_SESSION / 1000 }, secret) };
 }
 
 /** 오피스 서버 콜백 본문(필요한 칸만) */
@@ -158,7 +176,8 @@ export async function verifyCallback(body: CallbackBody, authorization: string |
   return null;
 }
 
-export interface CallbackResult { status: number; saved?: Saved; closed: boolean }
+/** rejected: 저장하지 않은 이유(늦게 온 콜백). 오피스 서버에는 그래도 error: 0으로 답한다(다시 보내지 않게) */
+export interface CallbackResult { status: number; saved?: Saved; closed: boolean; rejected?: string }
 
 /**
  * 콜백 처리(서명 검사는 끝난 내용). status 1 편집 중(세션 연장), 2 저장할 파일 있음(닫힘), 4 바뀐 것 없이 닫힘,
@@ -174,25 +193,63 @@ export async function handleCallback(store: DocStore, sessions: OfficeSessions, 
   const cur = await sessions.get();
   const mine = !!cur && cur.key === cb.key;
   if (status === 1) {
-    if (mine) await sessions.put({ ...cur!, expiresAt: now + SESSION_TTL });
+    if (mine && cur!.expiresAt > now) await sessions.put({ ...cur!, expiresAt: Math.min(now + SESSION_TTL, cur!.startedAt + MAX_SESSION) });
     return { status, closed: false };
   }
   let saved: Saved | undefined;
   if (status === 2 || status === 6) {
     const url = String(cb.url ?? "");
     if (!sameOrigin(url, o.officeOrigin)) throw new WorkError(400, "저장 파일 주소가 오피스 서버가 아닙니다");
+    const st = await workState(store);
+    // 늦게 온 콜백: 세션이 끝났거나(만료·잠금 풀기) 그 사이 다른 수정본이 쌓였으면 덮어쓰지 않는다(V6 보안 점검)
+    const rejected = !mine || cur!.expiresAt <= now ? "편집 세션이 끝난 뒤 온 저장이라 반영하지 않았습니다"
+      : cur!.rev !== st.rev || cur!.baseVersion !== st.baseVersion ? "그 사이 다른 수정본이 저장돼 오피스 저장을 반영하지 않았습니다" : undefined;
+    if (rejected) {
+      if (mine && status === 2) await sessions.remove(cb.key!);
+      return { status, closed: status === 2, rejected };
+    }
     const data = await o.download(url);
     if (data.byteLength === 0 || data.byteLength > MAX_OFFICE_FILE) throw new WorkError(413, `저장 파일이 비었거나 ${MAX_OFFICE_FILE / 1024 / 1024}MB를 넘습니다`);
-    const st = await workState(store);
-    // 세션이 연 내용 위에서 저장한다. 그 사이 다른 쓰기는 잠금으로 막혔다(세션이 만료돼 끼어든 쓰기가 있으면 그 위에 덮는다)
+    // 세션이 연 내용 위에서 저장한다. 그 사이 다른 쓰기는 잠금으로 막혔다
     saved = await saveRevision(store, {
       baseRev: st.rev, put: [{ path: st.manifest.entry, data }], source: "office",
       summary: `오피스 편집기에서 저장${cb.users?.length ? `(${cb.users.length}명)` : ""}`,
     });
+    // 강제 저장(6) 뒤에도 같은 세션이 이어진다: 세션이 가리키는 rev를 새 수정본으로
+    if (status === 6 && saved.changed) await sessions.put({ ...cur!, rev: saved.rev });
   }
   const closed = status === 2 || status === 4;
   if (closed && mine) await sessions.remove(cb.key!);
   return { status, saved, closed };
+}
+
+/**
+ * 편집기 출처로 넘겨도 되는 경로: 브라우저 편집기가 쓰는 정적 파일·공동 편집 연결·저장 파일·준비 확인만(V6 보안 점검).
+ * 관리·명령·변환 API(/coauthoring/CommandService.ashx, /ConvertService.ashx, /info, /admin, /example …)는 넘기지 않는다.
+ * ONLYOFFICE는 정적 파일을 버전 접두어(/<버전>-<해시>/web-apps/…) 아래에서도 준다.
+ */
+const OFFICE_PATHS = /^(?:\/[0-9][\w.]*-[0-9a-z]+)?\/(?:web-apps|sdkjs|sdkjs-plugins|plugins|fonts|dictionaries|doc|cache\/files|downloadas|downloadfile|upload|printfile|themes)(?:\/|\.|$)|^\/healthcheck$/;
+
+export const officeProxyPath = (path: string) => OFFICE_PATHS.test(path) && !path.includes("..");
+
+/** 응답 본문을 읽으며 바이트 수를 센다. content-length가 없어도 상한을 넘으면 멈춘다(Worker·로컬 콜백 다운로드) */
+export async function readCapped(res: Response, max = MAX_OFFICE_FILE): Promise<Uint8Array> {
+  if (Number(res.headers.get("content-length") ?? 0) > max) throw new WorkError(413, "저장 파일이 너무 큽니다");
+  if (!res.body) return new Uint8Array(await res.arrayBuffer());
+  const reader = res.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { await reader.cancel(); throw new WorkError(413, "저장 파일이 너무 큽니다"); }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.byteLength; }
+  return out;
 }
 
 function sameOrigin(url: string, origin: string) {

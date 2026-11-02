@@ -146,7 +146,7 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 | **VL 로컬 사이트 편집** (완료, 12절) | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
 | **VO 오피스 편집 서버** (완료 — 컨테이너 배포는 사용자 확인 대기) | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
 | **V5 에이전트·문서** (완료) | 0.5 | MCP `doc_ops` 연산 추가, `svg_put`, 스킬·가이드 갱신 | MCP 테스트: 에이전트가 글꼴·자유 배치·SVG 넣기를 연산으로 수행, 진단에 fix |
-| **V6 운영 마감** | 0.5 | 보안 점검(SVG 소독·draw.io 메시지·스타일 주입·오피스 콜백 JWT), staging 전체 회귀, 운영 배포 | 보안 점검 높음 이상 0, staging 회귀 통과 |
+| **V6 운영 마감** (로컬 완료 — staging 회귀·운영 배포 대기, 12절) | 0.5 | 보안 점검(SVG 소독·draw.io 메시지·스타일 주입·오피스 콜백 JWT), staging 전체 회귀, 운영 배포 | 보안 점검 높음 이상 0, staging 회귀 통과 |
 
 합계 약 12.5스프린트(25주, D-59로 VO 2.5 추가). V1이 끝나야 V2~V4가 시작되고, V3·V4는 서로 의존이 없다. VO는 요소 편집기와 의존이 없어 V1과 나란히 진행할 수 있다(한 사람이면 V4 뒤). VL은 V1 뒤 언제든 시작할 수 있지만, 연산이 늘어날 때마다 로컬에도 맞춰야 하므로 V2 직후에 두어 이후 마일스톤이 처음부터 양쪽에 같이 들어가게 한다.
 
@@ -225,7 +225,7 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
 - MCP: 로컬에서도 덱 쓰기·구조 연산·수정본 도구가 동작한다. `deck_render`만 "Browser Rendering이 없다"고 안내한다.
 - 함께 고친 버그: 로컬에서 슬라이드 덱이 덱으로 그려지지 않던 문제(화면이 `path === "deck.json"`으로 알아보는데 로컬 파일 경로는 `docs/…/vN.N/deck.json`). `relPath`·`isDeck`로 맞췄다(TESTING 5절).
 - 계획과 다른 점: 작업본을 "작업본 폴더"가 아니라 Worker와 같은 내용 주소 blob으로 두었다(같은 core 규칙을 그대로 쓰려고). 로컬에는 사용자가 없어 수정본 작성자는 비우고 출처(human·agent·restore)만 남긴다. 문서를 다른 메뉴로 옮기면 작업본은 이어지지 않는다(버전 파일에서 다시 시작). 접속자 표시(presence)는 Cloudflare만이다.
-- 테스트: TC-VE-10~13(`site/test/work.test.ts`), TC-UI-35·36, TC-MCP-21·22 갱신.
+- 테스트: TC-VE-10~13(`site/test/work.test.ts`), TC-UI-35·36, TC-MCP-25·22 갱신.
 
 **V3 HTML 자유 배치 (2026-11-02, D-54)**
 
@@ -271,3 +271,13 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
 - 제3자 고지: `site/web/public/third-party-notices.txt`(draw.io Apache-2.0, svgcanvas MIT, pathseg BSD-3, ONLYOFFICE AGPL·소스 위치, pdf.js, MIT 라이브러리, 나눔고딕 OFL). 계정 메뉴 「오픈소스 고지」. 고지는 로컬·Cloudflare 같은 경로(`/third-party-notices.txt`).
 - 문서: `spec/ARCHITECTURE.md`(요소 편집기 행), `.claude/guides/site-local.md`·`cloudflare-app.md`.
 - 하지 못한 것: 슬라이드 형식 명세 `docs/slide-editor-spec.html`은 사이트 문서가 아니라(`docs/` 바로 아래 낱개 파일, `meta.yaml` 없음) MCP로 새 버전을 만들 수 없다. 반영할 내용: 03·04절 글자 span은 `color`·`font-family`·`font-size`만, 직렬화 순서 `color;font-family;font-size`, 값 문법은 블록 CSS와 같음. 06절 글자 도구 막대·블록 글꼴 칸·표 행 높이·여러 요소 정렬·분배·레이어 패널. SVG는 `asset:` 그림으로 넣는다. 사이트 문서로 등록할지(사용자 결정) 정한 뒤 반영한다.
+
+**V6 운영 마감 — 보안 점검 (2026-11-02, 로컬 완료)**
+
+- 6.0 변경 전체(`origin/develop..HEAD`, V2~V5)를 보안 점검했다: 높음 0, 중간 3, 낮음 6. 모두 재현 테스트를 먼저 만들어 실패를 확인한 뒤 고쳤다(TESTING 2.11·5절, TC-SEC-01~05·07~09).
+- 중간: SVG CSS 주소 함수(`image-set`·`src` 등)로 바깥 요청 → CSS 함수 허용 목록·자산 CSP `default-src 'none'`. `font-family` 정규식 ReDoS(32자 54초) → 모호하지 않은 식·값 200자 상한. svgedit이 소독 전 SVG를 앱 문서에 붙임 → 편집 진입 때 소독·`<style>`을 `#svgcontent` 아래로.
+- 낮음: 인라인 SVG `<style>` 범위 우회 → 주석 제거·중괄호 직접 파싱. 오피스 프록시 전 경로 공개 → 편집기 경로 허용 목록(실제 ONLYOFFICE 10 경로로 확인)·헤더 정리·로컬 compose 루프백. 늦은 저장 콜백 덮어쓰기 → 세션·rev 확인 후 거부 기록, 다운로드 스트림 상한. 잠금 무기한 → 최대 8시간·owner 잠금 풀기. 로컬 서버 → 티켓 키 분리·JWT `exp` 필수·Host·Origin 검사. 앱 출처 `api.js` 실행은 문서화(`apps/worker/README.md`).
+- 결정: 버전 업로드(zip·폴더)로 들어온 SVG는 업로드 때 소독하지 않는다. 문서 원본 바이트를 지키는 원칙(파일이 원본) 때문이고, 그 파일은 콘텐츠 도메인 sandbox로만 열린다. 앱 화면에 올리는 경로(svgedit)에서만 소독한다.
+- 마이그레이션 `0005_office.sql`에 `started_at`을 더했다(아직 배포 전이라 같은 파일을 고쳤다). 로컬 `work.db`는 열 때 열을 더한다.
+- 남은 것: staging 전체 회귀와 운영 배포(develop 푸시 필요, 사용자 확인 대기). draw.io·오피스 자원은 만들지 않는다(사용자 결정, 2026-11-02).
+

@@ -41,7 +41,9 @@ describe("로컬 오피스 편집기(6.0 VO)", () => {
     const D = "/api/docs/notes/local-report";
     const s = (await call(U, "POST", `${D}/office/session`)).body;
     const { token, ...config } = s.config;
-    assert.deepEqual(await verifyJwt(token, SECRET), config);
+    const { exp, ...signed } = (await verifyJwt<Record<string, unknown>>(token, SECRET))!;
+    assert.deepEqual(signed, config);
+    assert.ok(Number(exp) * 1000 > Date.now());
     assert.equal(s.apiUrl, `${OFFICE}/web-apps/apps/api/documents/api.js`);
     // 오피스 서버가 받는 원본
     const file = await fetch(U + local(config.document.url));
@@ -57,7 +59,7 @@ describe("로컬 오피스 편집기(6.0 VO)", () => {
     // 콜백: 위조는 403, 다른 출처 주소는 400, 맞으면 수정본
     const cb = local(config.editorConfig.callbackUrl);
     const send = async (body: object, secret = SECRET) => {
-      const res = await fetch(U + cb, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${await signJwt({ payload: body }, secret)}` }, body: JSON.stringify(body) });
+      const res = await fetch(U + cb, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${await signJwt({ payload: body, exp: Math.floor(Date.now() / 1000) + 300 }, secret)}` }, body: JSON.stringify(body) });
       return { status: res.status, body: await res.json() };
     };
     assert.equal((await send({ key: s.key, status: 2, url: `${OFFICE}/cache/out.docx` }, "bad")).status, 403);

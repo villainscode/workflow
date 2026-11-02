@@ -121,6 +121,8 @@ const ws = new Hono<AppEnv>();
 const OWNER_ONLY: [string, RegExp][] = [
   ["DELETE", /^\/menus\/[^/]+$/], ["DELETE", /^\/trash\/[^/]+$/], ["*", /^\/categories(\/|$)/], ["*", /^\/invites(\/|$)/],
   ["PATCH", /^\/members\//], ["DELETE", /^\/members\//], ["GET", /^\/export$/], ["GET", /^\/usage$/],
+  // 오피스 편집 잠금 풀기(V6 보안 점검: 편집자가 연장만 보내 잠금을 붙들 수 있어 owner가 푼다)
+  ["POST", /^\/docs\/[^/]+\/[^/]+\/office\/unlock$/],
 ];
 function needed(method: string, path: string): Role {
   if (OWNER_ONLY.some(([m, re]) => (m === "*" || m === method) && re.test(path))) return "owner";

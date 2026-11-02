@@ -243,7 +243,7 @@ describe("정식 확정", () => {
 });
 
 describe("슬라이드 덱(5.0 M4)", () => {
-  test("TC-MCP-21 deck_create: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성. deck_get은 eid가 붙은 HTML(rev 0), 로컬에서도 slide_patch가 수정본으로 저장(6.0 VL)", async () => {
+  test("TC-MCP-25 deck_create: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성. deck_get은 eid가 붙은 HTML(rev 0), 로컬에서도 slide_patch가 수정본으로 저장(6.0 VL)", async () => {
     await fail("deck_create", { menu: "notes", title: "나쁜 덱", slides: [{ id: "a", html: '<section id="a"><p style="margin-top:8px">x</p></section>' }] },
       /slides\/a\.html:1:\d+ \[css-prop\] 허용하지 않는 CSS 속성: margin-top → margin은 쓰지 않습니다/);
     assert.match(await ok("deck_create", { menu: "notes", title: "MCP 덱", slug: "mcp-deck", slides: [{ id: "cover", html: '<section id="cover"><h1>표지</h1></section>' }] }),

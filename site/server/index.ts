@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, sep, extname } from "node:path";
 import Fastify, { type FastifyError } from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -19,6 +19,7 @@ import * as office from "@workflow/core/office";
 import { WorkError, type StructOp } from "@workflow/core/work";
 import { StructEditError } from "@workflow/core/structedit/html";
 import { mimeOf } from "@workflow/core/mime";
+import { SVG_ASSET_CSP } from "@workflow/core/svg";
 import { findDocDir } from "./docpath.ts";
 import type { Change } from "@workflow/core/textedit";
 import {
@@ -70,6 +71,26 @@ function docEvent(req: { headers: Record<string, unknown> }, r: { menu: string; 
 }
 
 const app = Fastify({ logger: { level: "info" }, bodyLimit: MAX_UPLOAD });
+
+/**
+ * 로컬 서버 출입 검사(V6 보안 점검). 127.0.0.1에만 열려 있어도 브라우저의 다른 사이트가 이 주소로 요청을 보낼 수 있다.
+ * - Host: 루프백 이름(localhost·127.0.0.1·[::1])과 오피스 서버(docker)가 부르는 이름만. DNS 리바인딩 막기
+ * - 상태를 바꾸는 요청(GET·HEAD·OPTIONS 밖): Origin이 없거나(MCP·CLI·오피스 서버) 루프백 출처만. 다른 사이트·sandbox 문서("null")는 403
+ */
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const extraHosts = new Set(["host.docker.internal", ...[process.env.ONLYOFFICE_BACKEND].filter(Boolean).map((u) => new URL(u!).hostname),
+  ...(process.env.WORKFLOW_ALLOWED_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean)]);
+const hostName = (h: string) => h.replace(/:\d+$/, "").toLowerCase();
+app.addHook("onRequest", async (req, reply) => {
+  const host = hostName(String(req.headers.host ?? ""));
+  if (!LOOPBACK.has(host) && !extraHosts.has(host)) return reply.code(403).send({ error: "허용하지 않는 Host입니다" });
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
+  const origin = req.headers.origin;
+  if (origin === undefined) return;
+  let ok = false;
+  try { ok = LOOPBACK.has(new URL(origin).hostname.toLowerCase()); } catch { ok = false; }
+  if (!ok) return reply.code(403).send({ error: "다른 사이트에서 보낸 요청은 받지 않습니다" });
+});
 
 await app.register(fastifyMultipart, { limits: { fileSize: MAX_UPLOAD, files: 2000 } });
 // docs/ 원본 파일. HTML 문서의 상대 경로 리소스와 링크도 이 경로 아래에서 풀린다.
@@ -368,13 +389,20 @@ app.get<{ Params: { sha: string } }>("/api/assets/:sha/raw", async (req, reply) 
   const a = local.asset(req.params.sha);
   if (!a) throw new WorkError(404, "없는 이미지입니다");
   // SVG 자산(소독함)도 앱 출처에서 직접 열리면 스크립트가 돌지 않게 sandbox
-  if (a.mime === "image/svg+xml") reply.header("Content-Security-Policy", "sandbox").header("X-Content-Type-Options", "nosniff");
+  if (a.mime === "image/svg+xml") reply.header("Content-Security-Policy", SVG_ASSET_CSP).header("X-Content-Type-Options", "nosniff");
   return reply.type(a.mime).header("Cache-Control", "private, max-age=31536000, immutable").send(Buffer.from(local.getBlob(a.sha256)));
 });
 
 // 편집기 설정(6.0 V4·VO): draw.io 출처(apps/drawio의 `npm run serve`), 오피스 편집기(docker, ONLYOFFICE_URL). 없으면 버튼을 숨긴다
 const OFFICE_URL = (process.env.ONLYOFFICE_URL ?? "").replace(/\/$/, "");
 const OFFICE_SECRET = process.env.ONLYOFFICE_JWT_SECRET ?? "";
+// 파일·콜백 주소 토큰의 서명 키는 오피스 서버와 나눈 JWT 비밀값과 따로 둔다(Worker의 SIGNING_KEY와 같은 구분, V6 보안 점검).
+// 서버를 다시 켜도 7일짜리 콜백 주소가 살아 있게 data/에 한 번 만들어 둔다
+const TICKET_KEY = (() => {
+  const f = join(DATA_DIR, "office-ticket.key");
+  if (!existsSync(f)) writeFileSync(f, randomBytes(32).toString("hex"), { mode: 0o600 });
+  return readFileSync(f, "utf8").trim();
+})();
 // 오피스 서버(docker 안)가 이 서버에 닿는 주소
 const OFFICE_BACKEND = (process.env.ONLYOFFICE_BACKEND ?? `http://host.docker.internal:${PORT}`).replace(/\/$/, "");
 const officeOn = () => !!OFFICE_URL && !!OFFICE_SECRET;
@@ -384,7 +412,7 @@ app.get("/api/editor-config", async () => ({ drawio: process.env.DRAWIO_ORIGIN |
 async function officeConfig(p: DocParams["Params"], mode: office.OfficeMode) {
   if (!officeOn()) throw new WorkError(501, "오피스 편집기를 쓸 수 없는 환경입니다(ONLYOFFICE_URL·ONLYOFFICE_JWT_SECRET)");
   const s = await office.openSession(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), { scope: officeScope(p), mode, userId: null });
-  const ticket = (use: "file" | "callback", ttl: number) => office.signTicket({ ws: "local", doc: `${p.menu}/${p.doc}`, key: s.key, use }, OFFICE_SECRET, ttl);
+  const ticket = (use: "file" | "callback", ttl: number) => office.signTicket({ ws: "local", doc: `${p.menu}/${p.doc}`, key: s.key, use }, TICKET_KEY, ttl);
   const config = await office.editorConfig({
     key: s.key, title: `${local.title(p.menu, p.doc)}${s.entry.slice(s.entry.lastIndexOf("."))}`, entry: s.entry, mode,
     fileUrl: `${OFFICE_BACKEND}/api/office/file?t=${await ticket("file", 3600)}`,
@@ -400,6 +428,8 @@ app.post<DocParams>("/api/docs/:menu/:doc/office/session", async (req) => office
 app.get<DocParams>("/api/docs/:menu/:doc/office/config", async (req) => officeConfig(req.params, "view"));
 app.post<DocParams & { Body: { key: string } }>("/api/docs/:menu/:doc/office/keepalive", async (req) =>
   ({ alive: await office.keepAlive(local.officeSessions(req.params.menu, req.params.doc), String(req.body?.key)) }));
+// 잠금 풀기(로컬은 사용자가 하나라 누구나). 오피스 서버에 남은 편집은 그 뒤 콜백이 와도 반영하지 않는다
+app.post<DocParams>("/api/docs/:menu/:doc/office/unlock", async (req) => ({ released: await office.releaseSession(local.officeSessions(req.params.menu, req.params.doc)) }));
 app.get<DocParams>("/api/docs/:menu/:doc/office", async (req) => {
   const s = await local.officeSessions(req.params.menu, req.params.doc).get();
   const st = await work.workState(local.store(req.params.menu, req.params.doc));
@@ -420,7 +450,7 @@ const ticketParams = (t: office.OfficeTicket) => {
   return { menu, doc };
 };
 app.get<{ Querystring: { t?: string } }>("/api/office/file", async (req, reply) => {
-  const t = await office.readTicket(req.query.t ?? "", OFFICE_SECRET, "file");
+  const t = await office.readTicket(req.query.t ?? "", TICKET_KEY, "file");
   if (!t) throw new WorkError(403, "주소가 맞지 않거나 만료됐습니다");
   const p = ticketParams(t);
   const s = await office.openSession(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), { scope: officeScope(p), mode: "view", userId: null });
@@ -428,7 +458,7 @@ app.get<{ Querystring: { t?: string } }>("/api/office/file", async (req, reply) 
   return reply.type("application/octet-stream").header("Cache-Control", "no-store").send(Buffer.from(local.getBlob(s.sha256)));
 });
 app.post<{ Querystring: { t?: string }; Body: office.CallbackBody }>("/api/office/callback", async (req) => {
-  const t = await office.readTicket(req.query.t ?? "", OFFICE_SECRET, "callback");
+  const t = await office.readTicket(req.query.t ?? "", TICKET_KEY, "callback");
   if (!t) throw new WorkError(403, "주소가 맞지 않거나 만료됐습니다");
   const cb = await office.verifyCallback(req.body ?? {}, req.headers.authorization, OFFICE_SECRET);
   if (!cb) throw new WorkError(403, "콜백 서명이 맞지 않습니다");
@@ -438,10 +468,11 @@ app.post<{ Querystring: { t?: string }; Body: office.CallbackBody }>("/api/offic
     download: async (url) => {
       const res = await fetch(url);
       if (!res.ok) throw new WorkError(502, `저장 파일을 받지 못했습니다(${res.status})`);
-      if (Number(res.headers.get("content-length") ?? 0) > office.MAX_OFFICE_FILE) throw new WorkError(413, "저장 파일이 너무 큽니다");
-      return new Uint8Array(await res.arrayBuffer());
+      return office.readCapped(res);
     },
   });
+  // 늦게 온 저장(세션 끝남·그 사이 다른 수정본)은 반영하지 않고 남긴다
+  if (r.rejected) app.log.warn({ doc: `${p.menu}/${p.doc}` }, `오피스 저장 거부: ${r.rejected}`);
   if (r.saved?.changed) broadcast({ type: "changed", reason: "revision", ...docEvent(req, p), rev: r.saved.rev });
   return { error: 0 };
 });

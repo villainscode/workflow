@@ -30,7 +30,9 @@ describe("오피스 편집기(6.0 VO)", () => {
     const s = await (await json("POST", `${D}/office/session`)).json<any>();
     expect(s.apiUrl).toBe("https://office.test/web-apps/apps/api/documents/api.js");
     const { token, ...config } = s.config;
-    expect(await verifyJwt(token, SECRET)).toEqual(config);
+    const { exp, ...signed } = (await verifyJwt<Record<string, unknown>>(token, SECRET))!;
+    expect(signed).toEqual(config);
+    expect(Number(exp) * 1000).toBeGreaterThan(Date.now());
     expect(config.documentType).toBe("word");
     expect(config.editorConfig.mode).toBe("edit");
     expect(config.document.key).toBe(s.key);
@@ -46,7 +48,7 @@ describe("오피스 편집기(6.0 VO)", () => {
     const s = await (await json("POST", `${D}/office/session`)).json<any>();
     const cbPath = new URL(s.config.editorConfig.callbackUrl).pathname + new URL(s.config.editorConfig.callbackUrl).search;
     const send = async (body: object, secret = SECRET) =>
-      server(cbPath, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${await signJwt({ payload: body }, secret)}` }, body: JSON.stringify(body) });
+      server(cbPath, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${await signJwt({ payload: body, exp: Math.floor(Date.now() / 1000) + 300 }, secret)}` }, body: JSON.stringify(body) });
     const saved = docx("고침");
     const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       expect(String(input)).toBe("https://office.test/cache/files/out.docx");

@@ -43,11 +43,12 @@ async function setup(entry = "report.docx") {
 
 describe("오피스 편집 서버(6.0 VO)", () => {
   test("TC-VO-01 JWT: 서명·검사 왕복, 다른 비밀값·내용 바꿈·만료·alg 바꿈은 거부. 토큰은 쓰임새(file·callback)가 맞아야 한다", async () => {
-    const t = await signJwt({ a: 1 }, SECRET);
-    assert.deepEqual(await verifyJwt(t, SECRET), { a: 1 });
+    const exp = Math.floor(Date.now() / 1000) + 60;
+    const t = await signJwt({ a: 1, exp }, SECRET);
+    assert.deepEqual(await verifyJwt(t, SECRET), { a: 1, exp });
     assert.equal(await verifyJwt(t, "other"), null);
     const [h, , s] = t.split(".");
-    const forged = `${h}.${Buffer.from(JSON.stringify({ a: 2 })).toString("base64url")}.${s}`;
+    const forged = `${h}.${Buffer.from(JSON.stringify({ a: 2, exp })).toString("base64url")}.${s}`;
     assert.equal(await verifyJwt(forged, SECRET), null);
     const none = `${Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url")}.${t.split(".")[1]}.`;
     assert.equal(await verifyJwt(none, SECRET), null);
@@ -84,7 +85,9 @@ describe("오피스 편집 서버(6.0 VO)", () => {
     assert.equal(c.editorConfig.callbackUrl, "https://app/cb");
     assert.equal(c.editorConfig.lang, "ko");
     const { token, ...rest } = c;
-    assert.deepEqual(await verifyJwt(token, SECRET), rest);
+    const { exp: cexp, ...signed } = (await verifyJwt<Record<string, unknown>>(token, SECRET))!;
+    assert.deepEqual(signed, rest);
+    assert.ok(Number(cexp) * 1000 > Date.now(), "편집 설정 JWT에도 만료(exp)");
     const v = await editorConfig({ key: "k1", title: "t", entry: "s.pptx", mode: "view", fileUrl: "f", callbackUrl: "cb", user: { id: "1", name: "n" } }, SECRET);
     assert.equal(v.documentType, "slide");
     assert.equal("callbackUrl" in v.editorConfig, false);
@@ -92,9 +95,11 @@ describe("오피스 편집 서버(6.0 VO)", () => {
   });
 
   test("TC-VO-04 콜백 검사: 본문 token·Authorization Bearer({payload}) 둘 다 받고, 위조는 null", async () => {
+    // 오피스 서버가 보내는 토큰에는 만료(exp)가 있다
+    const exp = Math.floor(Date.now() / 1000) + 300;
     const body = { key: "k", status: 2, url: "https://office/x" };
-    assert.deepEqual(await verifyCallback({ ...body, token: await signJwt(body, SECRET) }, undefined, SECRET), body);
-    assert.deepEqual(await verifyCallback(body, `Bearer ${await signJwt({ payload: body }, SECRET)}`, SECRET), body);
+    assert.deepEqual(await verifyCallback({ ...body, token: await signJwt({ ...body, exp }, SECRET) }, undefined, SECRET), { ...body, exp });
+    assert.deepEqual(await verifyCallback(body, `Bearer ${await signJwt({ payload: body, exp }, SECRET)}`, SECRET), body);
     assert.equal(await verifyCallback({ ...body, token: await signJwt(body, "bad") }, undefined, SECRET), null);
     assert.equal(await verifyCallback(body, undefined, SECRET), null);
   });

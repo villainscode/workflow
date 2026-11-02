@@ -19,6 +19,9 @@ export const openOfficeSession = async (menu: string, doc: string) =>
   send<OfficeSession>(await fetch(`${D(menu, doc)}/office/session`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }));
 export const keepOfficeAlive = async (menu: string, doc: string, key: string) =>
   send<{ alive: boolean }>(await fetch(`${D(menu, doc)}/office/keepalive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key }) }));
+/** 잠금 풀기(owner) */
+export const unlockOffice = async (menu: string, doc: string) =>
+  send<{ released: boolean }>(await fetch(`${D(menu, doc)}/office/unlock`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }));
 export const officeState = async (menu: string, doc: string) => send<{ active: boolean; key: string | null; rev: number }>(await fetch(`${D(menu, doc)}/office`));
 
 /** 오피스 서버의 api.js를 한 번만 넣는다 */

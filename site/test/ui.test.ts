@@ -83,7 +83,7 @@ describe("화면", { skip }, () => {
         // 실제 서버처럼 닫힌 뒤 조금 있다가 콜백(서버 주소는 대역 쪽에서 127.0.0.1로)
         const body = { key: u.searchParams.get("key"), status: 2, url: `${OFFICE}/cache/out.docx`, users: ["local"] };
         const cb = new URL(u.searchParams.get("cb")!);
-        setTimeout(() => void signJwt({ payload: body }, OFFICE_SECRET).then((t) => fetch(`${srv.url}${cb.pathname}${cb.search}`, {
+        setTimeout(() => void signJwt({ payload: body, exp: Math.floor(Date.now() / 1000) + 300 }, OFFICE_SECRET).then((t) => fetch(`${srv.url}${cb.pathname}${cb.search}`, {
           method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${t}` }, body: JSON.stringify(body),
         })), 300);
         return;

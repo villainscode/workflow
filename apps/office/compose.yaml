@@ -5,7 +5,7 @@
 services:
   office:
     build: .
-    ports: ["8090:80"]
+    ports: ["127.0.0.1:8090:80"]
     environment:
       JWT_ENABLED: "true"
       JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:?ONLYOFFICE_JWT_SECRET를 정하세요}

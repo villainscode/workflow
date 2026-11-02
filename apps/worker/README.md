@@ -98,7 +98,10 @@ openssl rand -base64 32 | npx wrangler secret put ONLYOFFICE_JWT_SECRET --env st
 
 - 비용(예상): standard-3(8GiB 메모리·디스크)이 켜져 있는 동안 시간당 약 $0.09, CPU는 쓴 만큼 더한다. 마지막 요청 뒤 30분이면 멈추므로 하루 2시간 쓰면 월 약 $5~6. Workers Paid 포함 사용량(메모리 월 25GiB-시간 등)을 먼저 쓴다. 사용량 창의 `officeSessions`가 편집 세션 수다.
 - 콜드 스타트: 컨테이너가 멈춰 있었으면 화면이 「편집 서버를 깨우는 중」 진행 막대로 기다린다(로컬 docker에서는 12초, Containers는 이미지를 받는 처음에 더 걸린다).
-- 컨테이너는 인터넷을 쓴다(`enableInternet`): 오피스 서버가 `APP_ORIGIN`에서 파일을 받고 콜백을 보낸다. 콜백이 가리키는 저장 파일은 `OFFICE_ORIGIN` 주소만 받고 컨테이너에서 직접 읽는다(SSRF 막기, 64MB 상한).
+- 컨테이너는 인터넷을 쓴다(`enableInternet`): 오피스 서버가 `APP_ORIGIN`에서 파일을 받고 콜백을 보낸다. 콜백이 가리키는 저장 파일은 `OFFICE_ORIGIN` 주소만 받고 컨테이너에서 직접 읽는다(SSRF 막기, 읽으며 세어 64MB 상한).
+- 편집기 출처 프록시는 편집기가 쓰는 경로만 넘긴다(`packages/core/src/office.ts` `officeProxyPath`: `web-apps`·`sdkjs`·`plugins`·`fonts`·`doc`·`cache/files`… 버전 접두어 포함, `/healthcheck`). 관리·명령·변환 API(`/coauthoring/CommandService.ashx`, `/ConvertService.ashx`, `/info`, `/admin`)는 404. 이미지를 올린 뒤 `test:office-real`이 편집기 경로가 모두 허용 목록 안인지 확인한다.
+- 남는 위험(문서화, V6 보안 점검): 화면은 `OFFICE_ORIGIN`의 `api.js`를 앱 출처 스크립트로 넣는다. 사용자 문서를 읽는 컨테이너가 장악되면 그 스크립트가 앱 세션 권한으로 돈다. 대응: 이미지는 digest로 고정하고 고치지 않으며 보안 업데이트를 따라 올린다. 앱 화면에는 지금 CSP가 없어 `script-src`로 좁히지 못한다(CSP를 두게 되면 `script-src`에 `OFFICE_ORIGIN`만 더한다).
+- 잠금: 편집 세션은 최대 8시간까지만 연장되고, owner가 「오피스 잠금 풀기」(`POST …/office/unlock`)로 풀 수 있다. 세션이 끝난 뒤 온 저장 콜백은 반영하지 않고 활동 `office-reject`로 남긴다.
 - 로컬: `ONLYOFFICE_JWT_SECRET=… docker compose -f apps/office/compose.yaml up -d`(http://localhost:8090). 사이트는 `ONLYOFFICE_URL=http://localhost:8090 ONLYOFFICE_JWT_SECRET=… npm run dev`, `wrangler dev`는 `.dev.vars`에 `OFFICE_ORIGIN=http://localhost:8090`·`OFFICE_BACKEND_ORIGIN=http://host.docker.internal:8787`·`ONLYOFFICE_JWT_SECRET`(컨테이너 바인딩 없이 docker로 바로 간다). 실제 왕복 확인: `site/`의 `npm run test:office-real`.
 - 이미지를 올릴 때: `apps/office/Dockerfile`의 digest를 바꾸고 `npm run test:office-real`을 돌린다. 이미지를 고치지 않는다(AGPL 소스 공개 의무가 생기지 않게. 고지는 화면 편집기 안 ONLYOFFICE 정보에 남는다).
 
