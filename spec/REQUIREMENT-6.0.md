@@ -143,7 +143,7 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 | **V2 HTML 속성 편집** (완료) | 1.5 | HTML `setStyle`(허용 목록·역연산), 토큰 색 견본, 글자 일부 서식(span style), 표 열 끌기·행 높이·표 너비, 흐름 속 그림 손잡이·정렬, 복제, HTML 구조 편집 화면을 요소 편집기로 교체 | core: 연산 뒤 바뀌지 않은 바이트 동일·역연산 왕복. 리포 HTML 전체에 "아무것도 안 바꾸고 저장 = 바이트 동일". 화면: 글꼴 크기·색 바꾸기 → 새로 고침 뒤 유지 |
 | **V3 HTML 자유 배치** | 1.5 | 어떤 요소든 끌어 고정 위치로 전환(섹션 기준), 그림·글상자·SVG를 끌어 놓은 자리에 넣기, 이동·크기·앞뒤·스냅·정렬, 섹션 최소 높이 자동 조정, 좁은 화면 규칙 | 화면: 그림을 지정 위치에 올리고 옮긴 좌표 저장(배율별 오차 1px 이내), 640px 이하에서 가로 스크롤 없음, 다른 섹션 바이트 동일 |
 | **V4 SVG** | 2.5 | SVG 자산(서버 소독), HTML·덱에 파일 참조·인라인으로 넣기, draw.io 임베드(자체 호스팅)로 새로 그리기·고치기(`xmlsvg`), svgedit로 업로드 SVG 고치기, 인라인 SVG 색·글자 속성 편집(`svgAttr`) | 소독 테스트(스크립트·이벤트 속성·외부 주소 제거), draw.io로 그려 넣고 다시 열어 고치기, svgedit로 도형 색·위치 바꿔 저장 화면 테스트 |
-| **VL 로컬 사이트 편집** | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
+| **VL 로컬 사이트 편집** (완료, 12절) | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
 | **VO 오피스 편집 서버** | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
 | **V5 에이전트·문서** | 0.5 | MCP `doc_ops` 연산 추가, `svg_put`, 스킬·가이드 갱신 | MCP 테스트: 에이전트가 글꼴·자유 배치·SVG 넣기를 연산으로 수행, 진단에 fix |
 | **V6 운영 마감** | 0.5 | 보안 점검(SVG 소독·draw.io 메시지·스타일 주입·오피스 콜백 JWT), staging 전체 회귀, 운영 배포 | 보안 점검 높음 이상 0, staging 회귀 통과 |
@@ -216,3 +216,13 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
 - 화면(`viewers/structedit/`): 속성 패널(`HtmlStylePanel`), 글자 편집 중 도구 막대(`editor/TextToolbar`를 상태·명령 어댑터로 나눠 HTML contenteditable에도 씀, `inlineText.ts`), 표 열 경계·행 높이·표 너비·그림 크기 손잡이(`HtmlHandles`, 감싸는 상자 대비 %), 그림 정렬, 복제(⌘D), ⌘Z·⇧⌘Z, Esc 부모 고르기, 레이어 패널(`editor/LayerPanel`).
 - 계획과 다른 점: 역연산을 따로 두지 않았다. HTML은 연산 하나가 수정본 하나라 되돌리기는 수정본 복원으로 한다(5.0 구조 편집과 같은 방식). 덱 캔버스(Moveable)와 HTML은 겹치는 부분이 없어 공통 캔버스 모듈은 만들지 않았다. HTML은 배율 없는 iframe 위 손잡이 층이고, 공통으로 쓴 것은 글자 도구 막대(상태·명령 어댑터)와 레이어 패널이다. 공통 캔버스는 V3 자유 배치에서 다시 본다.
 - 테스트: TC-VE-03~09, TC-CFUI-20.
+
+**VL 로컬 사이트 편집 (2026-11-02, D-58)**
+
+- 수정본 층을 `packages/core/src/work`로 옮겼다: 작업 상태·수정본 쌓기·되돌리기·버전으로 올리기 전 확인, 구조 편집(HTML·OOXML)·슬라이드 덱 연산(rev 다시 적용 포함)·덱 파일 검사. 저장소는 `DocStore`(수정본 행·버전 파일·내용 주소 blob)로 받는다. Worker의 `revisions.ts`·`structedit.ts`·`deck.ts`는 D1·R2 저장소와 이력 조회만 남은 얇은 층이 됐고 Worker 테스트 73건이 그대로 통과한다. Worker의 `HttpError`는 core `WorkError`와 같은 클래스다.
+- 로컬 서버(`site/server/work.ts`, 경로는 `index.ts`): Worker와 같은 경로·응답(`work`·`work/structure`·`work/edit-view`·`work/pdf`·`work/files/<r번호|버전>/…`·`revisions`·`restore`·`publish`·`deck`·`deck/slides/:sid`·`assets`). 작업본 본문은 `data/work/blobs`, 수정본 행·머리·그림 자산은 `data/work.db`라 편집해도 `docs/`는 그대로이고, 「버전으로 저장」하면 업로드와 같은 `upload()`로 새 `vN.N` 폴더와 `meta.yaml`(`source: revision`)을 쓴다. 덱이 가리키는 그림은 그 버전 폴더 `assets/`로 복사하고, 다른 곳에서 clone한 리포에서는 색인 sha로 찾는다. 저장하면 SSE `changed`(reason `revision`)로 알린다.
+- 화면: 구조 편집·슬라이드 편집·PDF 편집 버튼의 `CLOUD` 조건을 뺐다. 로컬 덱 그림 주소(`useAssetUrl`)도 연다. PDF 내보내기는 Cloudflare만 둔다.
+- MCP: 로컬에서도 덱 쓰기·구조 연산·수정본 도구가 동작한다. `deck_render`만 "Browser Rendering이 없다"고 안내한다.
+- 함께 고친 버그: 로컬에서 슬라이드 덱이 덱으로 그려지지 않던 문제(화면이 `path === "deck.json"`으로 알아보는데 로컬 파일 경로는 `docs/…/vN.N/deck.json`). `relPath`·`isDeck`로 맞췄다(TESTING 5절).
+- 계획과 다른 점: 작업본을 "작업본 폴더"가 아니라 Worker와 같은 내용 주소 blob으로 두었다(같은 core 규칙을 그대로 쓰려고). 로컬에는 사용자가 없어 수정본 작성자는 비우고 출처(human·agent·restore)만 남긴다. 문서를 다른 메뉴로 옮기면 작업본은 이어지지 않는다(버전 파일에서 다시 시작). 접속자 표시(presence)는 Cloudflare만이다.
+- 테스트: TC-VE-10~13(`site/test/work.test.ts`), TC-UI-35·36, TC-MCP-21·22 갱신.

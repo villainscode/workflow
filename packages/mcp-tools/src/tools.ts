@@ -396,7 +396,7 @@ export function registerTools(server: McpServer, host: ToolHost) {
   const SLIDE_OPS = "연산(eid로 대상 지정): setText{eid,html}, setStyle{eid,set,unset}, setAttr{eid,name:alt|src,value}, insert{parent,index,html}, remove{eid}, restore{parent,index,html}, move{eid,parent,index}, " +
     "toPinned{eid,box:{left,top,width,height}}, tableCols{eid,widths}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, setNotes{text}";
   const LOCAL_ONLY = (e: unknown) => {
-    if (e instanceof ToolError && (e.status === 404 && /Not Found|^404/.test(e.message))) throw new ToolError("이 사이트에서는 고칠 수 없습니다(로컬 사이트는 보기만, D-51). Cloudflare 워크스페이스에서 쓰세요.");
+    if (e instanceof ToolError && (e.status === 404 && /Not Found|^404/.test(e.message))) throw new ToolError("이 사이트에는 없는 기능입니다(로컬 사이트에는 Browser Rendering이 없어 deck_render를 쓸 수 없습니다). Cloudflare 워크스페이스에서 쓰세요.");
     throw e;
   };
   interface DeckWork { rev: number; baseVersion: string; index: { title: string; order: string[] }; slides: { id: string; html: string }[] }

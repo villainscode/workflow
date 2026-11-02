@@ -8,6 +8,7 @@
     "./textedit/*": "./src/textedit/*.ts",
     "./slide": "./src/slide/index.ts",
     "./pdfedit": "./src/pdfedit/index.ts",
+    "./work": "./src/work/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {

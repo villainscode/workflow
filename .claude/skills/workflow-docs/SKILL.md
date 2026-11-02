@@ -28,7 +28,7 @@ description: 업무 문서 사이트(localhost:8000)의 문서를 찾고, 텍스
 - **여러 파일 아티팩트**: ① Artifact `list`(`scope: "files"`, `url`)로 파일 목록을 본다 ② `read`(`paths`, `out_dir`: 새 빈 폴더)로 모두 같은 폴더에 받는다. 페이지 본문은 `read`(path 없이)로 받아 그 폴더의 `index.html`로 둔다 ③ `upload_document`(files: [그 폴더], entry: `index.html`, origin: 아티팩트 주소)로 올린다.
 - 출처(`origin`)가 있는 문서는 사이트에서 스크립트를 끈 채로 열리고, 화면의 "스크립트 켜기"로 켠다(D-25, D-27). 출처는 사이트 "문서 관리"에서 고친다.
 - 정식 확정: `release_document`.
-- **슬라이드 덱**(5.0): 새 덱은 `deck_create`(슬라이드마다 `<section id=…>` HTML 한 조각). 고칠 때는 `deck_get`으로 data-eid와 rev를 읽고 `slide_patch`(연산)로 작게 고친다. 통째 교체·새 슬라이드는 `slide_put`, 그림은 `asset_put`으로 올려 받은 `asset:<sha256>`을 src에 쓴다. 쓰기 도구가 돌려준 진단(파일:줄:칸 [코드] → fix)대로 고쳐 다시 보낸다. 사람이 고친 뒤에는 반드시 `deck_get`으로 다시 읽는다. 덱 쓰기는 Cloudflare 워크스페이스만 된다(로컬은 보기만).
+- **슬라이드 덱**(5.0): 새 덱은 `deck_create`(슬라이드마다 `<section id=…>` HTML 한 조각). 고칠 때는 `deck_get`으로 data-eid와 rev를 읽고 `slide_patch`(연산)로 작게 고친다. 통째 교체·새 슬라이드는 `slide_put`, 그림은 `asset_put`으로 올려 받은 `asset:<sha256>`을 src에 쓴다. 쓰기 도구가 돌려준 진단(파일:줄:칸 [코드] → fix)대로 고쳐 다시 보낸다. 사람이 고친 뒤에는 반드시 `deck_get`으로 다시 읽는다. 덱 쓰기는 로컬 사이트와 Cloudflare 워크스페이스 모두 된다(6.0 VL). `deck_render`(PNG 미리보기)만 Cloudflare 전용이다.
 - **HTML·DOCX·PPTX·XLSX 구조 고치기**(5.0, Cloudflare): `doc_structure`로 eid(HTML)·표/그림 id(오피스)와 rev를 읽고 `doc_ops`로 표 행·열·너비, 블록 넣기·지우기·옮기기, 그림을 고친다. 저장마다 HTML eid가 바뀌므로 다시 고칠 때는 `doc_structure`를 다시 읽는다. 결과는 수정본이고 버전은 사람이 만든다. 잘못 고쳤으면 `revision_list`로 보고 `revision_restore`로 되돌린다.
 
 ## 참조와 화면 표시

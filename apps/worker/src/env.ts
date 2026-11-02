@@ -34,10 +34,8 @@ export interface Workspace { id: number; slug: string; name: string }
 
 export type AppEnv = { Bindings: Bindings; Variables: { ws: Workspace; user: User | null; role: Role } };
 
-/** 원래 로컬 서버의 StoreError와 같은 뜻: status와 사용자에게 보일 메시지 */
-export class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
-}
+/** 원래 로컬 서버의 StoreError와 같은 뜻: status와 사용자에게 보일 메시지. 수정본 층(core work)이 던지는 오류와 같은 클래스다 */
+export { WorkError as HttpError } from "@workflow/core/work";
 
 /** R2 키: 워크스페이스별 내용 주소(sha256) 저장. 같은 내용은 한 번만 둔다 */
 export const blobKey = (wsId: number, sha256: string) => `ws/${wsId}/blobs/${sha256}`;

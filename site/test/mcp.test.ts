@@ -243,7 +243,7 @@ describe("정식 확정", () => {
 });
 
 describe("슬라이드 덱(5.0 M4)", () => {
-  test("TC-MCP-21 deck_create: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성. deck_get은 eid가 붙은 HTML(rev 0), 로컬에서 slide_patch는 보기만 안내", async () => {
+  test("TC-MCP-21 deck_create: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성. deck_get은 eid가 붙은 HTML(rev 0), 로컬에서도 slide_patch가 수정본으로 저장(6.0 VL)", async () => {
     await fail("deck_create", { menu: "notes", title: "나쁜 덱", slides: [{ id: "a", html: '<section id="a"><p style="margin-top:8px">x</p></section>' }] },
       /slides\/a\.html:1:\d+ \[css-prop\] 허용하지 않는 CSS 속성: margin-top → margin은 쓰지 않습니다/);
     assert.match(await ok("deck_create", { menu: "notes", title: "MCP 덱", slug: "mcp-deck", slides: [{ id: "cover", html: '<section id="cover"><h1>표지</h1></section>' }] }),
@@ -252,12 +252,20 @@ describe("슬라이드 덱(5.0 M4)", () => {
     const g = await ok("deck_get", { ref: "notes/mcp-deck" });
     assert.match(g, /rev 0\(기준 draft\)/);
     assert.match(g, /<h1 data-eid="e1">표지<\/h1>/);
-    await fail("slide_patch", { ref: "notes/mcp-deck", slideId: "cover", ops: [{ t: "setText", eid: "e1", html: "x" }] }, /로컬 사이트는 보기만/);
+    assert.match(await ok("slide_patch", { ref: "notes/mcp-deck", slideId: "cover", ops: [{ t: "setText", eid: "e1", html: "새 표지" }] }), /수정본 1/);
+    assert.match(await ok("deck_get", { ref: "notes/mcp-deck" }), /rev 1[\s\S]*새 표지/);
+    // 버전 폴더는 사람이 「버전으로 저장」할 때만 생긴다
+    assert.equal(meta("notes", "mcp-deck").versions.length, 1);
+    await fail("deck_render", { ref: "notes/mcp-deck", slideId: "cover" }, /Browser Rendering이 없어/);
   });
 
-  test("TC-MCP-22 로컬에서 doc_structure·doc_ops·revision_list는 보기만 안내(D-51)", async () => {
-    await fail("doc_structure", { ref: "sdlc/notes/mcp-deck" }, /로컬 사이트는 보기만/);
-    await fail("doc_ops", { ref: "sdlc/notes/mcp-deck", ops: [{ t: "remove", eid: "e1" }], baseRev: 0 }, /로컬 사이트는 보기만/);
-    await fail("revision_list", { ref: "sdlc/notes/mcp-deck" }, /로컬 사이트는 보기만/);
+  test("TC-MCP-22 로컬에서도 doc_structure·doc_ops·revision_list·revision_restore가 동작한다(6.0 VL, D-58)", async () => {
+    await ok("upload_document", { menu: "notes", title: "MCP 구조", slug: "mcp-struct", files: ["out/bundle/index.html"] });
+    const st = await ok("doc_structure", { ref: "notes/mcp-struct" });
+    assert.match(st, /e\d+ <p> 묶음/);
+    const eid = /(e\d+) <p>/.exec(st)![1];
+    assert.match(await ok("doc_ops", { ref: "notes/mcp-struct", baseRev: 0, ops: [{ t: "setText", eid, html: "바뀐 묶음" }] }), /수정본 1로 저장/);
+    assert.match(await ok("revision_list", { ref: "notes/mcp-struct" }), /r1 \(지금\) · agent/);
+    assert.match(await ok("revision_restore", { ref: "notes/mcp-struct", rev: 0, baseRev: 1 }), /수정본 2를 만들었습니다/);
   });
 });

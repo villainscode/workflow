@@ -2,7 +2,7 @@ import type { DeckIndex, SlideOp } from "@workflow/core/slide";
 import { API } from "./base.ts";
 import { SaveConflict } from "./structedit.ts";
 
-/** 덱 편집 API(5.0 M4, Cloudflare). 저장은 모두 수정본이 된다. 409는 SaveConflict */
+/** 덱 편집 API(5.0 M4, 로컬·Cloudflare). 저장은 모두 수정본이 된다. 409는 SaveConflict */
 
 export interface DeckWork { baseVersion: string; rev: number; index: DeckIndex; slides: { id: string; html: string }[] }
 export interface SlideSaved { rev: number; changed: boolean; rebased: boolean; slide: string; html: string; inverse: SlideOp[] }

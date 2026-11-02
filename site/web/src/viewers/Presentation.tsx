@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { fileSrc, useText, type VersionFile } from "../lib/api.ts";
+import { fileSrc, isDeck, useText, type VersionFile } from "../lib/api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
 import { Viewer } from "./Viewer.tsx";
@@ -54,7 +54,7 @@ const DeckShow = lazy(() => import("./deck/DeckViewer.tsx").then((m) => ({ defau
 
 export function PresentationContent({ file, ctx }: { file: VersionFile; ctx: DocContext }) {
   const e = ext(file.path);
-  if (file.path === "deck.json") return <Suspense fallback={null}><DeckShow menu={ctx.menu} doc={ctx.doc} version={ctx.version} /></Suspense>;
+  if (isDeck(file)) return <Suspense fallback={null}><DeckShow menu={ctx.menu} doc={ctx.doc} version={ctx.version} /></Suspense>;
   if (e === "html" || e === "htm") {
     return (
       <ScaledBox>

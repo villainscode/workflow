@@ -6,7 +6,7 @@ import { PresentationContent } from "../viewers/Presentation.tsx";
 import { IconButton } from "./IconButton.tsx";
 import { useParams, useSearchParams } from "react-router";
 import { DocSettingsDialog } from "./manage/DocSettingsDialog.tsx";
-import { fileSrc, useDoc, versionLabel } from "../lib/api.ts";
+import { fileSrc, isDeck, useDoc, versionLabel } from "../lib/api.ts";
 import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { useConfirm } from "./confirm/ConfirmProvider.tsx";
 import { EmptyState } from "./EmptyState.tsx";
@@ -201,15 +201,15 @@ export function DocView() {
             <IconButton icon={TextCursorInput} label="텍스트 편집" active={textEditing} disabled={textEditing || structEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setTextEditing(true); }} />
           )}
-          {CLOUD && can.edit && entry && STRUCT_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+          {can.edit && entry && STRUCT_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
             <IconButton icon={LayoutPanelTop} label="구조 편집 (표·그림)" active={structEditing} disabled={structEditing || textEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setStructEditing(true); }} />
           )}
-          {CLOUD && can.edit && entry?.path === "deck.json" && version.version === data.currentVersion && (
+          {can.edit && isDeck(entry) && version.version === data.currentVersion && (
             <IconButton icon={PenLine} label="슬라이드 편집" active={structEditing} disabled={structEditing}
               onClick={() => setStructEditing(true)} />
           )}
-          {CLOUD && can.edit && entry && /\.pdf$/i.test(entry.path) && version.version === data.currentVersion && (
+          {can.edit && entry && /\.pdf$/i.test(entry.path) && version.version === data.currentVersion && (
             <IconButton icon={PenLine} label="PDF 편집" active={structEditing} disabled={structEditing}
               onClick={() => setStructEditing(true)} />
           )}
@@ -261,7 +261,7 @@ export function DocView() {
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
         ) : structEditing ? (
           <Suspense fallback={<EmptyState title="편집기를 불러오는 중…" />}>
-            {entry.path === "deck.json" ? <DeckEditor menu={menu} doc={doc} onExit={onStructExit} />
+            {isDeck(entry) ? <DeckEditor menu={menu} doc={doc} onExit={onStructExit} />
               : /\.pdf$/i.test(entry.path) ? <PdfEditor menu={menu} doc={doc} onExit={onStructExit} />
               : <StructEditor menu={menu} doc={doc} onExit={onStructExit} />}
           </Suspense>

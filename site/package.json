@@ -10,7 +10,7 @@
     "build": "tsc && vite build",
     "typecheck": "tsc",
     "check:textedit": "tsx scripts/textedit-check.ts",
-    "test": "node --import tsx --test test/unit.test.ts test/markdown.test.ts test/textedit.test.ts test/api.test.ts test/mcp.test.ts",
+    "test": "node --import tsx --test test/unit.test.ts test/markdown.test.ts test/textedit.test.ts test/api.test.ts test/mcp.test.ts test/work.test.ts",
     "test:ui": "node --import tsx --test test/ui.test.ts",
     "test:all": "npm test && npm run test:ui"
   },

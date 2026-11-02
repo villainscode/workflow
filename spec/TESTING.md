@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 157개(실제 테스트 205건: `npm test` 171건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 73건 + Cloudflare 화면 테스트 20건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 34건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 163개(실제 테스트 211건: `npm test` 175건 + `npm run test:ui` 36건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 73건 + Cloudflare 화면 테스트 20건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 34건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -33,6 +33,7 @@ npm run test:ui          # Cloudflare 화면 테스트(VITE_CLOUD=1 빌드 + 임
 | `site/test/textedit.test.ts` | 2.0 텍스트 편집 어댑터(HTML·DOCX·PPTX·XLSX) | 샘플 파일(`site/scripts/fixtures/`) |
 | `site/test/api.test.ts` | 사이트 REST API 전체 | 임시 docs로 서버를 띄우고 응답과 원본 파일(meta.yaml·버전 폴더)을 함께 확인 |
 | `site/test/mcp.test.ts` | 3.x workflow-docs MCP 도구 11개 | MCP SDK 클라이언트로 stdio 연결(Claude Code와 같은 방식) |
+| `site/test/work.test.ts` | 6.0 VL 로컬 수정본·구조 편집·덱 편집·그림 자산·버전으로 저장 | 임시 docs로 서버를 띄우고 저장 전후 docs/ 파일 전체를 비교 |
 | `site/test/ui.test.ts` | 화면 주요 흐름 | Puppeteer로 실제 브라우저 조작 |
 | `site/test/helpers.ts` | 임시 작업 폴더, 서버 띄우기, 업로드·호출 도구 | |
 
@@ -201,8 +202,8 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-MCP-18 | `get_text`: seg 목록 형식(`0,2-3`)을 해석해 그 조각만 ▶로 표시 | 3.0 7.2 |
 | TC-MCP-19 | 쓰기 도구의 변경 알림에 `by: claude-code`와 바뀐 조각이 담긴다 | 3.0 7.3, D-29 |
 | TC-MCP-20 | `focus_in_site`: 열린 화면이 없으면 주소 안내, 있으면 "열린 사이트 화면 n개" + `focus` 이벤트(버전·seg 포함) | 3.0 7.3 |
-| TC-MCP-22 | 로컬에서 `doc_structure`·`doc_ops`·`revision_list`는 "로컬 사이트는 보기만" 안내(D-51) | 5.0 M7 |
-| TC-MCP-21 | `deck_create`: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성(메모 "Claude Code:"). `deck_get`은 eid가 붙은 HTML(rev 0), 로컬에서 `slide_patch`는 "로컬 사이트는 보기만" 안내(D-51) | 5.0 M4 |
+| TC-MCP-22 | 로컬에서도 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore`가 동작한다(작업 출처 agent, rev 0으로 되돌리기) | 6.0 VL(D-58, D-51 바꿈) |
+| TC-MCP-21 | `deck_create`: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성(메모 "Claude Code:"). `deck_get`은 eid가 붙은 HTML(rev 0), 로컬에서도 `slide_patch`가 수정본(버전 폴더는 그대로), `deck_render`는 Browser Rendering이 없다고 안내 | 5.0 M4, 6.0 VL |
 | TC-MCP-21 | SVG 문서도 `get_text`·`edit_text`로 고치고, 넘칠 수 있으면 "주의:"를 함께 알린다 | 2.0 확장(SVG) |
 | TC-MCP-17 | `release_document`: v1.0 approved, 메모 앞 "Claude Code:", 두 번째는 거부 | 3.0 §4.2 |
 
@@ -243,6 +244,8 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-UI-32 | 문서 화면 제목을 누르면 그 자리 입력칸, Esc는 취소, Enter → 확인 창 → `meta.yaml` title이 바뀌고 제목에 반영 | 5.3 |
 | TC-UI-33 | 업로드 창 "새 Markdown 문서" 제목 칸에서 한글 Enter(조합 중 keydown 뒤 Enter 두 번)를 쳐도 확인 창이 취소되지 않고, 확인하면 문서가 생긴다 | 아래 5절 버그의 회귀 검사 |
 | TC-UI-34 | 상단 메뉴 대분류 추가 이름 칸에서 같은 한글 Enter를 쳐도 확인 창이 취소되지 않고, 확인하면 대분류가 생긴다 | 아래 5절 버그의 회귀 검사 |
+| TC-UI-35 | 로컬 HTML 구조 편집: 속성 패널로 글자 크기 → 수정본 자동 저장(docs/는 그대로) → 「버전으로 저장」하면 v0.1 폴더에 바뀐 HTML | 6.0 VL |
+| TC-UI-36 | 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 슬라이드 편집에서 글자를 고쳐 Esc → 수정본 → 「버전으로 저장」 | 6.0 VL, 아래 5절 버그의 회귀 검사 |
 | TC-UI-13 | 같은 탭에서 전체 페이지 이동을 10번 해도 멈추지 않고, 뒤로 가기로 돌아온 페이지도 실시간 반영된다 | 2.5 (아래 5절 버그의 회귀 검사) |
 
 ---
@@ -380,7 +383,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-40 | PDF 쪽: 회전(누적)·지우기·옮기기·다른 PDF 끼워 넣기, 범위 밖·잘못된 각도·PDF 아닌 파일 400, 마지막 쪽은 못 지움, 빈 연산은 원본 그대로 | 5.0 4.5 |
 | TC-ED-41 | PDF 양식: 칸 목록(글자·체크·목록), 한글 글자·체크·목록 채우기(우리 글꼴로 칸 모양), 없는 칸 400 | 5.0 4.5 |
 
-### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`, `site/test/unit.test.ts`, `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20)
+### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`, `site/test/unit.test.ts`·`work.test.ts`, `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20, TC-UI-35·36)
 
 계획은 `spec/REQUIREMENT-6.0.md`. 마일스톤마다 케이스를 더한다.
 
@@ -395,6 +398,10 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-VE-07 | 문서 견본(`docTheme`): 글꼴은 Google Fonts 링크·`@font-face`·글꼴 변수(일반 계열 빼고 처음 나온 순서), 색은 `:root` 색 변수의 처음 값과 다크 모드 여부 | 6.0 4.2 |
 | TC-VE-08 | 리포 실제 HTML 문서 전체: 빈 연산은 바이트 동일, 문서마다 앞 40개 블록에 setStyle을 넣고 지우면 그 시작 태그 밖은 그대로(style이 없던 요소는 원본과 같다) | 6.0 7절 V2 |
 | TC-VE-09 | Worker 연결: 구조 응답에 인라인 style·깊이·문서 견본(theme), setStyle·복제는 수정본 하나(메모 「서식 1, 복제 1」), 허용 밖 스타일은 400과 고칠 방법, 같은 값이면 수정본을 만들지 않는다. MCP `doc_structure`가 글꼴·색 토큰 줄을 보여 준다(TC-CF-46) (`structedit.test.ts`) | 6.0 4.5 |
+| TC-VE-10 | 로컬 수정본(Worker와 같은 API, 규칙은 core `work`): HTML 구조 연산 → 수정본 1(docs/는 그대로), 지난 baseRev는 409, 작업본 파일·편집 사본은 `work/files/r<rev>/`에서 상대 경로가 풀린다. 「버전으로 저장」하면 docs/ 변화는 새 버전 폴더와 meta.yaml뿐(source: revision), 이력에 올린 버전, 같은 rev로 다시 올리기는 409 (`work.test.ts`) | 6.0 VL(D-58) |
+| TC-VE-11 | 로컬 되돌리기: rev 0(기준 버전)·예전 수정본으로 새 수정본, 수정본 파일 목록과 내용, 이력 출처(restore·human) | 6.0 VL |
+| TC-VE-12 | 로컬 덱 편집과 그림 자산: 자산은 `asset:<sha>`(크기·주소), 슬라이드 연산이 수정본(inverse), 형식 밖 연산은 400 진단, 「버전으로 저장」하면 가리킨 그림이 버전 폴더 `assets/`로 복사된다 | 6.0 VL |
+| TC-VE-13 | 로컬 그림 자산은 PNG·JPEG·WebP·GIF만(SVG 400), 없는 자산 404 | 6.0 VL |
 
 ## 3. 수동 확인 케이스
 
@@ -452,4 +459,5 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-30 | PDF 편집에서 글상자 도구로 쪽을 눌러도 글자 칸이 생기지 않음 | 눌렀을 때 생긴 글자 칸이 포커스를 받은 뒤, 같은 누름의 기본 동작(포커스 옮기기)으로 바로 포커스를 잃어 빈 칸으로 지워졌다 | 글상자 도구의 pointerdown 기본 동작을 막음(`PdfEditor.tsx`) | TC-CFUI-16 |
 | 2026-10-30 | 가져오기 CLI로 들어온 덱은 슬라이드 파일에 data-eid가 없어 에이전트가 고칠 요소를 가리킬 수 없음 | 가져오기는 업로드 검사(`prepareDeck`)를 거치지 않는다 | 덱 읽기 API(`readDeck`, 로컬·Worker)가 늘 직렬화 형식(eid 붙은)으로 준다. eid는 문서 순서로 정해져 서버·화면이 같다 | TC-CFUI-14, TC-MCP-21 |
 | 2026-10-30 | (Cloudflare staging) PDF 내보내기가 「Navigation timeout of 30000 ms exceeded」로 실패 | 렌더링 문서를 열 때 `networkidle0`(0.5초 동안 요청 없음)을 기다렸는데, 실제 Browser Rendering에서는 이 신호가 오지 않아 거의 매번 30초를 넘겼다. 로컬 `wrangler dev`는 로컬 Chrome이라 드러나지 않았다 | `load`까지만 기다리고 그 뒤 글꼴·그림을 기다림(`apps/worker/src/render.ts`) | 실제 Browser Rendering(원격 바인딩 시험 Worker)에서 `networkidle0` 3번 모두 시간 초과·`load` 3번 모두 4~5초 성공 확인, TC-CFUI-18 |
+| 2026-11-02 | 로컬 사이트에서 슬라이드 덱이 덱으로 그려지지 않고(대표 파일이 JSON 글로 보임) 슬라이드 편집 버튼도 나오지 않음 | 화면이 대표 파일을 `path === "deck.json"`으로 알아보는데, 로컬 색인의 파일 경로는 리포 기준(`docs/<메뉴>/…/vN.N/deck.json`)이다. Cloudflare만 버전 안 상대 경로라 드러나지 않았다 | 버전 안 상대 경로 `relPath`·`isDeck`(`web/src/lib/api.ts`)로 보기·발표·편집 버튼·덱 파일 읽기를 맞춤 | TC-UI-36 (수정 전 슬라이드 편집 버튼 없음으로 실패 확인) |
 | 2026-11-02 | (production) `http://workflow.simplite.net`으로 열고 로그인하면 Google이 「400 redirect_uri_mismatch」 | 콜백 주소를 요청 주소의 출처로 만드는데, http로 열면 https로 옮기는 곳이 없어 `http://…/api/auth/google/callback`을 보냈다(Google에는 https만 등록). 같은 이유로 세션 쿠키에 Secure도 빠질 수 있었다 | Worker 진입점에서 APP_ORIGIN이 https면 http 요청을 https로 301(`apps/worker/src/https.ts`), Worker를 거치지 않는 정적 화면은 `main.tsx`에서 https로 이동 | TC-CF-49 (수정 전 실패 확인) |

@@ -51,6 +51,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | 색인·검색 | SQLite(better-sqlite3) + drizzle-orm. 서버가 켜질 때마다 파일에서 다시 만든다. 검색은 FTS5 trigram |
 | 변환 | PPTX·DOCX → PDF는 LibreOffice, draw.io → SVG는 drawio CLI |
 | MCP | stdio 서버(`@modelcontextprotocol/sdk` 1.32) |
+| 편집기·수정본(6.0 VL, D-58) | `server/work.ts`: Worker와 같은 API. 작업본 본문은 `data/work/blobs/<sha256>`, 수정본 행·그림 자산은 `data/work.db`(better-sqlite3, 다시 만들지 않는다). 「버전으로 저장」하면 `docs/`에 새 버전 폴더와 meta.yaml |
 
 ## 4. Cloudflare 앱 (`apps/worker/`)
 
@@ -77,7 +78,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | API·권한 | `src/app.ts`(워크스페이스 미들웨어: 로그인·역할·Origin 검사·변경 알림), `src/members.ts` | D1 |
 | 로그인 | `src/auth.ts`(Google OIDC + PKCE, 세션 쿠키, 초대, 개발용 로그인, 원격 MCP 내부 호출 머리글) | D1 |
 | 쓰기·읽기 | `src/write.ts`, `src/manage.ts`, `src/repo.ts`, `src/search.ts`, `src/export.ts` | D1 + R2 |
-| 편집기(5.0) | `src/revisions.ts`(수정본·작업본·버전으로 올리기), `src/structedit.ts`(구조 편집 연산 → 수정본), `src/deck.ts`(슬라이드 덱 연산·통째 쓰기·색인, rev 다시 적용), `src/render.ts`(HTML PDF·슬라이드 PNG, Browser Rendering), `src/assets.ts`(편집기 이미지) | D1 + R2 |
+| 편집기(5.0) | 규칙은 `packages/core/src/work`(로컬과 같이 씀). `src/revisions.ts`(D1·R2 저장소, 이력, 버전으로 올리기), `src/structedit.ts`(구조 편집 연산 → 수정본), `src/deck.ts`(슬라이드 덱 연산·통째 쓰기·색인, rev 다시 적용), `src/render.ts`(HTML PDF·슬라이드 PNG, Browser Rendering), `src/assets.ts`(편집기 이미지) | D1 + R2 |
 | 사용자 콘텐츠 | `src/content.ts`(서명 토큰 `/c/…`, `/i/…`), `src/token.ts` | R2, 콘텐츠 도메인 |
 | 실시간 | `src/live.ts` | Durable Object(WebSocket) |
 | 변환 | `src/convert.ts`, `apps/converter` | Containers |
@@ -118,6 +119,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | HTML 구조 편집(5.0) | parse5. 요소 원본 위치로 표 행·열·열 너비·블록·그림을 바꾸고 나머지 바이트는 그대로 둔다(`structedit/html.ts`) |
 | DOCX·PPTX·XLSX 구조 편집(5.0, D-47) | htmlparser2(XML 모드) 위치 트리로 표 행·열·열 너비, 그림 교체, 시트 열 너비. 바뀐 파트만 다시 묶는다(`structedit/ooxml.ts`) |
 | PDF 편집 연산(5.0 M6) | pdf-lib + @pdf-lib/fontkit. 글상자·그림·형광펜·펜·쪽 회전·지우기·옮기기·끼워 넣기·양식 채우기, 회전된 쪽은 회전만큼 돌려 그림. 부분 글꼴은 harfbuzz `hb-subset`(글리프 번호 유지). `pdfedit/` |
+| 수정본 층(6.0 VL) | `work/`: 작업 상태·수정본 쌓기·되돌리기, 구조 편집·덱 연산을 작업본에 적용. 저장소는 `DocStore`(문서 하나의 수정본 행·버전 파일·내용 주소 blob)로 받아 Worker(D1·R2)와 로컬(SQLite·data 폴더)이 각자 만든다. sha256은 Web Crypto |
 | 슬라이드 형식(5.0 M4) | parse5로 제한된 HTML(덱 = deck.json + slides/<id>.html)을 읽고 허용 목록·CSS 값 문법을 직접 검사(css-tree 대신, 허용 범위가 좁다). 연산은 역연산을 돌려준다(`slide/`) |
 | 해시 | `@noble/hashes`(동기 sha256). Web Crypto는 비동기라 어댑터 API를 그대로 두려고 골랐다 |
 
@@ -125,11 +127,11 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 
 | 대상 | 도구 | 건수 |
 |---|---|---|
-| 로컬 사이트 | node:test(단위·API·MCP) | 170 |
-| 로컬 화면 | puppeteer(전역 설치) | 34 |
-| 공통 로직 | node:test(구조 편집·슬라이드 형식·PDF) | 27 |
-| Cloudflare Worker | Vitest 4 + `@cloudflare/vitest-plugin`(Workers 런타임에서 D1·R2·DO를 로컬로) | 71 |
-| Cloudflare 화면 | puppeteer + `wrangler dev`. 앱·파일 출처를 나누고, 변환 컨테이너는 로컬 Docker로 띄운다 | 18 |
+| 로컬 사이트 | node:test(단위·API·MCP·로컬 편집) | 175 |
+| 로컬 화면 | puppeteer(전역 설치) | 36 |
+| 공통 로직 | node:test(구조 편집·슬라이드 형식·PDF) | 34 |
+| Cloudflare Worker | Vitest 4 + `@cloudflare/vitest-plugin`(Workers 런타임에서 D1·R2·DO를 로컬로) | 73 |
+| Cloudflare 화면 | puppeteer + `wrangler dev`. 앱·파일 출처를 나누고, 변환 컨테이너는 로컬 Docker로 띄운다 | 20 |
 
 GitHub Actions(`.github/workflows/workflow-app.yml`):
 

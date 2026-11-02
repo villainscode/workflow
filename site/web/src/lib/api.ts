@@ -67,6 +67,11 @@ export { nextVersion, versionLabel } from "@workflow/core/versions";
 
 
 /** 파일 내용이 바뀌면 URL도 바뀌게 해서 브라우저 캐시와 iframe을 새로 고친다. */
+/** 버전 폴더 안 상대 경로. 로컬 사이트 색인은 리포 기준 경로(docs/<메뉴>/…/<문서>/vN.N/<파일>)를 준다 */
+export const relPath = (f: { path: string }) => (CLOUD ? f.path : f.path.replace(/^docs\/.*?\/v\d+\.\d+\//, ""));
+/** 슬라이드 덱(5.0 M4)의 대표 파일인가 */
+export const isDeck = (f: { path: string } | undefined) => !!f && relPath(f) === "deck.json";
+
 export const fileSrc = (f: VersionFile) => `${f.url}?h=${f.sha256.slice(0, 12)}`;
 
 /** 변환 결과 URL. 원본 내용이 바뀌면 h 값이 바뀌어 새로 변환된다. */

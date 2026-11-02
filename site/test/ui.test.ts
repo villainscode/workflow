@@ -35,6 +35,11 @@ async function open(path: string, title?: string) {
   if (title) await page.waitForFunction((t: string) => document.querySelector("main h1, h1")?.textContent?.includes(t), { timeout: 15_000 }, title);
 }
 const text = () => page.evaluate(() => document.body.innerText) as Promise<string>;
+/** 글자가 보이는 버튼(아이콘 + 글자)을 글자로 누른다 */
+async function clickButton(label: string) {
+  for (const b of await page.$$("button")) if ((await b.evaluate((e: Element) => e.textContent))?.trim() === label) return b.click();
+  throw new Error(`${label} 버튼이 없습니다`);
+}
 async function clickConfirm(label?: string) {
   await page.waitForSelector("dialog[open]", { timeout: 5000 });
   await new Promise((r) => setTimeout(r, 120)); // 포커스 지연(60ms) 뒤
@@ -694,6 +699,58 @@ describe("화면", { skip }, () => {
     await clickConfirm("추가");
     await page.waitForFunction(() => location.pathname === "/ops", { timeout: 10_000 });
     assert.match(readText(join(ws.docs, "_site/categories.yaml")), /key: ops[\s\S]*name: 운영|name: 운영[\s\S]*key: ops/);
+  });
+
+  test("TC-UI-35 로컬 HTML 구조 편집(6.0 VL): 속성 패널로 글자 크기 → 수정본 자동 저장 → 버전으로 저장하면 새 버전 폴더", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 구조 편집", slug: "local-struct" }, [["page.html", "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 구조 편집</h1><p>크기 바꿀 문단</p></main></body></html>"]]);
+    const FRAME = 'iframe[title="구조 편집"]';
+    await open("/sdlc/notes/local-struct", "로컬 구조 편집");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector("main > p[data-eid]") && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME);
+    await page.evaluate((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("main > p")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })), FRAME);
+    await page.waitForSelector('input[aria-label="서식 크기"]');
+    await page.click('input[aria-label="서식 크기"]');
+    await page.keyboard.type("22px");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    // docs/는 아직 그대로
+    assert.equal(meta("notes", "local-struct").current, "v0.0");
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    assert.equal(meta("notes", "local-struct").current, "v0.1");
+    assert.match(readText(join(ws.docs, "notes/local-struct/v0.1/page.html")), /<p style="font-size:22px">크기 바꿀 문단<\/p>/);
+  });
+
+  test("TC-UI-36 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 편집(6.0 VL)에서 글자를 두 번 눌러 고치고 Esc → 수정본 → 버전으로 저장", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 덱 편집", slug: "local-deck-ui" }, [
+      ["deck.json", JSON.stringify({ v: 1, title: "로컬 덱 편집", order: ["cover"] })],
+      ["slides/cover.html", '<section id="cover"><h1>표지</h1></section>'],
+    ]);
+    await open("/sdlc/notes/local-deck-ui", "로컬 덱 편집");
+    // 보기 화면도 덱으로 그린다(로컬 파일 경로는 docs/…/vN.N/deck.json이라 전에는 JSON 글로 보였다)
+    await page.waitForSelector("main .slide-root", { timeout: 15_000 });
+    await (await page.waitForSelector('button[aria-label="슬라이드 편집"]', { timeout: 10_000 })).click();
+    await page.waitForSelector('.deck-edit-layer [data-eid="e1"]', { timeout: 20_000 });
+    await page.click('.deck-edit-layer [data-eid="e1"]', { count: 2 });
+    await page.waitForSelector(".slide-text-editor.ProseMirror-focused");
+    await page.evaluate(() => {
+      const el = document.querySelector(".slide-text-editor")!;
+      const r = document.createRange(); r.selectNodeContents(el);
+      const sel = getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+    });
+    await page.keyboard.type("새 표지");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    assert.equal(meta("notes", "local-deck-ui").current, "v0.1");
+    assert.match(readText(join(ws.docs, "notes/local-deck-ui/v0.1/slides/cover.html")), /<h1 data-eid="e1">새 표지<\/h1>/);
   });
 
   test("TC-UI-12 없는 문서·없는 대분류는 안내 화면", async () => {

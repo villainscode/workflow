@@ -1,4 +1,4 @@
-import { convertSrc, fileSrc, type VersionFile } from "../lib/api.ts";
+import { convertSrc, fileSrc, isDeck, type VersionFile } from "../lib/api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { HtmlViewer } from "./HtmlViewer.tsx";
 import { ImageViewer } from "./ImageViewer.tsx";
@@ -24,7 +24,7 @@ const CODE = new Set(["yaml", "yml", "json", "ts", "tsx", "js", "sh", "py", "sql
 export function Viewer({ file, ctx }: { file: VersionFile; ctx: DocContext }) {
   const e = ext(file.path);
   const src = fileSrc(file);
-  if (file.path === "deck.json") return <Suspense fallback={<EmptyState title="불러오는 중…" />}><DeckViewer menu={ctx.menu} doc={ctx.doc} version={ctx.version} /></Suspense>;
+  if (isDeck(file)) return <Suspense fallback={<EmptyState title="불러오는 중…" />}><DeckViewer menu={ctx.menu} doc={ctx.doc} version={ctx.version} /></Suspense>;
   if (e === "md" || e === "markdown") return <MarkdownViewer file={file} src={src} ctx={ctx} />;
   if (e === "html" || e === "htm") return <HtmlViewer key={String(ctx.scripts ?? true)} url={src} scripts={ctx.scripts ?? true} />;
   if (IMAGE.has(e)) return <ImageViewer url={src} />;

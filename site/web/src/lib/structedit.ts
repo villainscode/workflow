@@ -3,7 +3,7 @@ import type { OoxmlImage, OoxmlSheet, OoxmlTable } from "@workflow/core/structed
 import { API } from "./base.ts";
 
 /**
- * 5.0 구조 편집·수정본 API(Cloudflare 전용, spec/REQUIREMENT-5.0.md 5.4).
+ * 5.0 구조 편집·수정본 API(spec/REQUIREMENT-5.0.md 5.4). 로컬 사이트도 같은 경로를 둔다(6.0 VL).
  * 연산(ops)은 서버가 작업본 대표 파일에 적용해 수정본 하나로 저장한다. 그림은 먼저 자산으로 올리고 `asset:<sha>`로 가리킨다.
  */
 
