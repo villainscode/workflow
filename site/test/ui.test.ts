@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { call, freePort, makeWorkspace, readText, SITE, startServer, upload, waitFor, type TestServer } from "./helpers.ts";
 import { applyOp, markEids, outline } from "@workflow/core/structedit/html";
+import { signJwt } from "@workflow/core/office";
 import { baseMinHeight, containingBlock, pinBoxOf, previewPin } from "../web/src/viewers/structedit/pinBox.ts";
 
 const PUPPETEER = (() => {
@@ -27,6 +28,11 @@ let page: any;
 // draw.io 대역(6.0 V4): 앱과 다른 출처(빈 포트)에서 embed 프로토콜만 흉내 내는 페이지
 let drawio: ReturnType<typeof createServer>;
 let DRAWIO = "";
+// 오피스 편집 서버 대역(6.0 VO): healthcheck(처음 두 번은 준비 안 됨), api.js, 닫으면 서명한 저장 콜백을 보낸다
+const OFFICE_SECRET = "ui-office-secret";
+let office: ReturnType<typeof createServer>;
+let OFFICE = "";
+let officeHealth = 0;
 const meta = (menu: string, doc: string) => parse(readText(join(ws.docs, menu, doc, "meta.yaml")));
 
 /** 페이지 이동. SSE가 계속 열려 있어 networkidle 대신 domcontentloaded까지만 기다린다 */
@@ -61,7 +67,30 @@ describe("화면", { skip }, () => {
     const drawPort = await freePort();
     drawio = createServer((_req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(readFileSync(join(SITE, "test/fixtures/fake-drawio.html"))); }).listen(drawPort, "127.0.0.1");
     DRAWIO = `http://127.0.0.1:${drawPort}`;
-    srv = await startServer(ws, { DRAWIO_ORIGIN: DRAWIO });
+    const officePort = await freePort();
+    OFFICE = `http://127.0.0.1:${officePort}`;
+    const docx = readFileSync(join(SITE, "../packages/core/test/fixtures/struct.docx"));
+    office = createServer((req, res) => {
+      const u = new URL(req.url ?? "/", OFFICE);
+      if (u.pathname === "/healthcheck") return res.end(officeHealth++ < 2 ? "false" : "true");
+      if (u.pathname === "/web-apps/apps/api/documents/api.js") {
+        res.writeHead(200, { "content-type": "text/javascript" });
+        return res.end(readFileSync(join(SITE, "test/fixtures/fake-office-api.js")));
+      }
+      if (u.pathname === "/cache/out.docx") return res.end(Buffer.concat([docx, Buffer.from("화면 저장")]));
+      if (u.pathname === "/close") {
+        res.end();
+        // 실제 서버처럼 닫힌 뒤 조금 있다가 콜백(서버 주소는 대역 쪽에서 127.0.0.1로)
+        const body = { key: u.searchParams.get("key"), status: 2, url: `${OFFICE}/cache/out.docx`, users: ["local"] };
+        const cb = new URL(u.searchParams.get("cb")!);
+        setTimeout(() => void signJwt({ payload: body }, OFFICE_SECRET).then((t) => fetch(`${srv.url}${cb.pathname}${cb.search}`, {
+          method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${t}` }, body: JSON.stringify(body),
+        })), 300);
+        return;
+      }
+      res.statusCode = 404; res.end();
+    }).listen(officePort, "127.0.0.1");
+    srv = await startServer(ws, { DRAWIO_ORIGIN: DRAWIO, ONLYOFFICE_URL: OFFICE, ONLYOFFICE_JWT_SECRET: OFFICE_SECRET });
     const webPort = await freePort();
     vite = spawn(process.execPath, [join(SITE, "../node_modules/vite/bin/vite.js")], {
       cwd: SITE, env: { ...process.env, PORT: String(srv.port), WEB_PORT: String(webPort) }, stdio: "ignore",
@@ -82,6 +111,7 @@ describe("화면", { skip }, () => {
     vite?.kill("SIGTERM");
     await srv?.stop();
     drawio?.close();
+    office?.close();
     ws.cleanup();
   });
 
@@ -913,6 +943,29 @@ describe("화면", { skip }, () => {
     assert.match(html, />새 글자<\/text>/);
     const revs = await call(srv.url, "GET", "/api/docs/notes/local-inline-svg/revisions");
     assert.deepEqual(revs.body.revisions.slice(0, 2).map((r: { summary: string }) => r.summary), ["SVG 도형", "SVG 도형"]);
+  });
+
+  test("TC-VO-11 로컬 오피스 편집기(6.0 VO, 대역 서버): 확인 창 → 깨우는 동안 진행 막대 → 편집기 열림(다른 쓰기 409) → 닫고 저장 → 수정본(office) → 구조 편집 화면에서 버전으로 저장", async () => {
+    const docx = readFileSync(join(SITE, "../packages/core/test/fixtures/struct.docx"));
+    await upload(srv.url, { menu: "notes", title: "로컬 오피스", slug: "local-office" }, [["report.docx", docx]]);
+    officeHealth = 0;
+    await open("/sdlc/notes/local-office", "로컬 오피스");
+    await page.waitForSelector('button[data-tip="오피스 편집기로 열기 (서식)"]', { timeout: 10_000 });
+    await page.click('button[data-tip="오피스 편집기로 열기 (서식)"]');
+    await clickConfirm("열기");
+    await page.waitForSelector('[role="progressbar"][aria-label="오피스 편집기 진행"]', { timeout: 5000 });
+    await page.waitForSelector("[data-fake-office]", { timeout: 20_000 });
+    assert.match(await text(), /가짜 오피스 편집기: 로컬 오피스\.docx \(edit\)/);
+    assert.equal((await call(srv.url, "POST", "/api/docs/notes/local-office/revisions", { baseRev: 0, put: [{ path: "x.txt", text: "x" }] })).status, 409);
+    await clickButton("닫고 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("오피스 편집기에서 수정본 1"), { timeout: 30_000 });
+    const revs = await call(srv.url, "GET", "/api/docs/notes/local-office/revisions");
+    assert.equal(revs.body.revisions[0].source, "office");
+    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "버전으로 저장" && !b.disabled), { timeout: 15_000 });
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await waitFor(async () => meta("notes", "local-office").current === "v0.1", 15_000, "새 버전");
+    assert.equal(readFileSync(join(ws.docs, "notes", "local-office", "v0.1", "report.docx")).toString().endsWith("화면 저장"), true);
   });
 
   test("TC-UI-36 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 편집(6.0 VL)에서 글자를 두 번 눌러 고치고 Esc → 수정본 → 버전으로 저장", async () => {

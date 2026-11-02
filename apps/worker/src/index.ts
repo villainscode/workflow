@@ -4,6 +4,7 @@ import type { Bindings } from "./env.ts";
 import { mcpHandler } from "./mcp.ts";
 import { cleanup } from "./cleanup.ts";
 import { toHttps } from "./https.ts";
+import { isOfficeRequest, officeProxy } from "./office.ts";
 
 /**
  * 문서 탐색 워크플로우 Worker 진입점(REQUIREMENT-4.0).
@@ -14,6 +15,7 @@ import { toHttps } from "./https.ts";
  */
 export { Live } from "./live.ts";
 export { Converter } from "./convert.ts";
+export { Office } from "./office.ts";
 
 let provider: OAuthProvider<Bindings> | undefined;
 
@@ -21,6 +23,8 @@ export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
     const https = toHttps(request, env);
     if (https) return https;
+    // 오피스 편집기 출처(OFFICE_ORIGIN)는 컨테이너로 넘긴다(6.0 VO)
+    if (isOfficeRequest(request, env)) return officeProxy(request, env);
     provider ??= new OAuthProvider<Bindings>({
       apiRoute: "/mcp",
       apiHandler: mcpHandler,

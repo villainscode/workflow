@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FileDown, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
+import { Download, ExternalLink, FileDown, FilePen, FilePlus2, LayoutPanelTop, Link2, Minimize, PenLine, Presentation, Settings2, TextCursorInput } from "lucide-react";
 import { HtmlTextEditor } from "../viewers/HtmlTextEditor.tsx";
 import { OfficeTextEditor } from "../viewers/OfficeTextEditor.tsx";
 import { PresentationContent } from "../viewers/Presentation.tsx";
@@ -9,6 +9,7 @@ import { DocSettingsDialog } from "./manage/DocSettingsDialog.tsx";
 import { fileSrc, isDeck, useDoc, versionLabel } from "../lib/api.ts";
 import { useOpenUpload } from "./upload/UploadContext.tsx";
 import { useConfirm } from "./confirm/ConfirmProvider.tsx";
+import { useEditorConfig } from "../lib/editorConfig.ts";
 import { EmptyState } from "./EmptyState.tsx";
 import { ReleaseBadge } from "./ReleaseBadge.tsx";
 import { OriginBar, useScripts } from "./OriginBar.tsx";
@@ -31,7 +32,10 @@ import { useHere } from "../lib/live.ts";
 const StructEditor = lazy(() => import("../viewers/structedit/StructEditor.tsx").then((m) => ({ default: m.StructEditor })));
 const DeckEditor = lazy(() => import("../viewers/deck/editor/DeckEditor.tsx").then((m) => ({ default: m.DeckEditor })));
 const PdfEditor = lazy(() => import("../viewers/pdf/PdfEditor.tsx").then((m) => ({ default: m.PdfEditor })));
+const OfficeEditor = lazy(() => import("../viewers/office/OfficeEditor.tsx").then((m) => ({ default: m.OfficeEditor })));
 
+// 오피스 편집기(6.0 VO)로 여는 형식
+const OFFICE_EDITABLE = /\.(docx|pptx|xlsx)$/i;
 // 줄 단위 비교가 의미 있는 텍스트 형식
 const TEXT = /\.(md|markdown|html?|svg|ya?ml|json|txt|mmd|csv|xml|ts|tsx|js|sh|py|sql)$/i;
 // zip 형식이라 줄 대신 텍스트 조각 목록으로 비교하는 형식(2.0)
@@ -55,10 +59,13 @@ export function DocView() {
   const [refCopy, setRefCopy] = useState(false);
   // 구조 편집(5.0): 표·그림·블록을 고쳐 수정본으로 자동 저장하고, 버전으로 저장하면 새 버전
   const [structEditing, setStructEditing] = useState(false);
+  // 오피스 편집기(6.0 VO): DOCX·PPTX·XLSX 서식 편집(ONLYOFFICE). 닫으면 수정본이 되고 구조 편집 화면에서 버전으로 저장한다
+  const [officeEditing, setOfficeEditing] = useState(false);
+  const editorCfg = useEditorConfig();
   // HTML PDF 내보내기(5.0 M8, Cloudflare Browser Rendering): 진행·오류 안내
   const [exporting, setExporting] = useState("");
   const [exportPct, setExportPct] = useState<number | null>(null);
-  useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); setExporting(""); }, [menu, doc]);
+  useEffect(() => { setTextEditing(false); setRefCopy(false); setStructEditing(false); setOfficeEditing(false); setExporting(""); }, [menu, doc]);
   useEffect(() => {
     if (!savedNotice) return;
     const t = setTimeout(() => setSavedNotice(""), 5000);
@@ -71,7 +78,7 @@ export function DocView() {
   }, []);
 
   // 접속자 표시(5.0 M7): 이 문서를 보고 있다(편집 화면이면 편집 중)고 알린다
-  useHere(menu, doc, textEditing || structEditing ? "edit" : "view");
+  useHere(menu, doc, textEditing || structEditing || officeEditing ? "edit" : "view");
   // 외부 문서(출처 있음)의 HTML 스크립트 켜기 상태(3.3). 훅이라 아래 조기 반환보다 먼저 부른다
   const [scripts, setScripts] = useScripts(menu, doc, params.get("v") ?? data?.currentVersion ?? "", !!data?.originUrl);
 
@@ -96,6 +103,16 @@ export function DocView() {
       setParam("v", null);
       setSavedNotice(`${versionLabel(saved)} 버전으로 저장했습니다${warnings?.length ? ` · 주의: ${warnings.join(" · ")}` : ""}`);
     }
+  };
+  const openOffice = async () => {
+    const ok = await confirm({ title: "오피스 편집기로 열까요?", confirmText: "열기",
+      message: "편집하는 동안 이 문서의 다른 편집(구조 편집·Claude Code)은 막힙니다. 닫으면 수정본으로 저장되고, 버전은 따로 저장합니다.",
+      details: [`문서: ${data!.title}`, "편집 서버가 쉬고 있었다면 깨우는 데 1분쯤 걸립니다"] });
+    if (ok) { setRefCopy(false); setParam("seg", null); setOfficeEditing(true); }
+  };
+  const onOfficeExit = (savedRev?: number) => {
+    setOfficeEditing(false);
+    if (savedRev) { setStructEditing(true); setSavedNotice(`오피스 편집기에서 수정본 ${savedRev}(으)로 저장했습니다. 확인하고 「버전으로 저장」하세요`); }
   };
   const onStructExit = (saved?: string) => {
     setStructEditing(false);
@@ -205,6 +222,10 @@ export function DocView() {
             <IconButton icon={LayoutPanelTop} label="구조 편집 (표·그림)" active={structEditing} disabled={structEditing || textEditing}
               onClick={() => { setRefCopy(false); setParam("seg", null); setStructEditing(true); }} />
           )}
+          {can.edit && editorCfg.office && entry && OFFICE_EDITABLE.test(entry.path) && version.version === data.currentVersion && !cmpVersion && (
+            <IconButton icon={FilePen} label="오피스 편집기로 열기 (서식)" active={officeEditing} disabled={officeEditing || structEditing || textEditing}
+              onClick={() => void openOffice()} />
+          )}
           {can.edit && isDeck(entry) && version.version === data.currentVersion && (
             <IconButton icon={PenLine} label="슬라이드 편집" active={structEditing} disabled={structEditing}
               onClick={() => setStructEditing(true)} />
@@ -259,6 +280,10 @@ export function DocView() {
           </>
         ) : !entry ? (
           <EmptyState title="대표 파일(entry)이 없습니다" body="meta.yaml의 entry를 확인하세요." />
+        ) : officeEditing ? (
+          <Suspense fallback={<EmptyState title="편집기를 불러오는 중…" />}>
+            <OfficeEditor menu={menu} doc={doc} onExit={onOfficeExit} />
+          </Suspense>
         ) : structEditing ? (
           <Suspense fallback={<EmptyState title="편집기를 불러오는 중…" />}>
             {isDeck(entry) ? <DeckEditor menu={menu} doc={doc} onExit={onStructExit} />

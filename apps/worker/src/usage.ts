@@ -6,7 +6,7 @@ import type { Bindings } from "./env.ts";
  */
 
 /** 캐시에 없어 실제로 변환·렌더링했을 때 한 줄(실패해도 본 작업은 그대로) */
-export async function noteUsage(env: Bindings, wsId: number, action: "convert" | "render", target: string) {
+export async function noteUsage(env: Bindings, wsId: number, action: "convert" | "render" | "office", target: string) {
   await env.DB.prepare("INSERT INTO activity (workspace_id, user_id, agent, action, target, version, at) VALUES (?, NULL, NULL, ?, ?, NULL, ?)")
     .bind(wsId, action, target, new Date().toISOString()).run().catch((e) => console.error("사용량 기록 실패", e));
 }
@@ -23,17 +23,18 @@ export async function usage(env: Bindings, wsId: number, days: number) {
     db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM (SELECT DISTINCT f.sha256, f.size FROM version_file f
       JOIN document_version v ON v.id = f.version_id JOIN document d ON d.id = v.document_id WHERE d.workspace_id = ?)`).bind(wsId).first<{ n: number; bytes: number }>(),
     db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM asset WHERE workspace_id = ?").bind(wsId).first<{ n: number; bytes: number }>(),
-    db.prepare("SELECT action, COUNT(*) AS n FROM activity WHERE workspace_id = ? AND action IN ('convert', 'render') AND at >= ? GROUP BY action")
+    db.prepare("SELECT action, COUNT(*) AS n FROM activity WHERE workspace_id = ? AND action IN ('convert', 'render', 'office') AND at >= ? GROUP BY action")
       .bind(wsId, since).all<{ action: string; n: number }>(),
   ]);
   const bySource = Object.fromEntries(revs.results.map((r) => [r.source, r.n]));
   const byAction = Object.fromEntries(paid.results.map((r) => [r.action, r.n]));
   return {
     days,
-    revisions: { total: revs.results.reduce((a, r) => a + r.n, 0), human: bySource.human ?? 0, agent: bySource.agent ?? 0, restore: bySource.restore ?? 0 },
+    revisions: { total: revs.results.reduce((a, r) => a + r.n, 0), human: bySource.human ?? 0, agent: bySource.agent ?? 0, restore: bySource.restore ?? 0, office: bySource.office ?? 0 },
     versions: versions?.n ?? 0,
     storage: { versionFiles: files?.n ?? 0, versionBytes: files?.bytes ?? 0, assets: assets?.n ?? 0, assetBytes: assets?.bytes ?? 0 },
     conversions: byAction.convert ?? 0,
     renders: byAction.render ?? 0,
+    officeSessions: byAction.office ?? 0,
   };
 }

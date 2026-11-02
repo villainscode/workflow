@@ -2,7 +2,7 @@
 // 한 Worker가 앱(workflow.simplite.net)과 사용자 콘텐츠(workflow-files.simplite.net) 두 도메인을 받는다. 호스트로 나눈다(src/app.ts)
 // 맨 위 설정은 로컬(wrangler dev·테스트)용이다. 배포는 env.staging(workers.dev) · env.production(simplite.net)
 // 바인딩·vars는 환경마다 따로 적어야 한다(wrangler가 상속하지 않는다).
-// 비밀값(wrangler secret put --env …): SIGNING_KEY(콘텐츠 주소·내부 호출 서명), ADMIN_TOKEN(가져오기 API), GOOGLE_CLIENT_SECRET. 로컬은 .dev.vars
+// 비밀값(wrangler secret put --env …): SIGNING_KEY(콘텐츠 주소·내부 호출 서명), ADMIN_TOKEN(가져오기 API), GOOGLE_CLIENT_SECRET, ONLYOFFICE_JWT_SECRET(오피스 편집기를 켤 때, README). 로컬은 .dev.vars
 {
   "name": "workflow-app",
   "main": "src/index.ts",

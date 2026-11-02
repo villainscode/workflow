@@ -89,7 +89,7 @@ export const agentOf = (c: Context<AppEnv>) => (c.req.header("x-workflow-agent")
 /** 상태를 바꾼 API 경로 → 알림 이유(로컬 SSE의 reason과 같은 말). null이면 알리지 않는다 */
 export function reasonOf(method: string, path: string): string | null {
   if (method === "GET" || /\/text-preview$|^\/images$|^\/focus$|^\/(members|invites)(\/|$)/.test(path)) return null;
-  if (path === "/assets") return null;
+  if (path === "/assets" || /\/office(\/|$)/.test(path)) return null;
   if (/\/revisions(\/\d+\/restore)?$/.test(path) || /\/deck(\/slides\/[^/]+)?$/.test(path)) return "revision";
   if (/\/publish$/.test(path)) return "publish";
   if (path === "/upload") return "upload";

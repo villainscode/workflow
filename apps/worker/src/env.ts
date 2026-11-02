@@ -25,6 +25,14 @@ export interface Bindings {
   SUPERADMIN_EMAILS: string;
   /** draw.io 편집기 출처(6.0 V4, 자체 호스팅 apps/drawio, 예: https://draw.simplite.net). 비면 draw.io 버튼을 숨긴다 */
   DRAWIO_ORIGIN?: string;
+  /** 오피스 편집 서버(6.0 VO, ONLYOFFICE 컨테이너 apps/office). 없고 OFFICE_ORIGIN만 있으면 그 주소로 바로 간다(로컬 docker) */
+  OFFICE?: DurableObjectNamespace<import("./office.ts").Office>;
+  /** 편집기 출처(예: https://office.simplite.net, 이 Worker의 별도 도메인). 비면 오피스 편집기 버튼을 숨긴다 */
+  OFFICE_ORIGIN?: string;
+  /** 오피스 서버가 앱에 닿는 주소(로컬 docker: http://host.docker.internal:8787). 비면 APP_ORIGIN */
+  OFFICE_BACKEND_ORIGIN?: string;
+  /** 오피스 서버와 나눈 JWT 비밀값(비밀값) */
+  ONLYOFFICE_JWT_SECRET?: string;
   /** "1"이면 개발용 로그인(POST /api/auth/dev-login)을 연다. 로컬·테스트에서만 */
   DEV_LOGIN?: string;
 }

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve, join, sep, extname } from "node:path";
 import Fastify, { type FastifyError } from "fastify";
@@ -14,6 +15,7 @@ import { scanDocs } from "./scan.ts";
 import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
 import { LocalWork } from "./work.ts";
 import * as work from "@workflow/core/work";
+import * as office from "@workflow/core/office";
 import { WorkError, type StructOp } from "@workflow/core/work";
 import { StructEditError } from "@workflow/core/structedit/html";
 import { mimeOf } from "@workflow/core/mime";
@@ -361,8 +363,79 @@ app.get<{ Params: { sha: string } }>("/api/assets/:sha/raw", async (req, reply) 
   return reply.type(a.mime).header("Cache-Control", "private, max-age=31536000, immutable").send(Buffer.from(local.getBlob(a.sha256)));
 });
 
-// 편집기 설정(6.0 V4): draw.io 출처. 로컬은 apps/drawio의 `npm run serve` 주소를 DRAWIO_ORIGIN으로 준다(없으면 버튼을 숨긴다)
-app.get("/api/editor-config", async () => ({ drawio: process.env.DRAWIO_ORIGIN || null }));
+// 편집기 설정(6.0 V4·VO): draw.io 출처(apps/drawio의 `npm run serve`), 오피스 편집기(docker, ONLYOFFICE_URL). 없으면 버튼을 숨긴다
+const OFFICE_URL = (process.env.ONLYOFFICE_URL ?? "").replace(/\/$/, "");
+const OFFICE_SECRET = process.env.ONLYOFFICE_JWT_SECRET ?? "";
+// 오피스 서버(docker 안)가 이 서버에 닿는 주소
+const OFFICE_BACKEND = (process.env.ONLYOFFICE_BACKEND ?? `http://host.docker.internal:${PORT}`).replace(/\/$/, "");
+const officeOn = () => !!OFFICE_URL && !!OFFICE_SECRET;
+app.get("/api/editor-config", async () => ({ drawio: process.env.DRAWIO_ORIGIN || null, office: officeOn() }));
+
+// ---------- 오피스 편집기(6.0 VO, D-59): Worker(apps/worker/src/office.ts)와 같은 경로·응답. 규칙은 packages/core/src/office ----------
+async function officeConfig(p: DocParams["Params"], mode: office.OfficeMode) {
+  if (!officeOn()) throw new WorkError(501, "오피스 편집기를 쓸 수 없는 환경입니다(ONLYOFFICE_URL·ONLYOFFICE_JWT_SECRET)");
+  const s = await office.openSession(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), { scope: officeScope(p), mode, userId: null });
+  const ticket = (use: "file" | "callback", ttl: number) => office.signTicket({ ws: "local", doc: `${p.menu}/${p.doc}`, key: s.key, use }, OFFICE_SECRET, ttl);
+  const config = await office.editorConfig({
+    key: s.key, title: `${local.title(p.menu, p.doc)}${s.entry.slice(s.entry.lastIndexOf("."))}`, entry: s.entry, mode,
+    fileUrl: `${OFFICE_BACKEND}/api/office/file?t=${await ticket("file", 3600)}`,
+    callbackUrl: mode === "edit" ? `${OFFICE_BACKEND}/api/office/callback?t=${await ticket("callback", 7 * 86400)}` : undefined,
+    user: { id: "local", name: "로컬 사용자" },
+  }, OFFICE_SECRET);
+  return { apiUrl: `${OFFICE_URL}/web-apps/apps/api/documents/api.js`, key: s.key, rev: s.rev, config, keepAliveMs: office.KEEPALIVE };
+}
+// 문서 키 앞부분: 오피스 서버 하나를 여러 문서가 같이 쓰므로 문서마다 다르게(메뉴·문서 slug의 sha256 앞 12자)
+const officeScope = (p: { menu: string; doc: string }) => `l${createHash("sha256").update(`${p.menu}/${p.doc}`).digest("hex").slice(0, 12)}`;
+
+app.post<DocParams>("/api/docs/:menu/:doc/office/session", async (req) => officeConfig(req.params, "edit"));
+app.get<DocParams>("/api/docs/:menu/:doc/office/config", async (req) => officeConfig(req.params, "view"));
+app.post<DocParams & { Body: { key: string } }>("/api/docs/:menu/:doc/office/keepalive", async (req) =>
+  ({ alive: await office.keepAlive(local.officeSessions(req.params.menu, req.params.doc), String(req.body?.key)) }));
+app.get<DocParams>("/api/docs/:menu/:doc/office", async (req) => {
+  const s = await local.officeSessions(req.params.menu, req.params.doc).get();
+  const st = await work.workState(local.store(req.params.menu, req.params.doc));
+  return { active: !!s && s.expiresAt > Date.now(), key: s?.key ?? null, rev: st.rev };
+});
+app.get("/api/office/status", async () => {
+  if (!officeOn()) return { enabled: false, ready: false };
+  try {
+    const res = await fetch(`${OFFICE_URL}/healthcheck`, { signal: AbortSignal.timeout(5000) });
+    return { enabled: true, ready: res.ok && (await res.text()).trim() === "true" };
+  } catch {
+    return { enabled: true, ready: false };
+  }
+});
+/** 오피스 서버가 부르는 API: 서명 토큰(t)으로만 */
+const ticketParams = (t: office.OfficeTicket) => {
+  const [menu, doc] = String(t.doc).split("/");
+  return { menu, doc };
+};
+app.get<{ Querystring: { t?: string } }>("/api/office/file", async (req, reply) => {
+  const t = await office.readTicket(req.query.t ?? "", OFFICE_SECRET, "file");
+  if (!t) throw new WorkError(403, "주소가 맞지 않거나 만료됐습니다");
+  const p = ticketParams(t);
+  const s = await office.openSession(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), { scope: officeScope(p), mode: "view", userId: null });
+  if (s.key !== t.key) throw new WorkError(409, "문서 내용이 바뀌었습니다. 편집기를 다시 여세요");
+  return reply.type("application/octet-stream").header("Cache-Control", "no-store").send(Buffer.from(local.getBlob(s.sha256)));
+});
+app.post<{ Querystring: { t?: string }; Body: office.CallbackBody }>("/api/office/callback", async (req) => {
+  const t = await office.readTicket(req.query.t ?? "", OFFICE_SECRET, "callback");
+  if (!t) throw new WorkError(403, "주소가 맞지 않거나 만료됐습니다");
+  const cb = await office.verifyCallback(req.body ?? {}, req.headers.authorization, OFFICE_SECRET);
+  if (!cb) throw new WorkError(403, "콜백 서명이 맞지 않습니다");
+  const p = ticketParams(t);
+  const r = await office.handleCallback(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), cb, {
+    expectedKey: t.key, officeOrigin: OFFICE_URL,
+    download: async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new WorkError(502, `저장 파일을 받지 못했습니다(${res.status})`);
+      if (Number(res.headers.get("content-length") ?? 0) > office.MAX_OFFICE_FILE) throw new WorkError(413, "저장 파일이 너무 큽니다");
+      return new Uint8Array(await res.arrayBuffer());
+    },
+  });
+  if (r.saved?.changed) broadcast({ type: "changed", reason: "revision", ...docEvent(req, p), rev: r.saved.rev });
+  return { error: 0 };
+});
 
 app.post("/api/reindex", async () => { reindex("manual"); return { ok: true, warnings }; });
 

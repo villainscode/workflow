@@ -52,6 +52,8 @@ export function docStore(env: Bindings, ws: Workspace, doc: DocRef, user: User |
         throw e;
       }
     },
+    // 오피스 편집 세션(6.0 VO, office.ts)이 살아 있으면 잠김
+    locked: async () => !!(await db.prepare("SELECT 1 FROM office_session WHERE document_id = ? AND expires_at > ?").bind(doc.id, Date.now()).first()),
   };
 }
 

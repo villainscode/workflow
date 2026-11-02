@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 170개(실제 테스트 218건: `npm test` 177건 + `npm run test:ui` 41건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 76건 + Cloudflare 화면 테스트 22건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 45건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 172개(실제 테스트 220건: `npm test` 178건 + `npm run test:ui` 42건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 80건 + Cloudflare 화면 테스트 23건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 50건 통과), 6.0 요소 편집기 케이스는 2.9절, 오피스 편집기(VO)는 2.10절(실제 ONLYOFFICE 왕복 TC-VO-12는 `npm run test:office-real`로 손으로 돌림, 2026-11-02 통과). Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -324,6 +324,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-20 | HTML 속성 편집(6.0 V2): 속성 패널에서 문단 크기 22px·토큰 색(`var(--accent)`) → 새로 고침 뒤 패널·화면에 유지, 글자 편집 중 도구 막대로 고른 두 글자만 28px(막대 목록을 써도 편집이 이어짐), 칸을 골라 열 경계 끌기(colgroup·`table-layout:fixed`)·행 높이 손잡이·그림 크기 손잡이(감싸는 상자 대비 %), ⌘Z로 그림 크기 되돌림, ⌘D 제목 복제, 레이어 패널 | 6.0 4.2 |
 | TC-CFUI-21 | HTML 자유 배치(6.0 V3): 문단을 옮기기 손잡이로 끌면 고정 위치(`data-pin`·left %·top px·width %, 섹션 `data-pin-box`·min-height, head 좁은 화면 규칙), 놓기 직전 미리 보기 자리와 저장 뒤 자리가 1px 이내, 첫 전환 안내, 그림 파일을 둘째 섹션 한 점에 놓으면 그 섹션 끝에 고정 그림(가운데 1px 이내), Shift+방향키 8px 이동 저장, 640px 미리보기는 static·가로 스크롤 없음·손잡이 숨김, 「흐름으로 되돌리기」면 그 섹션은 원래 시작 태그 | 6.0 4.2 |
 | TC-CFUI-22 | SVG(6.0 V4): 버전 폴더 SVG 그림을 「SVG 고치기」(svgedit)로 채움 색을 바꿔 저장하면 새 SVG 자산(`assets/<sha16>.svg`)으로 바뀌고 콘텐츠 도메인에서 image/svg+xml·sandbox CSP, viewBox 유지. SVG 파일을 「그림 넣기」로 넣으면 script·이벤트 속성이 지워진 파일 참조 | 6.0 4.4 |
+| TC-CFUI-23 | 오피스 편집기(6.0 VO, 대역 오피스 서버): `editor-config` office, 「오피스 편집기로 열기」 확인 창 → 편집기(편집 모드)·세션 active → 「닫고 저장」 → 서명한 저장 콜백 → 수정본(office, 작성자 owner) → 구조 편집 화면, 세션 풀림 | 6.0 D-59 |
 | TC-CFUI-18 | HTML 문서 PDF 내보내기(확인 창 → 진행 막대(만드는 중·내려받는 중 %) → 내려받기)·API(A4 쪽, 두 번째는 캐시로 빠름, HTML이 아닌 문서는 400), 덱 화면에는 PDF 버튼 없음, 슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 5.0 M8 |
 | TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
 | TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
@@ -426,6 +427,23 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-VE-30 | 로컬 화면 draw.io(대역 페이지 `test/fixtures/fake-drawio.html`, 다른 출처): 「다이어그램」으로 그려 저장하면 draw.io SVG(`content` 보존)가 그림으로, 「SVG 고치기」는 draw.io로 다시 열어 이어서 고친다. 같은 페이지의 위조 save 메시지는 무시. 실제 draw.io 왕복은 `apps/drawio` `npm run check`(draw.io를 올릴 때) | D-56·D-57 |
 | TC-VE-31 | 로컬 화면 인라인 SVG: 문서의 도형을 누르면 속성 패널에서 글자(Enter)·채움 색(고르기를 마칠 때 한 번)을 바꾼다, 수정본 하나씩(「SVG 도형」) | 6.0 4.4 |
 
+### 2.10 6.0 오피스 편집기 VO (`packages/core/test/office.test.ts`, `apps/worker/test/office.test.ts`, `site/test/office.test.ts`·`ui.test.ts`(TC-VO-11)·`office-real.test.ts`(TC-VO-12), 화면은 TC-CFUI-23)
+
+| ID | 확인 | 근거 |
+|---|---|---|
+| TC-VO-01 | JWT(HS256) 서명·검사 왕복, 다른 비밀값·내용 바꿈·만료·`alg: none`은 거부. 파일·콜백 주소 토큰은 쓰임새(file·callback)가 맞아야 한다 | D-59 |
+| TC-VO-02 | 편집 세션: 편집으로 열면 작업본 잠금, 같은 내용은 같은 문서 키(공동 편집), 잠긴 동안 다른 쓰기·버전으로 저장 409, 연장·만료(15분), 보기는 잠그지 않음, HTML은 400 | D-59 |
+| TC-VO-03 | 편집 설정: documentType·문서 키·파일 주소·콜백(편집일 때만)·한국어, token은 설정 전체의 JWT, 보기는 편집 권한 없음 | D-59 |
+| TC-VO-04 | 콜백 검사: 본문 token·`Authorization: Bearer`({payload}) 둘 다 받고 위조는 거부 | D-59 |
+| TC-VO-05 | 콜백 저장: status 2는 받은 파일로 대표 파일을 바꾼 수정본(source office)을 쌓고 잠금을 푼다. 다른 키·다른 출처 주소(SSRF)·64MB 초과는 거부, status 4는 저장 없이 닫힘, 저장 뒤 다시 열면 새 키 | D-59 |
+| TC-VO-06 | Worker: `editor-config`에 office, 편집 설정 JWT, 파일 주소(서명 토큰)로 원본, 토큰 없거나 위조면 403 | D-59 |
+| TC-VO-07 | Worker 콜백: 위조 JWT·다른 키 403, 오피스 서버가 아닌 주소(169.254.169.254) 400(요청하지 않음), status 1은 연장, status 2는 수정본(office, 세션 주인이 작성자)·잠금 풀림 | D-59 |
+| TC-VO-08 | Worker 잠금·권한: 편집 세션 동안 같은 문서 저장·버전으로 저장 409, viewer는 편집 세션 403·보기 설정(콜백 없음)만 | D-59 |
+| TC-VO-09 | Worker: HTML 문서는 400, 준비 상태는 오피스 서버 healthcheck | D-59 |
+| TC-VO-10 | 로컬 API(대역 오피스 서버): 설정·파일·콜백 → 수정본(office), 잠긴 동안 409, 위조 403·다른 출처 400, 버전으로 저장하면 docs/에 받은 파일 그대로 | D-58·D-59 |
+| TC-VO-11 | 로컬 화면(대역 api.js): 「오피스 편집기로 열기」 확인 창 → 깨우는 동안 진행 막대 → 편집기(편집 모드)·다른 쓰기 409 → 「닫고 저장」 → 저장 콜백 → 수정본 안내 → 구조 편집 화면에서 버전으로 저장 | D-59 |
+| TC-VO-12 | 실제 ONLYOFFICE Docs 10.0(docker): 편집 설정으로 DOCX를 열고 글자를 넣어 닫으면 오피스 서버가 서명한 저장 콜백(Authorization Bearer) → 수정본, 저장 파일 word/document.xml에 입력한 글자. 손으로 돌린다(`npm run test:office-real`) | D-59 |
+
 ## 3. 수동 확인 케이스
 
 자동으로 확인하기 어렵거나(끌기, 전체 화면, 외부 프로그램 화면) 결과를 눈으로 봐야 하는 항목이다. 릴리스 전에 실제 사이트(`npm run dev`)에서 확인한다.
@@ -462,6 +480,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 
 - 업로드 대화상자·메뉴 관리 대화상자의 화면 조작은 API 케이스로 서버 동작만 확인한다(화면은 수동 TC-M-02·04, 새 Markdown 문서 탭은 TC-UI-26, 하위 문서 추가는 TC-UI-29).
 - 사이드바 끌어서 놓기 화면 테스트(TC-UI-28)는 DragEvent를 직접 보내 확인한다. 실제 마우스 끌기는 수동 TC-M-23.
+- 오피스 편집기(6.0 VO): Cloudflare Containers 위 실제 구동(콜드 스타트·WebSocket 공동 편집·컨테이너 프록시)은 자원을 만들기 전이라 확인하지 못했다. 자동 테스트는 대역 오피스 서버, 실제 ONLYOFFICE는 로컬 docker(TC-VO-12)로만 본다.
 
 ---
 
@@ -485,3 +504,4 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-11-02 | 로컬 사이트에서 슬라이드 덱이 덱으로 그려지지 않고(대표 파일이 JSON 글로 보임) 슬라이드 편집 버튼도 나오지 않음 | 화면이 대표 파일을 `path === "deck.json"`으로 알아보는데, 로컬 색인의 파일 경로는 리포 기준(`docs/<메뉴>/…/vN.N/deck.json`)이다. Cloudflare만 버전 안 상대 경로라 드러나지 않았다 | 버전 안 상대 경로 `relPath`·`isDeck`(`web/src/lib/api.ts`)로 보기·발표·편집 버튼·덱 파일 읽기를 맞춤 | TC-UI-36 (수정 전 슬라이드 편집 버튼 없음으로 실패 확인) |
 | 2026-11-02 | (production) `http://workflow.simplite.net`으로 열고 로그인하면 Google이 「400 redirect_uri_mismatch」 | 콜백 주소를 요청 주소의 출처로 만드는데, http로 열면 https로 옮기는 곳이 없어 `http://…/api/auth/google/callback`을 보냈다(Google에는 https만 등록). 같은 이유로 세션 쿠키에 Secure도 빠질 수 있었다 | Worker 진입점에서 APP_ORIGIN이 https면 http 요청을 https로 301(`apps/worker/src/https.ts`), Worker를 거치지 않는 정적 화면은 `main.tsx`에서 https로 이동 | TC-CF-49 (수정 전 실패 확인) |
 | 2026-11-02 | (Cloudflare 화면 테스트) 구조 편집에서 「SVG 고치기」가 「Failed to fetch」 | 편집 사본의 `<img>`가 먼저 받은 SVG(CORS 헤더 없음)가 브라우저 캐시에 있으면, 편집기의 fetch가 같은 주소를 다시 확인(If-None-Match)하고 Worker가 CORS·Vary 없는 304를 돌려줘 CORS로 막혔다 | 콘텐츠 응답에 `Vary: Origin`을 늘 붙이고 304에도 앱 출처 CORS를 붙임(`apps/worker/src/content.ts`) | TC-CF-50 (수정 전 실패 확인), TC-CFUI-22 |
+| 2026-11-02 | (6.0 VO 작업 중) Cloudflare에서 `GET /api/w/:ws/editor-config`가 늘 404라 draw.io 버튼이 숨음 | V4에서 라우트 등록(`ws.get("/editor-config")`)이 그림 주소 핸들러 안 `return` 뒤에 들어가 한 번도 등록되지 않았다. 로컬 서버와 화면 테스트(대역)는 다른 경로라 드러나지 않았다 | 핸들러 밖으로 옮기고 office 칸을 더함(`apps/worker/src/app.ts`) | TC-VO-06 (예전 코드로 되돌려 실패 확인) |

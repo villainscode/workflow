@@ -9,6 +9,7 @@ import { mimeOf } from "@workflow/core/mime";
 import { DECK_ENTRY } from "@workflow/core/slide";
 import * as work from "@workflow/core/work";
 import { ASSET_EXT, WorkError, type DocStore, type Manifest, type ManifestFile, type RevisionSource } from "@workflow/core/work";
+import { sessionLocked, type OfficeSessions } from "@workflow/core/office";
 import { docDir, upload } from "./store.ts";
 
 /**
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS revision (id INTEGER PRIMARY KEY AUTOINCREMENT, doc T
   manifest_sha TEXT NOT NULL, source TEXT NOT NULL, summary TEXT, created_at TEXT NOT NULL, published_as TEXT, UNIQUE(doc, rev));
 CREATE TABLE IF NOT EXISTS head (doc TEXT PRIMARY KEY, rev INTEGER NOT NULL, base_version TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS asset (sha256 TEXT PRIMARY KEY, mime TEXT NOT NULL, size INTEGER NOT NULL, width INTEGER, height INTEGER, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS office_session (doc TEXT PRIMARY KEY, doc_key TEXT NOT NULL, rev INTEGER NOT NULL, base_version TEXT NOT NULL, expires_at INTEGER NOT NULL);
 `;
 
 export interface AssetRow { sha256: string; mime: string; size: number; width: number | null; height: number | null }
@@ -140,7 +142,33 @@ export class LocalWork {
           throw e;
         }
       },
+      // 오피스 편집 세션(6.0 VO)이 살아 있으면 잠김
+      locked: () => sessionLocked(this.officeSessions(menu, doc)),
     };
+  }
+
+  /** 문서 하나의 오피스 편집 세션(6.0 VO). 로컬에는 사용자가 없어 userId는 비운다 */
+  officeSessions(menu: string, doc: string): OfficeSessions {
+    const key = `${menu}/${doc}`;
+    return {
+      get: async () => {
+        const r = this.db.prepare("SELECT doc_key, rev, base_version, expires_at FROM office_session WHERE doc = ?").get(key) as
+          { doc_key: string; rev: number; base_version: string; expires_at: number } | undefined;
+        return r ? { key: r.doc_key, rev: r.rev, baseVersion: r.base_version, userId: null, expiresAt: r.expires_at } : null;
+      },
+      put: async (s) => {
+        this.db.prepare(`INSERT INTO office_session (doc, doc_key, rev, base_version, expires_at) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT (doc) DO UPDATE SET doc_key = excluded.doc_key, rev = excluded.rev, base_version = excluded.base_version, expires_at = excluded.expires_at`)
+          .run(key, s.key, s.rev, s.baseVersion, s.expiresAt);
+      },
+      remove: async (k) => { this.db.prepare("DELETE FROM office_session WHERE doc = ? AND doc_key = ?").run(key, k); },
+    };
+  }
+
+  /** 문서 제목(meta.yaml title) */
+  title(menu: string, doc: string) {
+    const m = this.meta(menu, doc) as { title?: string };
+    return m.title ?? doc;
   }
 
   // ---------- 이력·버전으로 저장 ----------

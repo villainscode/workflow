@@ -322,6 +322,7 @@ export async function purgeDoc(env: { DB: D1Database; BLOBS: R2Bucket }, ws: Wor
   await db.batch([
     db.prepare(`UPDATE document_version SET revision_id = NULL WHERE document_id IN (${marks})`).bind(...ids),
     db.prepare(`DELETE FROM document_head WHERE document_id IN (${marks})`).bind(...ids),
+    db.prepare(`DELETE FROM office_session WHERE document_id IN (${marks})`).bind(...ids),
     db.prepare(`DELETE FROM document_revision WHERE document_id IN (${marks})`).bind(...ids),
     db.prepare(`DELETE FROM version_file WHERE version_id IN (SELECT id FROM document_version WHERE document_id IN (${marks}))`).bind(...ids),
     db.prepare(`DELETE FROM document_version WHERE document_id IN (${marks})`).bind(...ids),

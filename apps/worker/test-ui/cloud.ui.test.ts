@@ -4,11 +4,13 @@
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, execSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { freePort, makeWorkspace, waitFor } from "../../../site/test/helpers.ts";
+import { signJwt } from "@workflow/core/office";
 
 const WORKER = resolve(import.meta.dirname, "..");
 const ROOT = resolve(WORKER, "../..");
@@ -23,6 +25,10 @@ let wrangler: ChildProcess;
 let BASE = "";
 let browser: any;
 let page: any;
+// 오피스 편집 서버 대역(6.0 VO): api.js·healthcheck, 닫으면 서명한 저장 콜백(로컬 화면 테스트와 같은 대역)
+const OFFICE_SECRET = "cf-ui-office-secret";
+let office: ReturnType<typeof createServer>;
+let OFFICE = "";
 
 /** 다른 곳(다른 사람·Claude Code)에서 바꾸는 것처럼 Worker API를 직접 부른다. 세션은 브라우저 쿠키, Origin은 앱 */
 const post = async (path: string, body: BodyInit, headers: Record<string, string> = {}) => {
@@ -161,9 +167,38 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
       writeFileSync(join(ws.docs, "notes/form-pdf/v0.0/form.pdf"), await pdf.save());
       writeFileSync(join(ws.docs, "notes/form-pdf/meta.yaml"), "title: 신청서 PDF\ncategory: sdlc\nmenu: notes\nkind: pdf\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: form.pdf\n");
     }
+    // 오피스 문서와 오피스 서버 대역
+    {
+      const docx = readFileSync(join(ROOT, "packages/core/test/fixtures/struct.docx"));
+      mkdirSync(join(ws.docs, "notes/office-doc/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/office-doc/v0.0/report.docx"), docx);
+      writeFileSync(join(ws.docs, "notes/office-doc/meta.yaml"), "title: 오피스 문서\ncategory: sdlc\nmenu: notes\nkind: docx\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: report.docx\n");
+      const officePort = await freePort();
+      OFFICE = `http://127.0.0.1:${officePort}`;
+      office = createServer((req, res) => {
+        const u = new URL(req.url ?? "/", OFFICE);
+        if (u.pathname === "/healthcheck") return res.end("true");
+        if (u.pathname === "/web-apps/apps/api/documents/api.js") {
+          res.writeHead(200, { "content-type": "text/javascript" });
+          return res.end(readFileSync(join(ROOT, "site/test/fixtures/fake-office-api.js")));
+        }
+        if (u.pathname === "/cache/out.docx") return res.end(Buffer.concat([docx, Buffer.from("클라우드 저장")]));
+        if (u.pathname === "/close") {
+          res.end();
+          const body = { key: u.searchParams.get("key"), status: 2, url: `${OFFICE}/cache/out.docx`, users: ["1"] };
+          const cb = new URL(u.searchParams.get("cb")!);
+          setTimeout(() => void signJwt({ payload: body }, OFFICE_SECRET).then((t) => fetch(`${BASE}${cb.pathname}${cb.search}`, {
+            method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${t}` }, body: JSON.stringify(body),
+          })), 300);
+          return;
+        }
+        res.statusCode = 404; res.end();
+      }).listen(officePort, "127.0.0.1");
+    }
     // 운영처럼 앱과 사용자 콘텐츠의 출처를 나눈다: 앱 127.0.0.1, 콘텐츠 localhost(같은 포트, 호스트로 나눔)
     wrangler = spawn("npx", ["wrangler", "dev", "--port", String(port), "--ip", "127.0.0.1", "--persist-to", persist,
-      "--var", `APP_ORIGIN:${BASE}`, "--var", `FILES_ORIGIN:http://localhost:${port}`], {
+      "--var", `APP_ORIGIN:${BASE}`, "--var", `FILES_ORIGIN:http://localhost:${port}`,
+      "--var", `OFFICE_ORIGIN:${OFFICE}`, "--var", `ONLYOFFICE_JWT_SECRET:${OFFICE_SECRET}`], {
       cwd: WORKER, stdio: "ignore", detached: true,
     });
     await waitFor(async () => (await fetch(BASE + "/api/health")).ok, 60_000, "wrangler dev 시작");
@@ -184,6 +219,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
 
   after(async () => {
     await browser?.close();
+    office?.close();
     if (wrangler?.pid) try { process.kill(-wrangler.pid, "SIGTERM"); } catch { /* 이미 종료 */ }
     ws.cleanup();
     rmSync(persist, { recursive: true, force: true });
@@ -723,6 +759,22 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="evil">/.exec(w2.html)?.[1];
     assert.ok(src2, w2.html);
     assert.doesNotMatch(await (await fetch(w2.files.find((f) => f.path === src2)!.url)).text(), /script|onmouseover/);
+  });
+
+  test("TC-CFUI-23 오피스 편집기(6.0 VO, 대역 서버): 확인 창 → 편집기(편집 모드) → 닫고 저장 → 저장 콜백(JWT) → 수정본(office) → 구조 편집 화면", async () => {
+    assert.deepEqual(await api("/editor-config"), { drawio: null, office: true });
+    await open("/team/sdlc/notes/office-doc", "오피스 문서");
+    await page.waitForSelector('button[data-tip="오피스 편집기로 열기 (서식)"]', { timeout: 10_000 });
+    await page.click('button[data-tip="오피스 편집기로 열기 (서식)"]');
+    await clickConfirm("열기");
+    await page.waitForSelector("[data-fake-office]", { timeout: 20_000 });
+    assert.match(await page.evaluate(() => document.body.innerText), /가짜 오피스 편집기: 오피스 문서\.docx \(edit\)/);
+    assert.equal((await api("/docs/notes/office-doc/office")).active, true);
+    for (const b of await page.$$("button")) if ((await b.evaluate((e: Element) => e.textContent))?.trim() === "닫고 저장") { await b.click(); break; }
+    await page.waitForFunction(() => document.body.innerText.includes("오피스 편집기에서 수정본 1"), { timeout: 30_000 });
+    const revs = await api("/docs/notes/office-doc/revisions");
+    assert.deepEqual([revs.revisions[0].source, revs.revisions[0].author], ["office", "owner@example.com"]);
+    assert.equal((await api("/docs/notes/office-doc/office")).active, false);
   });
 
   test("TC-CFUI-21 HTML 자유 배치(6.0 V3): 옮기기 손잡이로 끌면 고정 위치(놓은 자리와 1px 이내), 그림 파일을 놓은 자리에 고정 그림, 방향키 이동, 흐름으로 되돌리기, 640px 미리보기는 가로 스크롤 없음", async () => {

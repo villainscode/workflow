@@ -41,6 +41,8 @@ export interface DocStore {
   hasBlob(sha: string): Promise<boolean>;
   /** 수정본 행을 넣고 작업본 머리를 그 rev로 옮긴다. 같은 rev가 이미 있으면 WorkError(409) */
   addRevision(r: { rev: number; baseVersion: string; manifestSha: string; source: RevisionSource; summary: string | null }): Promise<void>;
+  /** 오피스 편집 세션이 열려 있으면 true(6.0 VO). 그동안 오피스 저장 말고는 쓰지 않는다 */
+  locked?(): Promise<boolean>;
 }
 
 export async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -49,6 +51,7 @@ export async function sha256Hex(data: Uint8Array): Promise<string> {
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+const LOCKED = "오피스 편집기에서 편집 중인 문서입니다. 편집기를 닫아 저장이 끝나면 다시 할 수 있습니다";
 const conflict = (rev: number) => new WorkError(409, `다른 곳에서 먼저 저장했습니다(지금 수정본 ${rev}). 최신 내용을 받아 다시 적용하세요`);
 
 /** 같은 내용이면 같은 sha가 나오도록 경로순으로 정렬해 쓴다 */
@@ -94,6 +97,7 @@ export interface Saved { rev: number; baseVersion: string; changed: boolean }
 
 /** 수정본 하나를 쌓는다. 바뀐 것이 없으면 그대로 돌려준다(changed: false) */
 export async function saveRevision(store: DocStore, ch: RevisionChange): Promise<Saved> {
+  if (ch.source !== "office" && (await store.locked?.())) throw new WorkError(409, LOCKED);
   const state = await workState(store);
   if (ch.baseRev !== state.rev) throw conflict(state.rev);
   const byPath = new Map((ch.replace ?? state.manifest).files.map((f) => [f.path, f]));
@@ -143,6 +147,7 @@ export async function restoreRevision(store: DocStore, rev: number, baseRev: num
 
 /** 버전으로 올리기 전 확인: 올릴 수정본이 있고 기준 rev가 지금과 같다 */
 export async function publishState(store: DocStore, baseRev: number): Promise<WorkState> {
+  if (await store.locked?.()) throw new WorkError(409, LOCKED);
   const state = await workState(store);
   if (!state.fromRevision) throw new WorkError(409, "버전으로 올릴 수정본이 없습니다");
   if (baseRev !== state.rev) throw new WorkError(409, `다른 곳에서 먼저 저장했습니다(지금 수정본 ${state.rev}). 최신 내용을 확인하세요`);

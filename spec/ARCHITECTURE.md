@@ -65,6 +65,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | 실시간 | Durable Objects, WebSocket Hibernation(쉬는 연결은 시간 요금 없음). 연결마다 사용자·보는 문서·보기/편집을 붙여(serializeAttachment) 접속자 목록을 보낸다(5.0 M7) |
 | HTML PDF·슬라이드 미리보기 | Cloudflare Browser Rendering(`@cloudflare/puppeteer`, `BROWSER` 바인딩). HTML 문서는 콘텐츠 도메인 주소로 열어 A4 PDF로, 슬라이드는 core가 만든 정적 HTML(화면 렌더러와 같은 DOM·기본 스타일)을 PNG로 찍는다. `load`까지 기다린 뒤 글꼴·그림을 기다리고, 내용(파일 sha 묶음)으로 R2에 캐시(5.0 M7·M8) |
 | PDF 변환 | Cloudflare Containers(`@cloudflare/containers`, durable_object 스케줄링 + `images` 형식이라 `Converter`가 `start()`에 이미지 이름을 넣는다). 이미지는 Node 22(Debian) + LibreOffice + Noto CJK |
+| 오피스 편집기(6.0 VO) | ONLYOFFICE Docs 커뮤니티판 10.0(공식 이미지 그대로, AGPL)을 Containers(`Office`, standard-3 1대, 30분 유휴 종료)로. 편집기 출처 `OFFICE_ORIGIN`(앱과 다른 도메인)을 Worker가 컨테이너로 넘기고, 편집 설정·콜백은 JWT, 저장 파일은 수정본(source office). 작업본 잠금은 D1 `office_session`. 배포 설정은 사용자 확인 뒤 넣는다(README) |
 | 로그인 | Google OIDC를 직접 구현(인가 코드 + PKCE). 세션은 D1, 쿠키는 HttpOnly·SameSite=Lax |
 | 권한 | 초대 링크로만 가입. 역할은 owner·editor·viewer |
 | 원격 MCP | `@cloudflare/workers-oauth-provider` 1.2(OAuth 2.1, 동적 클라이언트 등록), MCP SDK의 Streamable HTTP(상태 없음). OAuth 기록은 KV |
@@ -83,9 +84,10 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | 사용자 콘텐츠 | `src/content.ts`(서명 토큰 `/c/…`, `/i/…`), `src/token.ts` | R2, 콘텐츠 도메인 |
 | 실시간 | `src/live.ts` | Durable Object(WebSocket) |
 | 변환 | `src/convert.ts`, `apps/converter` | Containers |
+| 오피스 편집기(6.0 VO) | 규칙은 `packages/core/src/office.ts`(로컬과 같이 씀). `src/office.ts`(컨테이너 `Office`, 편집기 출처 프록시, 편집 설정·세션·콜백 API), `apps/office`(Dockerfile·로컬 compose) | Containers + D1 |
 | 원격 MCP | `src/mcp.ts`, `src/consent.ts`, `packages/mcp-tools` | OAuthProvider + KV |
 | draw.io 편집기(6.0 V4) | `apps/drawio`(코드 없는 정적 자산 Worker, `scripts/fetch.mjs`가 draw.war를 풀고 `_headers`를 쓴다). 앱은 `DRAWIO_ORIGIN`(`GET {API}/editor-config`)으로 연다 | 별도 Worker·도메인 |
-| D1 스키마 | `migrations/0001~0004` | |
+| D1 스키마 | `migrations/0001~0005` | |
 
 설계에서 바꾼 것과 이유:
 

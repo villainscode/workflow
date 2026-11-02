@@ -144,7 +144,7 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 | **V3 HTML 자유 배치** (완료, 12절) | 1.5 | 어떤 요소든 끌어 고정 위치로 전환(섹션 기준), 그림·글상자·SVG를 끌어 놓은 자리에 넣기, 이동·크기·앞뒤·스냅·정렬, 섹션 최소 높이 자동 조정, 좁은 화면 규칙 | 화면: 그림을 지정 위치에 올리고 옮긴 좌표 저장(배율별 오차 1px 이내), 640px 이하에서 가로 스크롤 없음, 다른 섹션 바이트 동일 |
 | **V4 SVG** (완료 — draw.io Worker 배포는 사용자 확인 대기, 12절) | 2.5 | SVG 자산(서버 소독), HTML·덱에 파일 참조·인라인으로 넣기, draw.io 임베드(자체 호스팅)로 새로 그리기·고치기(`xmlsvg`), svgedit로 업로드 SVG 고치기, 인라인 SVG 색·글자 속성 편집(`svgAttr`) | 소독 테스트(스크립트·이벤트 속성·외부 주소 제거), draw.io로 그려 넣고 다시 열어 고치기, svgedit로 도형 색·위치 바꿔 저장 화면 테스트 |
 | **VL 로컬 사이트 편집** (완료, 12절) | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
-| **VO 오피스 편집 서버** | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
+| **VO 오피스 편집 서버** (완료 — 컨테이너 배포는 사용자 확인 대기) | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
 | **V5 에이전트·문서** | 0.5 | MCP `doc_ops` 연산 추가, `svg_put`, 스킬·가이드 갱신 | MCP 테스트: 에이전트가 글꼴·자유 배치·SVG 넣기를 연산으로 수행, 진단에 fix |
 | **V6 운영 마감** | 0.5 | 보안 점검(SVG 소독·draw.io 메시지·스타일 주입·오피스 콜백 JWT), staging 전체 회귀, 운영 배포 | 보안 점검 높음 이상 0, staging 회귀 통과 |
 
@@ -253,3 +253,12 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
 - 함께 고친 버그: 콘텐츠 도메인 304 응답에 CORS가 없어, `<img>`로 먼저 받은 SVG를 편집기가 fetch로 다시 읽을 때 실패했다(TESTING 5절).
 - 계획과 다른 점: 덱 `svgAttr`는 하지 않았다(위). draw.io 화면 테스트는 대역 페이지로 프로토콜을 확인하고, 실제 draw.io는 `apps/drawio`의 확인 스크립트로 본다(CI에는 draw.war를 받지 않는다). 라이선스 고지 파일은 아직 없다(V6 보안·운영 마감에서 제3자 고지 목록과 함께).
 - 테스트: TC-VE-21~31, TC-CF-50, TC-CFUI-22, TC-MCP-01·23, TC-ED-08·TC-VE-13 갱신.
+
+**VO 오피스 편집 서버 (2026-11-02, 컨테이너 배포 전)**
+- 규칙은 `packages/core/src/office.ts`(로컬·Worker 공통): 편집 설정 JWT(HS256), 파일·콜백 주소 서명 토큰, 문서 키 = 작업 상태(기준 버전·rev)에서 만듦(같은 내용이면 공동 편집, 저장하면 새 키), 편집 세션 = 작업본 잠금(`DocStore.locked`, 그동안 다른 수정본·버전으로 저장 409, 15분 만료·화면이 5분마다 연장), 콜백 status 2·6이면 받은 파일로 대표 파일을 바꾼 수정본(source office), 2·4면 잠금 풀림. 저장 파일 주소는 오피스 서버 출처만(SSRF), 64MB 상한.
+- Cloudflare(`apps/worker/src/office.ts`): 컨테이너 클래스 `Office`(ONLYOFFICE Docs 10.0 공식 이미지 그대로, `apps/office/Dockerfile` digest 고정, standard-3·30분 유휴 종료·인터넷 사용), 편집기 출처 `OFFICE_ORIGIN`(앱과 다른 도메인)을 컨테이너로 넘기는 프록시(쿠키 지움), 세션 D1 `office_session`(마이그레이션 0005), 콜백 경로는 CSRF 검사 대신 서명 토큰 + JWT, 사용량 `officeSessions`. **`wrangler.jsonc`에는 아직 넣지 않았다**(넣으면 다음 CI 배포가 이미지를 올리고 Containers를 만든다). 넣을 설정과 비용은 `apps/worker/README.md` 「오피스 편집기」.
+- 로컬(`site/server`): 같은 경로, docker(`apps/office/compose.yaml`), `ONLYOFFICE_URL`·`ONLYOFFICE_JWT_SECRET`이 없으면 버튼을 숨긴다.
+- 화면(`viewers/office/OfficeEditor.tsx`): 「오피스 편집기로 열기」(확인 창) → 편집 서버 깨우기 진행 막대 → 편집기(DocsAPI) → 「닫고 저장」 → 저장 콜백을 기다려 구조 편집 화면으로(「버전으로 저장」).
+- 확인: 실제 ONLYOFFICE(docker)로 DOCX를 열어 글자를 넣고 닫으면 저장 콜백(Authorization Bearer JWT) → 수정본에 입력한 글자(TC-VO-12, 컨테이너 준비 12초). Cloudflare Containers 위 구동·WebSocket 공동 편집 프록시는 자원을 만든 뒤 staging에서 확인한다.
+- 함께 고친 버그: V4에서 Cloudflare `editor-config` 라우트가 등록되지 않아 draw.io 버튼이 늘 숨었다(TESTING 5절).
+- 남은 것: 텍스트 편집(2.0)·새 버전 올리기는 수정본 층을 거치지 않아 오피스 세션 중에도 막히지 않는다(세션 중 새 버전이 생기면 오피스 저장이 그 버전 위 수정본으로 들어가 그 사이 바뀐 대표 파일을 덮는다). 에이전트 OOXML 연산은 잠금으로 409.

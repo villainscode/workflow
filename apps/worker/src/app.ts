@@ -25,6 +25,7 @@ import { htmlPdf, slidePng } from "./render.ts";
 import { usage } from "./usage.ts";
 import { StructEditError } from "@workflow/core/structedit/html";
 import { agentOf, liveStub, reasonOf } from "./live.ts";
+import { officeRoutes, officeServer } from "./office.ts";
 
 import { contentToken } from "./token.ts";
 import { editView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload } from "./write.ts";
@@ -70,7 +71,8 @@ app.get("/i/:ws/:name", async (c) => {
 app.use("/api/*", async (c, next) => {
   // WebSocket 업그레이드(GET /live)도 쿠키가 따라가므로 같은 검사를 받는다(교차 사이트 WebSocket 막기, 5.0 M8)
   const unsafe = !["GET", "HEAD", "OPTIONS"].includes(c.req.method) || c.req.header("upgrade")?.toLowerCase() === "websocket";
-  if (unsafe && !c.req.path.startsWith("/api/admin/") && c.req.header("origin") !== new URL(c.req.url).origin) {
+  // 오피스 서버 콜백(/api/office/)은 쿠키 없이 서명 토큰과 JWT로 인증한다(office.ts)
+  if (unsafe && !c.req.path.startsWith("/api/admin/") && !c.req.path.startsWith("/api/office/") && c.req.header("origin") !== new URL(c.req.url).origin) {
     return c.json({ error: "허용되지 않은 요청입니다" }, 403);
   }
   await next();
@@ -87,6 +89,7 @@ app.use("/api/*", async (c, next) => {
 });
 
 app.route("/api/admin", admin);
+app.route("/api/office", officeServer);
 app.route("/", consent);
 app.route("/api/auth", auth);
 app.get("/api/invites/:token", inviteLink);
@@ -299,9 +302,11 @@ ws.get("/assets/:sha/url", async (c) => {
   const a = await assetRow(c.env.DB, c.var.ws.id, c.req.param("sha"));
   if (!a) throw new HttpError(404, "없는 이미지입니다");
   return c.json({ url: `${await contentBase(c)}/_asset/${a.sha256}`, width: a.width, height: a.height, mime: a.mime });
-/** 편집기 설정(6.0 V4): draw.io 출처. 화면이 iframe으로 연다 */
-ws.get("/editor-config", (c) => c.json({ drawio: c.env.DRAWIO_ORIGIN || null }));
 });
+/** 편집기 설정(6.0 V4·VO): draw.io 출처, 오피스 편집기를 쓸 수 있는지. 화면이 버튼을 보이거나 숨긴다 */
+ws.get("/editor-config", (c) => c.json({ drawio: c.env.DRAWIO_ORIGIN || null, office: !!c.env.OFFICE_ORIGIN && !!c.env.ONLYOFFICE_JWT_SECRET }));
+// 오피스 편집기(6.0 VO): 편집 설정·세션 연장·상태
+officeRoutes(ws);
 
 /** 워크스페이스 내보내기(owner): docs/ 모양 zip. 가져오기 CLI로 다시 넣을 수 있다 */
 ws.get("/export", async (c) => new Response(exportWorkspace(c.env, c.var.ws), { headers: {

@@ -1,0 +1,14 @@
+# 로컬 사이트(site/)·wrangler dev에서 오피스 편집기를 쓸 때(6.0 VO). Cloudflare 배포와 같은 이미지(Dockerfile)를 띄운다.
+#   ONLYOFFICE_JWT_SECRET=<비밀값> docker compose -f apps/office/compose.yaml up -d
+# 로컬 사이트: ONLYOFFICE_URL=http://localhost:8090 ONLYOFFICE_JWT_SECRET=<같은 값> npm run dev (site/)
+# 오피스 서버가 로컬 서버(host.docker.internal)에서 파일을 받으므로 사설 IP 요청을 허용한다(로컬 전용 설정)
+services:
+  office:
+    build: .
+    ports: ["8090:80"]
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:?ONLYOFFICE_JWT_SECRET를 정하세요}
+      JWT_HEADER: Authorization
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    extra_hosts: ["host.docker.internal:host-gateway"]
