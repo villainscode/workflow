@@ -616,7 +616,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     assert.equal(await order(), "b1,b2,b3");
   });
 
-  test("TC-CFUI-20 HTML 속성 편집(6.0 V2): 속성 패널 크기·토큰 색 → 새로 고침 뒤 유지, 글자 도구 막대로 일부 글자 크기, 표 열 끌기·행 높이·그림 크기 손잡이, ⌘Z, ⌘D 복제, 레이어", async () => {
+  test("TC-CFUI-20 HTML 속성 편집(6.0 V2): 속성 패널 크기·토큰 색 → 새로 고침 뒤 유지, 글자 도구 막대로 일부 글자 크기, 표 열 끌기·행 높이·그림 크기 손잡이, ⌘Z, ⌘D 복제", async () => {
     const D = "/docs/notes/style-html";
     const FRAME = 'iframe[title="구조 편집"]';
     const work = async () => {
@@ -719,8 +719,6 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     await key("d");
     await status("수정본 8");
     assert.equal((await work()).match(/<h2>서식 제목<\/h2>/g)!.length, 2);
-    // 레이어 패널: 블록 트리
-    await page.waitForFunction(() => document.querySelector('[role="tree"]')?.textContent?.includes("제목 2 · 서식 제목"), { timeout: 10_000 });
   });
 
   test("TC-CFUI-22 SVG(6.0 V4): 버전 폴더 SVG 그림을 「SVG 고치기」(svgedit)로 색을 바꿔 저장하면 새 SVG 자산(assets/….svg)으로 바뀌고 콘텐츠 도메인에서 sandbox CSP로 준다. SVG 파일을 그림으로 넣으면 소독된다", async () => {

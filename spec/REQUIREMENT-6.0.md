@@ -117,7 +117,7 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 | SVG 올리기·넣기 | ○ | ○ | — | — |
 | SVG 그리기·고치기(draw.io·svgedit) | ○ | ○ | — | — |
 | 여러 요소 정렬·분배·복제·앞뒤 | ○ | ○ | — | — |
-| 레이어(요소 트리) 패널 | ○ | ○ | — | — |
+| 레이어(요소 트리) 패널 | — (2026-11-02 사용자 요청으로 뺌) | ○ | — | — |
 | 로컬 사이트에서 편집 | ○ | ○ | ○ | ○ |
 
 ## 6. 결정 사항
@@ -214,7 +214,7 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
 - core(`structedit/html.ts`·`docstyle.ts`): `setStyle`(D-55 허용 목록, 기존 선언 순서 유지·같은 속성 제자리, position·left·top은 막음, 글꼴은 문서가 쓰는 글꼴 + 일반 계열), `tableRowHeight`, `duplicate`(안의 id 뺌), 글자 안 span style(color·font-family·font-size·font-weight), 열 너비를 바꾸면 `table-layout:fixed`를 함께, 고를 수 있는 요소에 `div`, 블록 목록에 인라인 style·감싸는 블록·깊이, 문서 견본 `docTheme`(글꼴·`:root` 색 토큰·다크 모드).
 - Worker·MCP: 구조 응답에 `theme`, 수정본 메모(서식·표 행 높이·복제), `doc_structure`가 글꼴·색 토큰과 블록 style을 보여 주고 `doc_ops` 설명에 새 연산.
 - 화면(`viewers/structedit/`): 속성 패널(`HtmlStylePanel`), 글자 편집 중 도구 막대(`editor/TextToolbar`를 상태·명령 어댑터로 나눠 HTML contenteditable에도 씀, `inlineText.ts`), 표 열 경계·행 높이·표 너비·그림 크기 손잡이(`HtmlHandles`, 감싸는 상자 대비 %), 그림 정렬, 복제(⌘D), ⌘Z·⇧⌘Z, Esc 부모 고르기, 레이어 패널(`editor/LayerPanel`).
-- 계획과 다른 점: 역연산을 따로 두지 않았다. HTML은 연산 하나가 수정본 하나라 되돌리기는 수정본 복원으로 한다(5.0 구조 편집과 같은 방식). 덱 캔버스(Moveable)와 HTML은 겹치는 부분이 없어 공통 캔버스 모듈은 만들지 않았다. HTML은 배율 없는 iframe 위 손잡이 층이고, 공통으로 쓴 것은 글자 도구 막대(상태·명령 어댑터)와 레이어 패널이다. 공통 캔버스는 V3 자유 배치에서 다시 본다.
+- 계획과 다른 점: 역연산을 따로 두지 않았다. HTML은 연산 하나가 수정본 하나라 되돌리기는 수정본 복원으로 한다(5.0 구조 편집과 같은 방식). 덱 캔버스(Moveable)와 HTML은 겹치는 부분이 없어 공통 캔버스 모듈은 만들지 않았다. HTML은 배율 없는 iframe 위 손잡이 층이고, 공통으로 쓴 것은 글자 도구 막대(상태·명령 어댑터)와 레이어 패널이다(HTML 레이어 패널은 2026-11-02 사용자 요청으로 뺐다. 덱에는 남아 있다). 공통 캔버스는 V3 자유 배치에서 다시 본다.
 - 테스트: TC-VE-03~09, TC-CFUI-20.
 
 **VL 로컬 사이트 편집 (2026-11-02, D-58)**

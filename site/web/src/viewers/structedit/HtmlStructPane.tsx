@@ -5,7 +5,6 @@ import { injectStyle } from "../../lib/textedit.ts";
 import { useConfirm } from "../../components/confirm/ConfirmProvider.tsx";
 import { IconButton } from "../../components/IconButton.tsx";
 import { TextToolbarView } from "../../editor/TextToolbar.tsx";
-import { LayerPanel, type LayerItem } from "../../editor/LayerPanel.tsx";
 import { HtmlStylePanel, GENERIC, fontValue } from "./HtmlStylePanel.tsx";
 import { HtmlHandles } from "./HtmlHandles.tsx";
 import { minHeightFor, pinBoxOf } from "./pinBox.ts";
@@ -338,13 +337,6 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     if (ref) void run([{ t: "move", eid: anchorEid, ref, where: dir < 0 ? "before" : "after" }], dir < 0 ? "위로 옮김" : "아래로 옮김");
   };
 
-  const layers = layerItems(s.blocks ?? []);
-  const moveLayer = (id: string, dir: -1 | 1) => {
-    const it = layers.find((x) => x.id === id), list = s.blocks ?? [];
-    const sibs = list.filter((x) => x.parent === list.find((y) => y.eid === id)?.parent);
-    const ref = sibs[sibs.findIndex((x) => x.eid === id) + dir];
-    if (it && ref) void run([{ t: "move", eid: id, ref: ref.eid, where: dir < 0 ? "before" : "after" }], dir < 0 ? "위로 옮김" : "아래로 옮김");
-  };
   /** 글상자 넣기: 고른 요소의 섹션(없으면 본문 뿌리), 보이는 위쪽 자리에 */
   const addTextbox = () => {
     const doc = d();
@@ -485,11 +477,6 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
             )}
           </div>
         )}
-        <div className="mt-4 max-h-72 overflow-y-auto border-t border-line pt-3">
-          <LayerPanel items={layers} selected={sel ? [sel] : []}
-            onSelect={(id) => { const el = node(id); if (el) { pick(el); el.scrollIntoView({ block: "nearest" }); } }}
-            onMove={moveLayer} />
-        </div>
       </aside>
       {svgEdit?.kind === "drawio" && drawio && (
         <DrawioEditor origin={drawio} svg={svgEdit.svg} title={svgEdit.title} onSave={svgEdit.save} onClose={() => setSvgEdit(null)} />
@@ -651,20 +638,6 @@ function InlineSvgSection({ ctx, b, shape, onShape }: { ctx: StructCtx; b: Block
 /** 명령을 부른 뒤 막대 상태(굵게·색 등)를 다시 읽는다 */
 function wrapBump<T extends object>(cmd: T, bump: () => void): T {
   return Object.fromEntries(Object.entries(cmd).map(([k, f]) => [k, (...a: unknown[]) => { const r = (f as (...x: unknown[]) => unknown)(...a); bump(); return r; }])) as T;
-}
-
-/** 블록 목록 → 레이어 항목(같은 부모 안 처음·끝, 표 안 요소와 목록 항목은 옮기지 않는다) */
-function layerItems(blocks: Block[]): LayerItem[] {
-  const byParent = new Map<string | null, Block[]>();
-  for (const b of blocks) byParent.set(b.parent, [...(byParent.get(b.parent) ?? []), b]);
-  return blocks.map((b) => {
-    const sibs = byParent.get(b.parent)!;
-    return {
-      id: b.eid, depth: b.depth, first: sibs[0] === b, last: sibs[sibs.length - 1] === b,
-      label: `${NAME[b.tag] ?? b.tag}${b.text ? ` · ${b.text.slice(0, 24)}` : ""}`,
-      movable: !INNER.has(b.tag.toUpperCase()),
-    };
-  });
 }
 
 /** 색 고르기: 고르는 동안(input)은 저장하지 않고, 고르기를 마쳤을 때(change) 한 번 저장한다(연산 하나 = 수정본 하나) */
