@@ -297,7 +297,7 @@ function summarize(ops: StructOp[]) {
   return [...n].map(([k, v]) => `${k} ${v}`).join(", ");
 }
 
-// ---------- 슬라이드 덱(5.0 M4, 명세 docs/slide-editor-spec.html 10절) ----------
+// ---------- 슬라이드 덱(5.0 M4, 명세 docs/editor-spec/slide-editor-spec 10절) ----------
 // 덱은 deck.json + slides/<id>.html. 슬라이드 한 장을 바꾸면 그 파일 blob 하나만 새로 생긴다.
 // baseRev가 지금과 다르면 최신 작업본에 연산을 다시 적용해 본다. 대상 요소가 모두 있으면 저장하고, 없으면 409.
 

@@ -2,7 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { applyOps, checkDeck, parseSlide, sanitizeInline, renderDeckHtml, renderSlideHtml, serializeSlide, SLIDE_BASE_CSS, SlideError, slidePath, type Slide, type SlideOp } from "../src/slide/index.ts";
 
-/** 5.0 M4: 슬라이드 형식(명세 docs/slide-editor-spec.html 03·04·07절). 케이스 목록은 spec/TESTING.md 2.8 */
+/** 5.0 M4: 슬라이드 형식(명세 docs/editor-spec/slide-editor-spec 03·04·07절). 케이스 목록은 spec/TESTING.md 2.8 */
 
 const A = "asset:" + "a".repeat(64);
 export const SAMPLE = `<section id="team" style="background:#f7f7f4;padding:128px;display:flex;flex-direction:column;gap:48px">

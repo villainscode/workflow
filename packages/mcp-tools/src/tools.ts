@@ -387,7 +387,7 @@ export function registerTools(server: McpServer, host: ToolHost) {
       : `열린 사이트 화면이 없습니다. 브라우저에서 이 주소를 여세요:\n${url}`;
   }));
 
-  // ---------- 슬라이드 덱(5.0 M4, 명세 docs/slide-editor-spec.html 11절) ----------
+  // ---------- 슬라이드 덱(5.0 M4, 명세 docs/editor-spec/slide-editor-spec 11절) ----------
 
   const DECK_FORMAT = "덱 형식: 캔버스 1920×1080px, 여백 128px, 글자 24px 이상. 슬라이드 한 장 = <section id=\"슬라이드id\" style=\"…\">…</section>(직계 <aside>는 발표자 노트). " +
     "블록 section div h1 h2 h3 p ul ol li table tr th td img hr, 글자 안 마크 b i u a[href^=https] span[style=color·font-family·font-size] br. 속성은 data-eid·style·img의 src(asset:<sha256>만)·alt. " +

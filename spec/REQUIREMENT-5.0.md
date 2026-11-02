@@ -20,7 +20,7 @@
 
 ## 2. 슬라이드 편집기 명세 분석
 
-`docs/slide-editor-spec.html`은 에이전트가 만든 16:9 덱(제한된 HTML)을 사람이 클릭해 고치는 편집기 명세다. 범위는 슬라이드 하나지만, 그 안의 결정 상당수는 다른 형식에도 쓸 수 있다.
+`docs/editor-spec/slide-editor-spec`은 에이전트가 만든 16:9 덱(제한된 HTML)을 사람이 클릭해 고치는 편집기 명세다. 범위는 슬라이드 하나지만, 그 안의 결정 상당수는 다른 형식에도 쓸 수 있다.
 
 ### 그대로 가져올 것
 
@@ -86,7 +86,7 @@
 
 ### 4.3 슬라이드 편집기
 
-명세 `docs/slide-editor-spec.html`의 01~16절을 그대로 따른다. 바꾸는 곳은 2절 "어긋나는 곳"의 저장 위치(R2 정본)와 문서 모델(덱 = `kind: deck` 문서)뿐이다.
+명세 `docs/editor-spec/slide-editor-spec`의 01~16절을 그대로 따른다. 바꾸는 곳은 2절 "어긋나는 곳"의 저장 위치(R2 정본)와 문서 모델(덱 = `kind: deck` 문서)뿐이다.
 
 ### 4.4 DOCX·PPTX·XLSX — 세 가지 길 (D-47)
 
@@ -361,7 +361,7 @@ gantt
 
 ## 10. 참고
 
-- 슬라이드 편집기 명세: `docs/slide-editor-spec.html`
+- 슬라이드 편집기 명세: `docs/editor-spec/slide-editor-spec`
 - 지금 구조: `spec/ARCHITECTURE.md`, 4.0 결정: `spec/REQUIREMENT-4.0.md`, 2.0 텍스트 편집: `spec/REQUIREMENT-2.0.md`
 - 조사(2026-10-29):
   - [Univer import/export 문서](https://docs.univer.ai/guides/docs/features/import-export) — DOCX 가져오기·내보내기는 서버(Univer Pro) 필요

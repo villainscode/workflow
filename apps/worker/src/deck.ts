@@ -4,7 +4,7 @@ import type { Bindings, User, Workspace } from "./env.ts";
 import { storeFor } from "./revisions.ts";
 
 /**
- * 슬라이드 덱 편집(5.0 M4, 명세 docs/slide-editor-spec.html 10절). 덱은 kind: deck 문서이고 파일은 deck.json + slides/<id>.html.
+ * 슬라이드 덱 편집(5.0 M4, 명세 docs/editor-spec/slide-editor-spec 10절). 덱은 kind: deck 문서이고 파일은 deck.json + slides/<id>.html.
  * 저장은 수정본으로 한다(D-49). 규칙은 packages/core/src/work(로컬 사이트와 같이 쓴다).
  */
 

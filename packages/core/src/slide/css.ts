@@ -1,5 +1,5 @@
 /**
- * 슬라이드 형식의 허용 CSS(명세 docs/slide-editor-spec.html 03절). 값 문법을 직접 검사한다(허용 범위가 좁아 css-tree 없이 충분하다).
+ * 슬라이드 형식의 허용 CSS(명세 docs/editor-spec/slide-editor-spec 03절). 값 문법을 직접 검사한다(허용 범위가 좁아 css-tree 없이 충분하다).
  * 단위는 px·%·fr만. 금지: margin(→ gap·padding), z-index(그리는 순서 = 문서 순서), url(), 그라데이션·그림자 같은 장식.
  */
 

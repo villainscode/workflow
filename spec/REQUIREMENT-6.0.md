@@ -186,7 +186,7 @@ gantt
 
 ## 10. 참고
 
-- 현황: `spec/REQUIREMENT-5.0.md` 4.1·6절·D-47·D-48·D-51, `docs/slide-editor-spec.html` 06·16절, `packages/core/src/structedit/html.ts`, `packages/core/src/slide/css.ts`, `site/web/src/viewers/deck/editor/Inspector.tsx`
+- 현황: `spec/REQUIREMENT-5.0.md` 4.1·6절·D-47·D-48·D-51, `docs/editor-spec/slide-editor-spec` 06·16절, `packages/core/src/structedit/html.ts`, `packages/core/src/slide/css.ts`, `site/web/src/viewers/deck/editor/Inspector.tsx`
 - 외부 조사(2026-10-30, npm 레지스트리 기준 버전):
   - [GrapesJS](https://github.com/GrapesJS/grapesjs)·[Component API](https://grapesjs.com/docs/api/component.html), [Puck](https://github.com/puckeditor/puck), [Craft.js](https://craft.js.org/docs/overview), [Webstudio](https://github.com/webstudio-is/webstudio), [Silex](https://github.com/SilexLabs/Silex)
   - [draw.io embed mode](https://www.drawio.com/doc/faq/embed-mode), [drawio-integration](https://github.com/jgraph/drawio-integration), [jgraph/drawio](https://github.com/jgraph/drawio)
@@ -270,7 +270,7 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
 - 사용량 창에 오피스 편집 세션 수와 오피스 수정본, 렌더링 칸 이름을 "HTML PDF·슬라이드 미리보기"로.
 - 제3자 고지: `site/web/public/third-party-notices.txt`(draw.io Apache-2.0, svgcanvas MIT, pathseg BSD-3, ONLYOFFICE AGPL·소스 위치, pdf.js, MIT 라이브러리, 나눔고딕 OFL). 계정 메뉴 「오픈소스 고지」. 고지는 로컬·Cloudflare 같은 경로(`/third-party-notices.txt`).
 - 문서: `spec/ARCHITECTURE.md`(요소 편집기 행), `.claude/guides/site-local.md`·`cloudflare-app.md`.
-- 하지 못한 것: 슬라이드 형식 명세 `docs/slide-editor-spec.html`은 사이트 문서가 아니라(`docs/` 바로 아래 낱개 파일, `meta.yaml` 없음) MCP로 새 버전을 만들 수 없다. 반영할 내용: 03·04절 글자 span은 `color`·`font-family`·`font-size`만, 직렬화 순서 `color;font-family;font-size`, 값 문법은 블록 CSS와 같음. 06절 글자 도구 막대·블록 글꼴 칸·표 행 높이·여러 요소 정렬·분배·레이어 패널. SVG는 `asset:` 그림으로 넣는다. 사이트 문서로 등록할지(사용자 결정) 정한 뒤 반영한다.
+- 슬라이드 형식 명세(2026-11-02, 사용자 결정): `docs/` 바로 아래 낱개 파일이라 MCP로 고칠 수 없어, 사이트 문서 「개발문서 › 편집기 명세 › 슬라이드 편집기 구현 명세」(`docs/editor-spec/slide-editor-spec/`)로 등록하고(v0.0 = 원본 그대로) MCP `upload_version`으로 v0.1을 올렸다. 반영: 03절 글자 span은 `color`·`font-family`·`font-size`만·직렬화 순서 `color;font-family;font-size`, 06절 글자 도구 막대·블록 글꼴 칸·여러 요소 정렬·분배·레이어 패널, 07절 행 높이, 08절 SVG는 소독 후 `asset:` 그림, 12절 덱 PDF 대신 `deck_render` PNG. 옛 낱개 파일 `docs/slide-editor-spec.html`은 5.0 당시 기록으로 그대로 두고, 참조는 새 문서로 바꿨다.
 
 **V6 운영 마감 — 보안 점검 (2026-11-02, 로컬 완료)**
 
