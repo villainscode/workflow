@@ -7,7 +7,7 @@ import { IconButton } from "../../components/IconButton.tsx";
 import { TextToolbarView } from "../../editor/TextToolbar.tsx";
 import { HtmlStylePanel, GENERIC, fontValue } from "./HtmlStylePanel.tsx";
 import { HtmlHandles } from "./HtmlHandles.tsx";
-import { minHeightFor, pinBoxOf } from "./pinBox.ts";
+import { containingBlock, minHeightFor, pinBoxOf, previewPin, type PinBox } from "./pinBox.ts";
 import { inlineText } from "./inlineText.ts";
 import { DrawioEditor } from "../../editor/DrawioEditor.tsx";
 import { SvgEditor } from "../../editor/SvgEditor.tsx";
@@ -204,6 +204,27 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     return true;
   }, [bump, pin]);
   useEffect(() => () => { if (nudgeTimer.current) clearTimeout(nudgeTimer.current); }, []);
+
+  /** 속성 패널 위치 칸: 고른 요소를 기준 섹션 안 X(%)·Y(px)·너비(%)로 고정한다. 흐름 요소는 지금 자리에서 고정 위치로 바뀐다 */
+  const pinBoxNow = (b: Block): PinBox | null => {
+    const doc = d(), el = doc?.querySelector<HTMLElement>(`[data-eid="${b.eid}"]`);
+    const base = b.pinBase ? doc?.querySelector<HTMLElement>(`[data-base="${b.pinBase}"]`) : null;
+    if (!el || !base) return null;
+    const cb = b.pinned ? ((el.offsetParent as HTMLElement | null) ?? base) : containingBlock(el, base);
+    return pinBoxOf(el.getBoundingClientRect(), cb);
+  };
+  const setPinBox = (b: Block, part: Partial<PinBox>) => {
+    const doc = d(), el = doc?.querySelector<HTMLElement>(`[data-eid="${b.eid}"]`);
+    const base = b.pinBase ? doc?.querySelector<HTMLElement>(`[data-base="${b.pinBase}"]`) : null;
+    const cur = pinBoxNow(b);
+    if (!doc || !el || !base || !cur || narrow) return;
+    const width = Math.min(100, Math.max(1, part.width ?? cur.width));
+    const box = { left: Math.min(100 - width, Math.max(0, part.left ?? cur.left)), top: Math.max(0, part.top ?? cur.top), width };
+    if (b.pinned) { el.style.left = `${box.left}%`; el.style.top = `${box.top}px`; el.style.width = `${box.width}%`; } else previewPin(el, base, box);
+    void minHeightFor(doc, base).then((minHeight) => pin([{ t: "toPinned", eid: b.eid,
+      box: { left: Math.round(box.left * 100) / 100, top: Math.round(box.top), width: Math.round(box.width * 100) / 100 }, minHeight }],
+    b.pinned ? "위치" : "자유 배치", !b.pinned));
+  };
   const duplicate = useCallback(() => {
     const eid = anchorRef.current;
     if (eid) void runRef.current([{ t: "duplicate", eid }], "복제");
@@ -446,9 +467,21 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               </section>
             )}
 
+            {b.pinBase && !narrow && (() => {
+              const now = b.pinned ? { left: parseFloat(b.style.left ?? "0"), top: parseFloat(b.style.top ?? "0"), width: parseFloat(b.style.width ?? "0") } : pinBoxNow(b);
+              return now && (
+                <section className="space-y-1" aria-label="위치">
+                  <h3 className="text-xs font-semibold text-muted">{b.pinned ? "위치 (자유 배치)" : "위치 (값을 넣으면 그 자리에 고정)"}</h3>
+                  <div className="grid grid-cols-3 gap-1">
+                    <PinNum key={`x${b.eid}${now.left}`} label="X" unit="%" value={now.left} disabled={busy} onCommit={(v) => setPinBox(b, { left: v })} />
+                    <PinNum key={`y${b.eid}${now.top}`} label="Y" unit="px" value={now.top} disabled={busy} onCommit={(v) => setPinBox(b, { top: v })} />
+                    <PinNum key={`w${b.eid}${now.width}`} label="너비" unit="%" value={now.width} disabled={busy} onCommit={(v) => setPinBox(b, { width: v })} />
+                  </div>
+                </section>
+              );
+            })()}
             {b.pinned && (
               <section>
-                <h3 className="mb-1 text-xs font-semibold text-muted">자유 배치 · 왼쪽 {b.style.left} · 위 {b.style.top} · 너비 {b.style.width}</h3>
                 <div className="flex flex-wrap gap-1">
                   <IconButton icon={BringToFront} label="앞으로 가져오기 (나중에 그리기)" variant="outline" disabled={busy} onClick={() => move(1)} />
                   <IconButton icon={SendToBack} label="뒤로 보내기 (먼저 그리기)" variant="outline" disabled={busy} onClick={() => move(-1)} />
@@ -457,7 +490,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
                 </div>
               </section>
             )}
-            {!b.pinned && b.pinBase && <p className="text-xs text-muted">문서 위 옮기기 손잡이를 끌면 그 자리에 고정됩니다(자유 배치).</p>}
+            {!b.pinned && b.pinBase && <p className="text-xs text-muted">문서 위 옮기기 손잡이를 끌거나 위치 값을 넣으면 그 자리에 고정됩니다(자유 배치).</p>}
 
             {ab && ab.tag !== "table" && !b.pinned && (
               <section className="flex flex-wrap gap-1">
@@ -632,6 +665,22 @@ function InlineSvgSection({ ctx, b, shape, onShape }: { ctx: StructCtx; b: Block
         </div>
       )}
     </section>
+  );
+}
+
+/** 위치 숫자 칸: Enter·칸 떠날 때 저장, Esc는 되돌림 */
+function PinNum({ label, unit, value, disabled, onCommit }: { label: string; unit: string; value: number; disabled: boolean; onCommit: (v: number) => void }) {
+  const shown = String(Math.round(value * 10) / 10);
+  const [v, setV] = useState(shown);
+  const commit = () => { const n = parseFloat(v); if (Number.isFinite(n) && String(n) !== shown) onCommit(n); else setV(shown); };
+  return (
+    <label className="flex items-center gap-1 text-xs">
+      <span className="shrink-0 text-muted">{label}</span>
+      <input type="number" step="any" aria-label={`위치 ${label} (${unit})`} disabled={disabled} value={v} className="w-full min-w-0 rounded border border-line bg-surface px-1 py-0.5 font-mono"
+        onChange={(e) => setV(e.target.value)} onBlur={commit} onFocus={(e) => e.target.select()}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") setV(shown); }} />
+      <span className="shrink-0 text-muted">{unit}</span>
+    </label>
   );
 }
 

@@ -782,7 +782,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     assert.equal((await api("/docs/notes/office-doc/office")).active, false);
   });
 
-  test("TC-CFUI-21 HTML 자유 배치(6.0 V3): 옮기기 손잡이로 끌면 고정 위치(놓은 자리와 1px 이내), 그림 파일을 놓은 자리에 고정 그림, 방향키 이동, 흐름으로 되돌리기, 640px 미리보기는 가로 스크롤 없음", async () => {
+  test("TC-CFUI-21 HTML 자유 배치(6.0 V3): 옮기기 손잡이로 끌면 고정 위치(놓은 자리와 1px 이내), 그림 파일을 놓은 자리에 고정 그림, 방향키 이동, 속성 패널 위치 칸(X·Y), 흐름으로 되돌리기, 640px 미리보기는 가로 스크롤 없음", async () => {
     const D = "/docs/notes/pin-html";
     const FRAME = 'iframe[title="구조 편집"]';
     const work = async () => {
@@ -849,6 +849,26 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     await ready("section.one > p[data-pin]");
     assert.ok(Math.abs((await boxIn("section.one > p[data-pin]")).x - (x0 - 8)) <= 1, "방향키 8px");
 
+    // 3-2) 속성 패널 위치 칸: 고정 문단 Y=40px, 흐름 문단(둘째 섹션)에 X=3% → 그 자리에 고정(섹션 밖으로 넘치는 값은 막는다)
+    const typeIn = async (label: string, v: string) => {
+      const sel = `input[aria-label="${label}"]`;
+      await page.waitForSelector(sel, { timeout: 10_000 });
+      await page.focus(sel);
+      await page.$eval(sel, (el) => (el as HTMLInputElement).select());
+      await page.keyboard.type(v);
+      await page.keyboard.press("Enter");
+    };
+    await typeIn("위치 Y (px)", "40");
+    await status("수정본 4");
+    assert.match(await work(), /<p data-pin="" style="position:absolute;left:[\d.]+%;top:40px;width:[\d.]+%;margin:0">옮길 문단입니다<\/p>/);
+    await ready("section.one > p[data-pin]");
+    assert.ok(Math.abs((await boxIn("section.one > p[data-pin]")).y - 40) <= 1, "Y 40px");
+    await inFrame(`d.querySelector("section.two > p").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    await typeIn("위치 X (%)", "3");
+    await status("수정본 5");
+    assert.match(await work(), /<p data-pin="" style="position:absolute;left:3%;top:\d+px;width:[\d.]+%;margin:0">그림을 놓을 섹션<\/p>/);
+    await ready("section.two > p[data-pin]");
+
     // 4) 640px 미리보기: 고정 요소가 흐름으로, 가로 스크롤 없음
     await page.click('button[aria-label="좁은 화면 미리보기 (640px)"]');
     await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.getBoundingClientRect().width <= 640, { timeout: 5000 }, FRAME);
@@ -861,7 +881,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     // 5) 흐름으로 되돌리기
     await inFrame(`d.querySelector("section.one > p[data-pin]").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
     await page.click('button[data-tip="흐름으로 되돌리기"]');
-    await status("수정본 4");
+    await status("수정본 6");
     assert.match(await work(), /<section data-pin-box="" style="position:relative;min-height:\d+px" class="two">/);
     assert.match(await work(), /<section class="one">\n<h2>첫 섹션<\/h2>\n<p>옮길 문단입니다<\/p>/);
   });
