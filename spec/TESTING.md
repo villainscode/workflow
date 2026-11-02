@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 157개(실제 테스트 205건: `npm test` 171건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 71건 + Cloudflare 화면 테스트 19건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 28건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 157개(실제 테스트 205건: `npm test` 171건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 72건 + Cloudflare 화면 테스트 19건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 28건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -298,6 +298,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CF-45 | 접속자: 화면이 "here"(메뉴·문서·보기/편집)를 보내면 모두에게 접속자 목록(같은 사람·같은 문서는 하나, 편집이 앞섬), 창을 닫으면 빠짐. 저장 알림에 저장한 사람 id (`test/live.test.ts`) | 5.0 M7 |
 | TC-CF-46 | `doc_structure`(eid·rev) → `doc_ops`(에이전트 수정본, 메모 "Claude Code:"), 지난 rev는 409 + "→ doc_structure로 다시 읽고", 잘못된 연산은 400 + "→ 쓸 수 있는 연산", `revision_list`(출처·작성자·메모), `revision_restore`(rev 0 = 기준 버전) | 5.0 M7 |
 | TC-CF-48 | 보안: 다른 출처(또는 Origin 없이) 연 실시간 WebSocket은 403(교차 사이트 WebSocket 막기), 1000자 넘는 접속자 메시지는 버림 (`test/live.test.ts`) | 5.0 M8 보안 점검 |
+| TC-CF-49 | http로 들어온 요청은 APP_ORIGIN이 https인 배포에서 같은 주소의 https로 301(경로·쿼리 유지, 콘텐츠 도메인도), 로컬 http·https 요청은 그대로 (`test/https.test.ts`). 정적 화면은 `main.tsx`가 https로 옮긴다 | 버그 2026-11-02 |
 | TC-CF-47 | 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·PDF 변환·렌더링 횟수(캐시에 없어 실제로 만든 것만 기록), owner 아니면 403 (`test/revisions.test.ts`) | 5.0 M8 |
 | TC-CF-44 | 덱 도구: `deck_create` → `deck_get`(eid) → `slide_patch`(수정본 출처 agent, 메모 "Claude Code:") → `slide_put` 형식 오류 진단 → `asset_put`(asset:<sha>·크기) | 5.0 M4 |
 | TC-CF-44 | PDF 변환: 결과는 원본 sha256으로 R2에 캐시(캐시가 있으면 컨테이너를 부르지 않음), 다른 워크스페이스 파일 404, svg 대상·Office가 아닌 형식 400 | 4.0 P7 |
@@ -443,3 +444,4 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-30 | PDF 편집에서 글상자 도구로 쪽을 눌러도 글자 칸이 생기지 않음 | 눌렀을 때 생긴 글자 칸이 포커스를 받은 뒤, 같은 누름의 기본 동작(포커스 옮기기)으로 바로 포커스를 잃어 빈 칸으로 지워졌다 | 글상자 도구의 pointerdown 기본 동작을 막음(`PdfEditor.tsx`) | TC-CFUI-16 |
 | 2026-10-30 | 가져오기 CLI로 들어온 덱은 슬라이드 파일에 data-eid가 없어 에이전트가 고칠 요소를 가리킬 수 없음 | 가져오기는 업로드 검사(`prepareDeck`)를 거치지 않는다 | 덱 읽기 API(`readDeck`, 로컬·Worker)가 늘 직렬화 형식(eid 붙은)으로 준다. eid는 문서 순서로 정해져 서버·화면이 같다 | TC-CFUI-14, TC-MCP-21 |
 | 2026-10-30 | (Cloudflare staging) PDF 내보내기가 「Navigation timeout of 30000 ms exceeded」로 실패 | 렌더링 문서를 열 때 `networkidle0`(0.5초 동안 요청 없음)을 기다렸는데, 실제 Browser Rendering에서는 이 신호가 오지 않아 거의 매번 30초를 넘겼다. 로컬 `wrangler dev`는 로컬 Chrome이라 드러나지 않았다 | `load`까지만 기다리고 그 뒤 글꼴·그림을 기다림(`apps/worker/src/render.ts`) | 실제 Browser Rendering(원격 바인딩 시험 Worker)에서 `networkidle0` 3번 모두 시간 초과·`load` 3번 모두 4~5초 성공 확인, TC-CFUI-18 |
+| 2026-11-02 | (production) `http://workflow.simplite.net`으로 열고 로그인하면 Google이 「400 redirect_uri_mismatch」 | 콜백 주소를 요청 주소의 출처로 만드는데, http로 열면 https로 옮기는 곳이 없어 `http://…/api/auth/google/callback`을 보냈다(Google에는 https만 등록). 같은 이유로 세션 쿠키에 Secure도 빠질 수 있었다 | Worker 진입점에서 APP_ORIGIN이 https면 http 요청을 https로 301(`apps/worker/src/https.ts`), Worker를 거치지 않는 정적 화면은 `main.tsx`에서 https로 이동 | TC-CF-49 (수정 전 실패 확인) |

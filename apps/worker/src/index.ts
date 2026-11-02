@@ -3,6 +3,7 @@ import { app } from "./app.ts";
 import type { Bindings } from "./env.ts";
 import { mcpHandler } from "./mcp.ts";
 import { cleanup } from "./cleanup.ts";
+import { toHttps } from "./https.ts";
 
 /**
  * 문서 탐색 워크플로우 Worker 진입점(REQUIREMENT-4.0).
@@ -18,6 +19,8 @@ let provider: OAuthProvider<Bindings> | undefined;
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    const https = toHttps(request, env);
+    if (https) return https;
     provider ??= new OAuthProvider<Bindings>({
       apiRoute: "/mcp",
       apiHandler: mcpHandler,
