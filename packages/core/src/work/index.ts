@@ -220,6 +220,7 @@ export async function applyStructOps(store: DocStore, assets: AssetLookup,
       for (const op of input.ops as HtmlOp[]) {
         if (op.t === "setAttr" && op.name === "src") ops.push({ ...op, value: await local(op.value) });
         else if (op.t === "insert" && op.node.kind === "image") ops.push({ ...op, node: { ...op.node, src: await local(op.node.src) } });
+        else if (op.t === "place" && op.node?.kind === "image") ops.push({ ...op, node: { ...op.node, src: await local(op.node.src) } });
         else ops.push(op);
       }
       out = enc.encode(applyHtmlOps(dec.decode(data), ops));
@@ -248,6 +249,7 @@ const OP_NAME: Record<string, string> = {
   setText: "글자", setAttr: "속성", setWidth: "너비", insert: "넣기", remove: "지우기", move: "옮기기",
   tableRow: "표 행", tableCol: "표 열", tableCols: "표 열 너비", replaceImage: "그림 교체", colWidth: "열 너비",
   setStyle: "서식", tableRowHeight: "표 행 높이", duplicate: "복제",
+  toPinned: "자유 배치", unpin: "흐름으로 되돌림", place: "자유 배치 넣기",
 };
 /** 메모가 없으면 연산 종류로 만든다. 예: "표 행 2, 그림 교체 1" */
 function summarize(ops: StructOp[]) {

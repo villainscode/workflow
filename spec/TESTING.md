@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 163개(실제 테스트 211건: `npm test` 175건 + `npm run test:ui` 36건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 73건 + Cloudflare 화면 테스트 20건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 34건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 165개(실제 테스트 213건: `npm test` 175건 + `npm run test:ui` 38건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 74건 + Cloudflare 화면 테스트 21건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 39건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -246,6 +246,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-UI-34 | 상단 메뉴 대분류 추가 이름 칸에서 같은 한글 Enter를 쳐도 확인 창이 취소되지 않고, 확인하면 대분류가 생긴다 | 아래 5절 버그의 회귀 검사 |
 | TC-UI-35 | 로컬 HTML 구조 편집: 속성 패널로 글자 크기 → 수정본 자동 저장(docs/는 그대로) → 「버전으로 저장」하면 v0.1 폴더에 바뀐 HTML | 6.0 VL |
 | TC-UI-36 | 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 슬라이드 편집에서 글자를 고쳐 Esc → 수정본 → 「버전으로 저장」 | 6.0 VL, 아래 5절 버그의 회귀 검사 |
+| TC-UI-37 | 로컬 HTML 자유 배치(6.0 V3): 그림 파일을 섹션의 한 점에 놓으면 그 자리 고정 그림(가운데가 놓은 점과 1px 이내), 640px 미리보기에서 고정 요소는 흐름(static)·가로 스크롤 없음, 「버전으로 저장」하면 그림이 새 버전 폴더 `assets/`로 | 6.0 V3·VL |
 | TC-UI-13 | 같은 탭에서 전체 페이지 이동을 10번 해도 멈추지 않고, 뒤로 가기로 돌아온 페이지도 실시간 반영된다 | 2.5 (아래 5절 버그의 회귀 검사) |
 
 ---
@@ -319,6 +320,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-14 | 슬라이드 편집: 한글 조합 입력(CDP IME 이벤트) → Esc 확정 → 새로 고침 뒤 유지, 고정 요소 끌기(화면 이동량 ÷ 배율, 맞춤선 6px 안), 표 열 넣기·열 경계 손잡이 끌기(이웃 두 열만, 합 100), ⌘Z, 다른 사람이 지운 요소를 고치면 알림·최신본, 버전으로 저장 | 명세 15절 |
 | TC-CFUI-19 | 요소 편집기(6.0 V1): 글자 도구 막대로 고른 글자만 크기 64px·색(막대를 눌러도 글자 편집이 이어짐) → 새로 고침 뒤 유지, 블록 글꼴 칸(덱 faces), 표 행 높이(tr), 고정 상자 3개 위 맞춤·가로 간격 같게, 레이어 패널 아래로(문서 순서), ⌘Z | 6.0 4.1·4.3 |
 | TC-CFUI-20 | HTML 속성 편집(6.0 V2): 속성 패널에서 문단 크기 22px·토큰 색(`var(--accent)`) → 새로 고침 뒤 패널·화면에 유지, 글자 편집 중 도구 막대로 고른 두 글자만 28px(막대 목록을 써도 편집이 이어짐), 칸을 골라 열 경계 끌기(colgroup·`table-layout:fixed`)·행 높이 손잡이·그림 크기 손잡이(감싸는 상자 대비 %), ⌘Z로 그림 크기 되돌림, ⌘D 제목 복제, 레이어 패널 | 6.0 4.2 |
+| TC-CFUI-21 | HTML 자유 배치(6.0 V3): 문단을 옮기기 손잡이로 끌면 고정 위치(`data-pin`·left %·top px·width %, 섹션 `data-pin-box`·min-height, head 좁은 화면 규칙), 놓기 직전 미리 보기 자리와 저장 뒤 자리가 1px 이내, 첫 전환 안내, 그림 파일을 둘째 섹션 한 점에 놓으면 그 섹션 끝에 고정 그림(가운데 1px 이내), Shift+방향키 8px 이동 저장, 640px 미리보기는 static·가로 스크롤 없음·손잡이 숨김, 「흐름으로 되돌리기」면 그 섹션은 원래 시작 태그 | 6.0 4.2 |
 | TC-CFUI-18 | HTML 문서 PDF 내보내기(확인 창 → 진행 막대(만드는 중·내려받는 중 %) → 내려받기)·API(A4 쪽, 두 번째는 캐시로 빠름, HTML이 아닌 문서는 400), 덱 화면에는 PDF 버튼 없음, 슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 5.0 M8 |
 | TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
 | TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
@@ -345,7 +347,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-08 | 이미지 자산: PNG → `asset:<sha>`·가로·세로, 같은 이미지는 한 번, 서명 주소로 받음, SVG·이미지 아님 400 | 5.0 4.1·5.4 |
 | TC-ED-09 | 매일 정리: 30일 지난 수정본 삭제(작업본·버전으로 올린 것은 남김), 남은 수정본·자산의 blob은 남김 | D-50 |
 | TC-ED-10 | 수정본 있는 문서 영구 삭제: 그 문서만 쓰던 blob은 지우고, 다른 문서 수정본이 쓰는 blob은 남김 | 5.0 5.2 |
-| TC-ED-11 | HTML 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 `data-eid`만 더한다 (`packages/core/test/structedit-html.test.ts`) | 5.0 4.1 |
+| TC-ED-11 | HTML 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 `data-eid`와 자유 배치 표시(`data-base`·`data-root`, 6.0 V3)만 더한다 (`packages/core/test/structedit-html.test.ts`) | 5.0 4.1 |
 | TC-ED-12 | HTML 표 행 넣기·빼기: 본문 행을 본떠 빈 칸, 넣고 빼면 원본 바이트와 같다 | 5.0 4.1 |
 | TC-ED-13 | HTML 표 열 넣기·빼기와 열 너비: 넣고 빼면 원본과 같고, 너비는 colgroup %(합 100)로만 쓴다 | 5.0 4.1 |
 | TC-ED-14 | HTML 글자 바꾸기: 인라인 마크만 남기고(script·위험한 링크 제거), 블록이 든 요소는 거부 | 5.0 4.1 |
@@ -383,7 +385,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-40 | PDF 쪽: 회전(누적)·지우기·옮기기·다른 PDF 끼워 넣기, 범위 밖·잘못된 각도·PDF 아닌 파일 400, 마지막 쪽은 못 지움, 빈 연산은 원본 그대로 | 5.0 4.5 |
 | TC-ED-41 | PDF 양식: 칸 목록(글자·체크·목록), 한글 글자·체크·목록 채우기(우리 글꼴로 칸 모양), 없는 칸 400 | 5.0 4.5 |
 
-### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`, `site/test/unit.test.ts`·`work.test.ts`, `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20, TC-UI-35·36)
+### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`·`structedit-pin.test.ts`, `site/test/unit.test.ts`·`work.test.ts`·`ui.test.ts`(TC-VE-20), `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20·21, TC-UI-35·36·37)
 
 계획은 `spec/REQUIREMENT-6.0.md`. 마일스톤마다 케이스를 더한다.
 
@@ -402,6 +404,13 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-VE-11 | 로컬 되돌리기: rev 0(기준 버전)·예전 수정본으로 새 수정본, 수정본 파일 목록과 내용, 이력 출처(restore·human) | 6.0 VL |
 | TC-VE-12 | 로컬 덱 편집과 그림 자산: 자산은 `asset:<sha>`(크기·주소), 슬라이드 연산이 수정본(inverse), 형식 밖 연산은 400 진단, 「버전으로 저장」하면 가리킨 그림이 버전 폴더 `assets/`로 복사된다 | 6.0 VL |
 | TC-VE-13 | 로컬 그림 자산은 PNG·JPEG·WebP·GIF만(SVG 400), 없는 자산 404 | 6.0 VL |
+| TC-VE-14 | 자유 배치 `toPinned`: 요소 style에 position·left %·top px·width %·margin:0, `data-pin`에 원래 style, 기준 섹션은 relative·min-height(올림)·`data-pin-box`, head에 좁은 화면 규칙 한 번. 다시 옮기면 위치만(오른쪽 끝이 100%를 넘지 않게 left 보정), unpin하면 원본 바이트 (`structedit-pin.test.ts`) | 6.0 4.2(D-54) |
+| TC-VE-15 | `place`: 섹션 끝(마지막 요소 다음 줄)에 고정 그림·글상자(글자는 이스케이프). 지우거나 흐름으로 되돌리면 섹션 style·규칙도 정리, 글자 블록·없는 섹션·`javascript:` 그림은 거부 | 6.0 4.2·4.5 |
+| TC-VE-16 | 고정할 수 없는 것: 표 안 요소·목록 항목·표 칸·표 자체·섹션 자체는 400, 너비 0·100% 초과·top 음수·minHeight 음수는 400, 고정 아닌 요소 unpin 400, 고정 요소를 다른 섹션으로 move는 400(같은 섹션 안 앞뒤는 된다) | 6.0 4.2 |
+| TC-VE-17 | 기준 섹션 판별: section이 없으면 본문 뿌리(main·body, 감싸개 하나면 그 안) 바로 아래 블록, 뿌리 바로 아래 요소는 뿌리. 편집 사본에 `data-base`·`data-root`. head·body 태그를 생략한 문서는 head의 마지막 요소 뒤에 규칙을 넣고 왕복이 원본과 같다 | 6.0 11절 |
+| TC-VE-18 | 리포 실제 HTML 전체: 고정할 수 있는 블록(문서마다 앞 12개) toPinned → unpin 왕복이 원본과 같고, 바뀌는 곳은 기준 섹션·요소의 시작 태그와 head 규칙뿐 | 6.0 V3 |
+| TC-VE-19 | Worker 연결: 구조에 pinBase·isBase·pinned, 그림 place(asset → `assets/` 상대 경로)·toPinned·unpin이 수정본 하나씩(메모 「자유 배치 넣기 1」·「자유 배치 1」·「흐름으로 되돌림 1」), 표 칸 고정은 400 (`structedit.test.ts`) | 6.0 4.5 |
+| TC-VE-20 | 리포 지금 버전 대표 HTML 배치 검사(브라우저): 문서마다 블록 3개를 화면과 같은 함수(`pinBox.ts`)로 재서 고정하면 375·640·641·718(A4 인쇄 폭)·800·1024·1280px 모두 가로 스크롤 없음, 고정 요소가 섹션 밖으로 넘치지 않음 (`site/test/ui.test.ts`) | 6.0 V0 남은 확인 |
 
 ## 3. 수동 확인 케이스
 

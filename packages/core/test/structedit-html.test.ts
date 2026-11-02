@@ -29,16 +29,18 @@ const eid = (html: string, tag: string, n = 0) => outline(html).filter((b) => b.
 
 
 describe("HTML 구조 편집", () => {
-  test("TC-ED-11 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 data-eid(와 <base>)만 더한다", () => {
+  test("TC-ED-11 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 data-eid·자유 배치 표시(data-base·data-root)와 <base>만 더한다", () => {
     const o = outline(DOC);
     const t = o.find((b) => b.tag === "table")!;
     assert.deepEqual(t.table, { rows: 3, cols: 2, widths: null, merged: false });
     assert.deepEqual(o.find((b) => b.tag === "img")!.image, { src: "img/a.png", alt: "그림", width: null });
     assert.equal(o.find((b) => b.tag === "p")!.editable, true);
     const marked = markEids(DOC);
-    assert.equal(marked.replace(/ data-eid="e\d+"/g, ""), DOC);
+    const unmark = (h: string) => h.replace(/ data-(?:eid|base)="e\d+"| data-root/g, "");
+    assert.equal(unmark(marked), DOC);
+    assert.match(marked, /<main data-base="e\d+" data-root>/);
     // 편집 화면용 <base>: head가 있으면 그 안 처음, 없으면 맨 앞
-    assert.equal(markEids(DOC, "https://f/x/").replace(/ data-eid="e\d+"/g, ""), `<base href="https://f/x/">${DOC}`);
+    assert.equal(unmark(markEids(DOC, "https://f/x/")), `<base href="https://f/x/">${DOC}`);
     assert.match(markEids("<html><head><title>t</title></head><body><p>a</p></body></html>", "https://f/\"x"), /^<html><head><base href="https:\/\/f\/&quot;x"><title>/);
     assert.equal(applyOps(DOC, []), DOC);
   });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Columns3, CopyPlus, Heading2, ImagePlus, ImageUp, Pilcrow, Rows3, Table2, Trash2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BringToFront, Columns3, CopyPlus, Heading2, ImagePlus, ImageUp, Pilcrow, PinOff, Rows3, SendToBack, Smartphone, SquareDashedText, Table2, Trash2 } from "lucide-react";
 import { editViewUrl, uploadAsset, type Block, type DocTheme } from "../../lib/structedit.ts";
 import { injectStyle } from "../../lib/textedit.ts";
 import { useConfirm } from "../../components/confirm/ConfirmProvider.tsx";
@@ -8,6 +8,7 @@ import { TextToolbarView } from "../../editor/TextToolbar.tsx";
 import { LayerPanel, type LayerItem } from "../../editor/LayerPanel.tsx";
 import { HtmlStylePanel, GENERIC, fontValue } from "./HtmlStylePanel.tsx";
 import { HtmlHandles } from "./HtmlHandles.tsx";
+import { minHeightFor, pinBoxOf } from "./pinBox.ts";
 import { inlineText } from "./inlineText.ts";
 import type { StructCtx } from "./StructEditor.tsx";
 
@@ -18,6 +19,9 @@ import type { StructCtx } from "./StructEditor.tsx";
  * 그림 파일을 문서 위에 끌어 놓거나 붙여 넣으면 고른 요소 뒤에(없으면 문서 끝 블록 뒤에) 넣는다.
  * 6.0 V2 요소 편집: 속성 패널(서식, HtmlStylePanel), 글자 편집 중 도구 막대(editor/TextToolbar + inlineText),
  * 표 열 경계·행 높이·표 너비·그림 크기 손잡이(HtmlHandles), 복제(⌘D), 되돌리기(⌘Z·⇧⌘Z), 부모 고르기(Esc), 레이어 패널.
+ * 6.0 V3 자유 배치: 옮기기 손잡이로 끌면 고정 위치(HtmlHandles), 고정 요소는 방향키로 1px·Shift 8px(잠깐 멈추면 저장), 앞뒤 순서·흐름으로 되돌리기.
+ * 그림 파일을 끌어 놓거나 붙여 넣으면 놓은 자리(붙여 넣기는 고른 요소 자리)에 고정 그림으로, 「글상자 넣기」는 보이는 자리에 고정 글상자로 넣는다.
+ * 좁은 화면 미리보기(640px)에서는 고정 요소가 흐름으로 돌아간 모습을 본다.
  */
 
 const SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "28px", "32px"];
@@ -38,6 +42,16 @@ const NAME: Record<string, string> = {
   li: "목록 항목", td: "칸", th: "머리 칸", tr: "행", figure: "그림 묶음", figcaption: "그림 설명", section: "구역", blockquote: "인용", pre: "코드",
 };
 
+/** 새 그림·글상자를 넣을 수 있는 기준 섹션(core PLACE_IN과 같다) */
+const PLACE_IN = new Set(["SECTION", "MAIN", "BODY", "DIV", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "NAV", "FIGURE", "FORM"]);
+function placeBase(doc: Document, at: Element | null): HTMLElement | null {
+  for (let p = at?.closest<HTMLElement>("[data-base]") ?? null; p; p = p.parentElement?.closest<HTMLElement>("[data-base]") ?? null) {
+    if (PLACE_IN.has(p.tagName)) return p;
+  }
+  const root = doc.querySelector<HTMLElement>("[data-root][data-base]");
+  return root && PLACE_IN.has(root.tagName) ? root : null;
+}
+
 const rowsOf = (t: Element) => [...t.querySelectorAll(":scope > tr, :scope > thead > tr, :scope > tbody > tr, :scope > tfoot > tr")];
 
 export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
@@ -55,6 +69,9 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   ctxRef.current = ctx;
   // 고른 칸의 행·열(표 안을 골랐을 때)
   const [cell, setCell] = useState<{ row: number; col: number } | null>(null);
+  // 좁은 화면(640px) 미리보기, 처음 고정 위치로 바꿨을 때 한 줄 안내
+  const [narrow, setNarrow] = useState(false);
+  const [pinNote, setPinNote] = useState(false);
   const blocks = new Map((s.blocks ?? []).map((b) => [b.eid, b]));
   const runRef = useRef(run);
   runRef.current = run;
@@ -89,18 +106,91 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   }, []);
   useEffect(() => paint(sel, cell), [sel, cell, paint]);
 
-  /** 그림 파일 → 자산 → 고른 요소(또는 마지막 블록) 뒤에 넣기 */
-  const insertImage = useCallback(async (file: File, ref: string | null) => {
+  /** 자유 배치 연산 저장. 실패하면 미리 그린 사본을 버리고 다시 읽는다 */
+  const pin = useCallback((ops: unknown[], summary: string, firstPin?: boolean) => {
+    void runRef.current(ops, summary).then((ok) => {
+      if (!ok) frame.current?.contentWindow?.location.reload();
+      else if (firstPin) setPinNote(true);
+    });
+  }, []);
+
+  /**
+   * 기준 섹션의 점(x·y, 사본 화면 좌표)에 고정 요소를 넣는다. 미리 넣어 최소 높이를 잰 뒤 지우고 place 하나로 저장한다.
+   * 그림은 섹션 너비의 절반·원래 크기 중 작은 너비, 글상자는 30%
+   */
+  const place = useCallback(async (base: HTMLElement, at: { x: number; y: number }, node: { kind: "image"; src: string; alt: string; width: number; height: number } | { kind: "textbox"; text: string }) => {
+    const doc = d();
+    if (!doc) return;
+    const c = base.getBoundingClientRect();
+    const cw = base.clientWidth;
+    const w = node.kind === "image" ? Math.min(node.width, cw * 0.5) : cw * 0.3;
+    const h = node.kind === "image" ? (w * node.height) / Math.max(1, node.width) : 0;
+    const left = Math.min(Math.max(c.left + base.clientLeft, at.x - w / 2), c.left + base.clientLeft + cw - w);
+    const top = Math.max(c.top + base.clientTop, at.y - h / 2);
+    const box = pinBoxOf({ left, top, width: w }, base);
+    const tmp = doc.createElement(node.kind === "image" ? "div" : "p");
+    tmp.setAttribute("data-pin", "");
+    tmp.textContent = node.kind === "textbox" ? node.text : "";
+    tmp.style.cssText = `position:absolute;left:${box.left}%;top:${box.top}px;width:${box.width}%;margin:0${node.kind === "image" ? `;aspect-ratio:${node.width}/${Math.max(1, node.height)}` : ""}`;
+    const prev = base.style.position;
+    base.style.position = "relative";
+    base.appendChild(tmp);
+    const minHeight = await minHeightFor(doc, base);
+    tmp.remove();
+    base.style.position = prev;
+    const out = { left: Math.round(box.left * 100) / 100, top: Math.round(box.top), width: Math.round(box.width * 100) / 100 };
+    const n = node.kind === "image" ? { kind: "image", src: node.src, alt: node.alt } : { kind: "textbox", text: node.text };
+    pin([{ t: "place", base: base.getAttribute("data-base"), node: n, box: out, minHeight }], node.kind === "image" ? "그림 자유 배치" : "글상자 넣기", true);
+  }, [pin]);
+
+  /** 그림 파일 → 자산 → 놓은 자리(at)가 있으면 그 섹션에 고정 그림, 없으면 고른 요소(또는 마지막 블록) 뒤에 넣기 */
+  const insertImage = useCallback(async (file: File, ref: string | null, at?: { x: number; y: number; target: Element | null }) => {
     if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { setMessage("PNG·JPEG·WebP·GIF만 넣을 수 있습니다"); return; }
+    const doc = d();
+    const base = at && doc ? placeBase(doc, at.target) : null;
+    if (base && at) {
+      try {
+        const a = await uploadAsset(file);
+        await place(base, at, { kind: "image", src: a.asset, alt: file.name.replace(/\.[^.]+$/, ""), width: a.width, height: a.height });
+      } catch (e) { setMessage(String((e as Error).message)); }
+      return;
+    }
     const target = ref ?? [...(d()?.body.querySelectorAll(":scope > [data-eid], :scope > * > [data-eid]") ?? [])].pop()?.getAttribute("data-eid");
     if (!target) { setMessage("그림을 넣을 자리를 먼저 고르세요"); return; }
     try {
       const a = await uploadAsset(file);
       await runRef.current([{ t: "insert", ref: target, where: "after", node: { kind: "image", src: a.asset, alt: file.name.replace(/\.[^.]+$/, "") } }], "그림 넣기");
     } catch (e) { setMessage(String((e as Error).message)); }
-  }, [setMessage]);
+  }, [setMessage, place]);
   const anchorRef = useRef(anchorEid);
   anchorRef.current = anchorEid;
+  const selRef = useRef(sel);
+  selRef.current = sel;
+  const narrowRef = useRef(narrow);
+  narrowRef.current = narrow;
+  // 방향키 이동: 사본에 바로 그리고 잠깐(0.5초) 멈추면 toPinned 하나로 저장한다
+  const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nudge = useCallback((dx: number, dy: number) => {
+    const doc = d(), eid = selRef.current, b = eid ? blocksRef.current?.find((x) => x.eid === eid) : undefined;
+    const el = eid ? doc?.querySelector<HTMLElement>(`[data-eid="${eid}"]`) : null;
+    const base = b?.pinBase ? doc?.querySelector<HTMLElement>(`[data-base="${b.pinBase}"]`) : null;
+    if (!doc || !b?.pinned || !el || !base || narrowRef.current) return false;
+    // 고정 요소의 위치 기준은 offsetParent(사본 iframe의 요소라 instanceof로 보지 않는다)
+    const cb = (el.offsetParent as HTMLElement | null) ?? base;
+    const r = el.getBoundingClientRect(), c = cb.getBoundingClientRect();
+    const minL = c.left + cb.clientLeft, maxL = minL + cb.clientWidth - r.width;
+    const box = pinBoxOf({ left: Math.min(Math.max(minL, r.left + dx), Math.max(minL, maxL)), top: Math.max(c.top + cb.clientTop, r.top + dy), width: r.width }, cb);
+    el.style.left = `${box.left}%`;
+    el.style.top = `${box.top}px`;
+    bump();
+    if (nudgeTimer.current) clearTimeout(nudgeTimer.current);
+    nudgeTimer.current = setTimeout(() => {
+      void minHeightFor(doc, base).then((minHeight) => pin([{ t: "toPinned", eid: b.eid,
+        box: { left: Math.round(box.left * 100) / 100, top: Math.round(box.top), width: Math.round(box.width * 100) / 100 }, minHeight }], "옮기기"));
+    }, 500);
+    return true;
+  }, [bump, pin]);
+  useEffect(() => () => { if (nudgeTimer.current) clearTimeout(nudgeTimer.current); }, []);
   const duplicate = useCallback(() => {
     const eid = anchorRef.current;
     if (eid) void runRef.current([{ t: "duplicate", eid }], "복제");
@@ -140,6 +230,11 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
       if (mod && k === "z") { e.preventDefault(); if (e.shiftKey) ctxRef.current.redo(); else ctxRef.current.undo(); }
       else if (mod && k === "d") { e.preventDefault(); duplicate(); }
+      else if (e.key.startsWith("Arrow") && !mod) {
+        const step = e.shiftKey ? 8 : 1;
+        const [dx, dy] = ({ ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] } as Record<string, [number, number]>)[e.key] ?? [0, 0];
+        if ((dx || dy) && nudge(dx, dy)) e.preventDefault();
+      }
       else if (e.key === "Escape") {
         // 부모 블록 고르기
         const cur = doc.querySelector("[data-sel]");
@@ -194,14 +289,23 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       if (!f) return;
       e.preventDefault();
       const at = (e.target as Element).closest?.("[data-eid]");
-      void insertImage(f, anchorOf(at ?? null)?.getAttribute("data-eid") ?? anchorRef.current);
+      // 좁은 화면 미리보기에서는 고정 위치가 흐름이라 놓은 자리에 고정하지 않는다
+      void insertImage(f, anchorOf(at ?? null)?.getAttribute("data-eid") ?? anchorRef.current,
+        narrowRef.current ? undefined : { x: e.clientX, y: e.clientY, target: e.target as Element });
     });
     doc.addEventListener("paste", (e) => {
       if ((e.target as Element).closest?.('[contenteditable="true"]')) return;
       const f = [...(e.clipboardData?.files ?? [])].find((x) => x.type.startsWith("image/"));
-      if (f) { e.preventDefault(); void insertImage(f, anchorRef.current); }
+      if (!f) return;
+      e.preventDefault();
+      // 고른 요소 자리(없으면 보이는 화면 가운데)에 고정 그림
+      const cur = selRef.current ? doc.querySelector(`[data-eid="${selRef.current}"]`) : null;
+      const r = cur?.getBoundingClientRect();
+      const view = doc.defaultView!;
+      void insertImage(f, anchorRef.current, narrowRef.current ? undefined
+        : { x: r ? r.left + r.width / 2 : view.innerWidth / 2, y: r ? Math.max(0, r.top) + 40 : view.innerHeight / 2, target: cur });
     });
-  }, [insertImage, pick, bump, duplicate]);
+  }, [insertImage, pick, bump, duplicate, nudge]);
 
   const b = sel ? blocks.get(sel) : undefined;
   const tb = table ? blocks.get(table.getAttribute("data-eid")!) : undefined;
@@ -226,6 +330,15 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     const ref = sibs[sibs.findIndex((x) => x.eid === id) + dir];
     if (it && ref) void run([{ t: "move", eid: id, ref: ref.eid, where: dir < 0 ? "before" : "after" }], dir < 0 ? "위로 옮김" : "아래로 옮김");
   };
+  /** 글상자 넣기: 고른 요소의 섹션(없으면 본문 뿌리), 보이는 위쪽 자리에 */
+  const addTextbox = () => {
+    const doc = d();
+    if (!doc || narrow) return;
+    const base = placeBase(doc, selEl);
+    if (!base) { setMessage("글상자를 넣을 섹션이 없습니다"); return; }
+    const c = base.getBoundingClientRect();
+    void place(base, { x: c.left + base.clientWidth * 0.2, y: Math.max(c.top + 16, 16) }, { kind: "textbox", text: "새 글상자" });
+  };
   const fonts = [...theme.fonts, ...GENERIC].map((f) => ({ label: f, value: fontValue(f) }));
   const palette = theme.tokens.map((t) => ({ value: `var(${t.name})`, label: t.name, swatch: t.value }));
   const ts = editing?.api.read();
@@ -238,21 +351,31 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
             isEditor={(el) => el.tagName === "IFRAME"} onLeave={() => editing.done(true)}
             note={theme.dark && ts.color && !ts.color.startsWith("var(") ? "직접 고른 색은 다크 모드에서 바뀌지 않습니다" : undefined} />
         )}
+        {!editing && (
+          <div className="flex flex-wrap items-center gap-1 border-b border-line bg-surface px-2 py-1">
+            <IconButton icon={SquareDashedText} label="글상자 넣기 (보이는 자리에 고정 위치)" text="글상자" size={16} disabled={busy || narrow} onClick={addTextbox} />
+            <IconButton icon={Smartphone} label={narrow ? "넓은 화면으로 돌아가기" : "좁은 화면 미리보기 (640px)"} size={16} active={narrow} onClick={() => setNarrow((v) => !v)} />
+            {narrow && <span className="text-xs text-muted">640px 이하에서는 고정 위치 요소가 문서 순서대로 쌓입니다. 이 보기에서는 옮길 수 없습니다.</span>}
+            {pinNote && !narrow && <span className="text-xs text-muted" role="status">옮긴 요소는 고정 위치가 됩니다. ⌘Z나 「흐름으로 되돌리기」로 되돌립니다.</span>}
+          </div>
+        )}
         <div className="relative min-h-0 flex-1">
-          <iframe
-            key={s.rev}
-            ref={frame}
-            src={editViewUrl(menu, doc, s.rev)}
-            title="구조 편집"
-            className="block h-full w-full border-0 bg-surface"
-            sandbox="allow-same-origin"
-            onLoad={onLoad}
-          />
-          {!editing && (
-            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-label="손잡이">
-              <HtmlHandles selEl={selEl} blocks={blocks} busy={busy} apply={(ops, summary) => void run(ops, summary)} />
-            </div>
-          )}
+          <div className={narrow ? "relative mx-auto h-full w-[640px] max-w-full border-x border-line" : "relative h-full"}>
+            <iframe
+              key={s.rev}
+              ref={frame}
+              src={editViewUrl(menu, doc, s.rev)}
+              title="구조 편집"
+              className="block h-full w-full border-0 bg-surface"
+              sandbox="allow-same-origin"
+              onLoad={onLoad}
+            />
+            {!editing && (
+              <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-label="손잡이">
+                <HtmlHandles selEl={selEl} blocks={blocks} busy={busy} narrow={narrow} pin={pin} apply={(ops, summary) => void run(ops, summary)} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <aside className="min-h-0 overflow-y-auto border-l border-line bg-surface p-3 text-sm" aria-label="고른 요소">
@@ -292,7 +415,20 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               </section>
             )}
 
-            {ab && ab.tag !== "table" && (
+            {b.pinned && (
+              <section>
+                <h3 className="mb-1 text-xs font-semibold text-muted">자유 배치 · 왼쪽 {b.style.left} · 위 {b.style.top} · 너비 {b.style.width}</h3>
+                <div className="flex flex-wrap gap-1">
+                  <IconButton icon={BringToFront} label="앞으로 가져오기 (나중에 그리기)" variant="outline" disabled={busy} onClick={() => move(1)} />
+                  <IconButton icon={SendToBack} label="뒤로 보내기 (먼저 그리기)" variant="outline" disabled={busy} onClick={() => move(-1)} />
+                  <IconButton icon={PinOff} label="흐름으로 되돌리기" text="흐름으로" variant="outline" disabled={busy}
+                    onClick={() => pin([{ t: "unpin", eid: b.eid }], "흐름으로 되돌림")} />
+                </div>
+              </section>
+            )}
+            {!b.pinned && b.pinBase && <p className="text-xs text-muted">문서 위 옮기기 손잡이를 끌면 그 자리에 고정됩니다(자유 배치).</p>}
+
+            {ab && ab.tag !== "table" && !b.pinned && (
               <section className="flex flex-wrap gap-1">
                 <IconButton icon={ArrowUp} label="위로 옮기기" variant="outline" disabled={busy} onClick={() => move(-1)} />
                 <IconButton icon={ArrowDown} label="아래로 옮기기" variant="outline" disabled={busy} onClick={() => move(1)} />

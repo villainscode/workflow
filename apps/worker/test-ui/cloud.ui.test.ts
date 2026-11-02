@@ -124,6 +124,27 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
 </body></html>
 `);
       writeFileSync(join(ws.docs, "notes/style-html/meta.yaml"), "title: 서식 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
+      // 자유 배치(6.0 V3): 섹션 두 개, 문단과 그림
+      mkdirSync(join(ws.docs, "notes/pin-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/pin-html/v0.0/pic.png"), png);
+      writeFileSync(join(ws.docs, "notes/pin-html/v0.0/page.html"), `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>배치 문서</title>
+<style>body{margin:0;padding:24px;font:16px/1.5 sans-serif}section{padding:16px;border:1px solid #ccc;margin:0 0 16px}</style>
+</head><body>
+<main>
+<section class="one">
+<h2>첫 섹션</h2>
+<p>옮길 문단입니다</p>
+<p>그대로 둘 문단</p>
+</section>
+<section class="two">
+<h2>둘째 섹션</h2>
+<p>그림을 놓을 섹션</p>
+</section>
+</main>
+</body></html>
+`);
+      writeFileSync(join(ws.docs, "notes/pin-html/meta.yaml"), "title: 배치 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
     }
     // PDF(5.0 M6): 폭이 다른 3쪽 + 양식 글자 칸
     {
@@ -652,6 +673,90 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     assert.equal((await work()).match(/<h2>서식 제목<\/h2>/g)!.length, 2);
     // 레이어 패널: 블록 트리
     await page.waitForFunction(() => document.querySelector('[role="tree"]')?.textContent?.includes("제목 2 · 서식 제목"), { timeout: 10_000 });
+  });
+
+  test("TC-CFUI-21 HTML 자유 배치(6.0 V3): 옮기기 손잡이로 끌면 고정 위치(놓은 자리와 1px 이내), 그림 파일을 놓은 자리에 고정 그림, 방향키 이동, 흐름으로 되돌리기, 640px 미리보기는 가로 스크롤 없음", async () => {
+    const D = "/docs/notes/pin-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text();
+    };
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    const inFrame = <T,>(fn: string) => page.evaluate((f: string, body: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
+      return new Function("d", body)(d);
+    }, FRAME, fn) as Promise<T>;
+    /** 섹션 안 요소 상자(섹션 안쪽 기준 px) */
+    const boxIn = (sel: string) => inFrame<{ x: number; y: number; w: number }>(`const el = d.querySelector(${JSON.stringify(sel)}); const s = el.closest("section");
+      const r = el.getBoundingClientRect(), c = s.getBoundingClientRect(); return { x: r.left - c.left - s.clientLeft, y: r.top - c.top - s.clientTop, w: r.width };`);
+    await open("/team/sdlc/notes/pin-html", "배치 HTML");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await ready("section.one > p[data-eid]");
+
+    // 1) 첫 섹션 문단을 손잡이로 끌기 → 놓기 직전 미리 보기 자리와 저장 뒤 자리가 1px 이내
+    await inFrame(`d.querySelector("section.one > p").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    const h = await page.waitForSelector('[data-handle="pin-move"]', { timeout: 10_000 });
+    const hb = (await h!.boundingBox())!;
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(hb.x + hb.width / 2 + 23 * i, hb.y + hb.height / 2 + 9 * i);
+    const before = await boxIn("section.one > p");
+    await page.mouse.up();
+    await status("수정본 1");
+    assert.match(await work(), /<p data-pin="" style="position:absolute;left:[\d.]+%;top:\d+px;width:[\d.]+%;margin:0">옮길 문단입니다<\/p>/);
+    assert.match(await work(), /<section data-pin-box="" style="position:relative;min-height:\d+px" class="one">/);
+    assert.match(await work(), /<style data-pin-rule>/);
+    await ready("section.one > p[data-pin]");
+    const after = await boxIn("section.one > p[data-pin]");
+    assert.ok(Math.abs(after.x - before.x) <= 1 && Math.abs(after.y - before.y) <= 1 && Math.abs(after.w - before.w) <= 1, `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+    await page.waitForFunction(() => document.body.innerText.includes("옮긴 요소는 고정 위치가 됩니다"), { timeout: 5000 });
+
+    // 2) 그림 파일을 둘째 섹션의 한 점에 놓기 → 그 점이 그림 가운데(가장자리 안에서)
+    const drop = await inFrame<{ x: number; y: number }>(`const s = d.querySelector("section.two"); const c = s.getBoundingClientRect(); return { x: Math.round(c.left + c.width * 0.6), y: Math.round(c.top + 30) };`);
+    await page.evaluate(async (f: string, x: number, y: number) => {
+      const c = document.createElement("canvas"); c.width = 160; c.height = 80;
+      c.getContext("2d")!.fillStyle = "#c33"; c.getContext("2d")!.fillRect(0, 0, 160, 80);
+      const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/png"));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "빨강.png", { type: "image/png" }));
+      const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
+      d.querySelector("section.two > p")!.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+    }, FRAME, drop.x, drop.y);
+    await status("수정본 2");
+    assert.match(await work(), /<p>그림을 놓을 섹션<\/p>\n<img src="assets\/[0-9a-f]{16}\.png" alt="빨강" data-pin="" style="position:absolute;left:[\d.]+%;top:\d+px;width:[\d.]+%;margin:0">\n<\/section>/);
+    await ready('section.two > img[data-pin]');
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector<HTMLImageElement>("section.two > img")!.complete, { timeout: 10_000 }, FRAME);
+    const img = await inFrame<{ cx: number; top: number; w: number }>(`const r = d.querySelector("section.two > img").getBoundingClientRect(); return { cx: r.left + r.width / 2, top: r.top, w: r.width };`);
+    assert.ok(Math.abs(img.cx - drop.x) <= 1 && Math.abs(img.w - 160) <= 1, `그림 가운데 ${img.cx} ≈ ${drop.x}, 너비 ${img.w}`);
+
+    // 3) 고정 문단을 고르고 Shift+← 한 번(8px) → 잠깐 뒤 저장(문단은 섹션 너비를 거의 다 써 오른쪽으로는 더 못 간다)
+    await inFrame(`d.querySelector("section.one > p[data-pin]").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    const x0 = (await boxIn("section.one > p[data-pin]")).x;
+    await inFrame(`d.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", shiftKey: true, bubbles: true, cancelable: true }))`);
+    await status("수정본 3");
+    await ready("section.one > p[data-pin]");
+    assert.ok(Math.abs((await boxIn("section.one > p[data-pin]")).x - (x0 - 8)) <= 1, "방향키 8px");
+
+    // 4) 640px 미리보기: 고정 요소가 흐름으로, 가로 스크롤 없음
+    await page.click('button[aria-label="좁은 화면 미리보기 (640px)"]');
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.getBoundingClientRect().width <= 640, { timeout: 5000 }, FRAME);
+    const narrow = await inFrame<{ pos: string; over: boolean }>(`const p = d.querySelector("section.one > p[data-pin]"); const e = d.documentElement;
+      return { pos: d.defaultView.getComputedStyle(p).position, over: e.scrollWidth > e.clientWidth };`);
+    assert.deepEqual(narrow, { pos: "static", over: false });
+    assert.equal(await page.$('[data-handle="pin-move"]'), null, "좁은 화면에서는 옮기기 손잡이를 숨긴다");
+    await page.click('button[aria-label="넓은 화면으로 돌아가기"]');
+
+    // 5) 흐름으로 되돌리기
+    await inFrame(`d.querySelector("section.one > p[data-pin]").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    await page.click('button[data-tip="흐름으로 되돌리기"]');
+    await status("수정본 4");
+    assert.match(await work(), /<section data-pin-box="" style="position:relative;min-height:\d+px" class="two">/);
+    assert.match(await work(), /<section class="one">\n<h2>첫 섹션<\/h2>\n<p>옮길 문단입니다<\/p>/);
   });
 
   test("TC-CFUI-15 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 고정 위치 그림이 되고, 서명 주소로 그린다", async () => {

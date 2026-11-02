@@ -10,6 +10,8 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { call, freePort, makeWorkspace, readText, SITE, startServer, upload, waitFor, type TestServer } from "./helpers.ts";
+import { applyOp, markEids, outline } from "@workflow/core/structedit/html";
+import { baseMinHeight, containingBlock, pinBoxOf, previewPin } from "../web/src/viewers/structedit/pinBox.ts";
 
 const PUPPETEER = (() => {
   try { return join(execSync("npm root -g", { encoding: "utf8" }).trim(), "@mermaid-js/mermaid-cli/node_modules/puppeteer"); } catch { return ""; }
@@ -726,6 +728,55 @@ describe("화면", { skip }, () => {
     assert.match(readText(join(ws.docs, "notes/local-struct/v0.1/page.html")), /<p style="font-size:22px">크기 바꿀 문단<\/p>/);
   });
 
+  test("TC-UI-37 로컬 HTML 자유 배치(6.0 V3): 그림 파일을 섹션의 한 점에 놓으면 그 자리 고정 그림(가운데 1px 이내), 640px 미리보기는 가로 스크롤 없음, 버전으로 저장하면 그림이 버전 폴더 assets/로", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 자유 배치", slug: "local-pin" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title><style>body{margin:0;padding:24px}section{padding:16px;border:1px solid #ccc}</style></head><body><main><h1>로컬 자유 배치</h1><section class=\"s\"><h2>섹션</h2><p>그림을 놓을 자리</p></section></main></body></html>"]]);
+    const FRAME = 'iframe[title="구조 편집"]';
+    await open("/sdlc/notes/local-pin", "로컬 자유 배치");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    await ready("section.s > p[data-eid]");
+    const drop = await page.evaluate((f: string) => {
+      const c = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("section.s")!.getBoundingClientRect();
+      // 이벤트 좌표는 정수로 잘린다
+      return { x: Math.round(c.left + c.width * 0.5), y: Math.round(c.top + 60) };
+    }, FRAME);
+    await page.evaluate(async (f: string, x: number, y: number) => {
+      const c = document.createElement("canvas"); c.width = 120; c.height = 60;
+      c.getContext("2d")!.fillStyle = "#246"; c.getContext("2d")!.fillRect(0, 0, 120, 60);
+      const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/png"));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "남색.png", { type: "image/png" }));
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("section.s > p")!
+        .dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+    }, FRAME, drop.x, drop.y);
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    await ready("section.s > img[data-pin]");
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector<HTMLImageElement>("section.s > img")!.complete, { timeout: 10_000 }, FRAME);
+    const img = await page.evaluate((f: string) => {
+      const r = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("section.s > img")!.getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    }, FRAME);
+    assert.ok(Math.abs(img.cx - drop.x) <= 1 && Math.abs(img.cy - drop.y) <= 1, `${JSON.stringify(img)} ≈ ${JSON.stringify(drop)}`);
+    await page.click('button[aria-label="좁은 화면 미리보기 (640px)"]');
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.getBoundingClientRect().width <= 640, { timeout: 5000 }, FRAME);
+    assert.deepEqual(await page.evaluate((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
+      return { pos: d.defaultView!.getComputedStyle(d.querySelector("section.s > img")!).position, over: d.documentElement.scrollWidth > d.documentElement.clientWidth };
+    }, FRAME), { pos: "static", over: false });
+    await page.click('button[aria-label="넓은 화면으로 돌아가기"]');
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    const saved = readText(join(ws.docs, "notes/local-pin/v0.1/page.html"));
+    const src = /<img src="(assets\/[0-9a-f]{16}\.png)" alt="남색" data-pin="" style="position:absolute;/.exec(saved)?.[1];
+    assert.ok(src, saved);
+    assert.ok(existsSync(join(ws.docs, "notes/local-pin/v0.1", src!)), "그림이 버전 폴더에 복사된다");
+  });
+
   test("TC-UI-36 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 편집(6.0 VL)에서 글자를 두 번 눌러 고치고 Esc → 수정본 → 버전으로 저장", async () => {
     await upload(srv.url, { menu: "notes", title: "로컬 덱 편집", slug: "local-deck-ui" }, [
       ["deck.json", JSON.stringify({ v: 1, title: "로컬 덱 편집", order: ["cover"] })],
@@ -758,5 +809,65 @@ describe("화면", { skip }, () => {
     await page.waitForFunction(() => document.body.innerText.includes("문서를 열 수 없습니다"), { timeout: 10_000 });
     await nav(WEB + "/ghost");
     await page.waitForFunction(() => document.body.innerText.includes("없는 대분류입니다"), { timeout: 10_000 });
+  });
+
+  test("TC-VE-20 리포 HTML 문서 자유 배치 배치 검사(6.0 V3): 지금 버전 대표 HTML마다 블록 3개를 화면처럼 재서 고정하면 375·640·641·718(A4 인쇄)·800·1024·1280px에서 가로 스크롤 없고 고정 요소가 섹션 밖으로 넘치지 않는다", async () => {
+    const root = join(SITE, "../docs");
+    const files: string[] = [];
+    for (const m of execSync(`find "${root}" -name meta.yaml -not -path "*/_*"`, { encoding: "utf8" }).trim().split("\n")) {
+      const cur = /^current:\s*(\S+)/m.exec(readFileSync(m, "utf8"))?.[1];
+      const dir = join(m, "..", cur ?? "");
+      const entry = existsSync(dir) ? execSync(`ls "${dir}"`, { encoding: "utf8" }).split("\n").find((f) => /\.html?$/.test(f)) : undefined;
+      if (entry) files.push(join(dir, entry));
+    }
+    assert.ok(files.length >= 5, `대표 HTML ${files.length}개`);
+    // 화면과 같은 재기 함수를 브라우저에 넣는다
+    const fns = `const containingBlock=${containingBlock};const pinBoxOf=${pinBoxOf};const baseMinHeight=${baseMinHeight};const previewPin=${previewPin};`;
+    const p = await browser.newPage();
+    await p.setRequestInterception(true);
+    p.on("request", (r: any) => (r.url().startsWith("data:") || r.url() === "about:blank" ? r.continue() : r.abort()));
+    const problems: string[] = [];
+    let pins = 0;
+    try {
+      for (const f of files) {
+        let html = readFileSync(f, "utf8");
+        const cands = outline(html).filter((b) => b.pinBase && ["p", "h2", "h3", "img", "figure", "div", "ul", "blockquote"].includes(b.tag));
+        const order = outline(html).map((b) => b.eid);
+        for (const pick of [...new Set([0, Math.floor(cands.length / 2), cands.length - 1])].map((i) => cands[i]).filter(Boolean)) {
+          const b = outline(html)[order.indexOf(pick.eid)];
+          await p.setViewport({ width: 1280, height: 900 });
+          await p.setContent(markEids(html), { waitUntil: "load" });
+          const m = await p.evaluate(`(() => { ${fns}
+            const el = document.querySelector('[data-eid="${b.eid}"]'), base = document.querySelector('[data-base="${b.pinBase}"]');
+            const cb = containingBlock(el, base), r = el.getBoundingClientRect();
+            const box = pinBoxOf({ left: r.left + 20, top: r.top + 10, width: Math.min(r.width, cb.clientWidth * 0.6) }, cb);
+            previewPin(el, base, box);
+            return { box, minHeight: baseMinHeight(base), doc: document.documentElement.outerHTML }; })()`) as { box: { left: number; top: number; width: number }; minHeight: number; doc: string };
+          // 화면(minHeightFor)처럼 641px에서 고정 요소 바닥도 잰다
+          await p.setViewport({ width: 641, height: 900 });
+          await p.setContent(`<!doctype html>${m.doc}`, { waitUntil: "load" });
+          const narrow = await p.evaluate(`(() => { ${fns} return baseMinHeight(document.querySelector('[data-base="${b.pinBase}"]'), false); })()`) as number;
+          html = applyOp(html, { t: "toPinned", eid: b.eid, box: m.box, minHeight: Math.max(m.minHeight, narrow) });
+          pins++;
+        }
+        for (const w of [1280, 1024, 800, 718, 641, 640, 375]) {
+          await p.setViewport({ width: w, height: 900 });
+          await p.setContent(html, { waitUntil: "load" });
+          const r = await p.evaluate(() => {
+            const d = document.documentElement, out: string[] = [];
+            if (d.scrollWidth > d.clientWidth + 1) out.push(`가로 스크롤 ${d.scrollWidth}>${d.clientWidth}`);
+            for (const el of document.querySelectorAll<HTMLElement>("[data-pin]")) {
+              if (getComputedStyle(el).position !== "absolute") continue;
+              const box = el.closest("[data-pin-box]")!.getBoundingClientRect(), e = el.getBoundingClientRect();
+              if (e.bottom > box.bottom + 1 || e.right > box.right + 1 || e.left < box.left - 1) out.push(`${el.tagName} 섹션 밖`);
+            }
+            return out.join(", ");
+          });
+          if (r) problems.push(`${f.slice(root.length + 1)} ${w}px: ${r}`);
+        }
+      }
+    } finally { await p.close(); }
+    assert.ok(pins >= 15, `고정한 블록 ${pins}개`);
+    assert.deepEqual(problems, []);
   });
 });

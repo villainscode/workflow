@@ -80,6 +80,33 @@ describe("구조 편집", () => {
     expect(same).toMatchObject({ rev: 1, changed: false });
   });
 
+  it("TC-VE-19 HTML 자유 배치 연결: 구조에 pinBase·isBase, 그림 place(asset → assets/ 상대 경로)·toPinned·unpin이 수정본 하나씩(메모 자동), 표 안 요소 고정은 400", async () => {
+    const up = await (await upload("team", { menu: "notes", title: "배치" }, [["page.html",
+      "<!doctype html><html><head><title>t</title></head><body><main><section><h2>제목</h2><p>문단</p><table><tr><td>칸</td></tr></table></section></main></body></html>"]])).json<any>();
+    const P = `${W}/docs/notes/${up.doc}`;
+    const s = await getJson(`${P}/work/structure`);
+    const sec = s.blocks.find((b: any) => b.tag === "section"), p = s.blocks.find((b: any) => b.tag === "p");
+    expect([sec.isBase, p.pinBase, p.pinned]).toEqual([true, sec.eid, false]);
+    expect(s.blocks.find((b: any) => b.tag === "td").pinBase).toBeNull();
+    const a = await putAsset();
+    expect((await (await ops(P, 0, [{ t: "place", base: sec.eid, node: { kind: "image", src: a.asset, alt: "점" }, box: { left: 60, top: 8, width: 25 }, minHeight: 240 }])).json<any>()).rev).toBe(1);
+    const html = await (await workText(P, "page.html")).text();
+    expect(html).toContain(`<img src="assets/${a.sha256.slice(0, 16)}.png" alt="점" data-pin="" style="position:absolute;left:60%;top:8px;width:25%;margin:0">`);
+    expect(html).toContain('<section data-pin-box="" style="position:relative;min-height:240px">');
+    expect(html).toContain("<style data-pin-rule>@media (max-width:640px)");
+    const s1 = await getJson(`${P}/work/structure`);
+    const p1 = s1.blocks.find((b: any) => b.tag === "p");
+    expect((await ops(P, 1, [{ t: "toPinned", eid: p1.eid, box: { left: 5, top: 120, width: 40 }, minHeight: 260 }])).status).toBe(200);
+    const p2 = (await getJson(`${P}/work/structure`)).blocks.find((b: any) => b.tag === "p");
+    expect(p2).toMatchObject({ pinned: true, style: { position: "absolute", left: "5%", top: "120px", width: "40%" } });
+    expect((await ops(P, 2, [{ t: "unpin", eid: p2.eid }])).status).toBe(200);
+    expect((await getJson(`${P}/revisions`)).revisions.slice(0, 3).map((r: any) => r.summary)).toEqual(["흐름으로 되돌림 1", "자유 배치 1", "자유 배치 넣기 1"]);
+    const td = (await getJson(`${P}/work/structure`)).blocks.find((b: any) => b.tag === "td");
+    const bad = await ops(P, 3, [{ t: "toPinned", eid: td.eid, box: { left: 0, top: 0, width: 10 } }]);
+    expect(bad.status).toBe(400);
+    expect((await bad.json<any>()).error).toMatch(/따로 고정하지 않습니다/);
+  });
+
   it("TC-ED-26 HTML 그림에 asset:<sha>를 주면 대표 파일 옆 assets/에 연결하고 상대 경로로 바꾼다. 없는 자산·기준 rev 다름·잘못된 연산은 거부", async () => {
     const a = await putAsset();
     const p = (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p");

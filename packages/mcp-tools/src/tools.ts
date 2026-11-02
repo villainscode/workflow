@@ -509,6 +509,9 @@ export function registerTools(server: McpServer, host: ToolHost) {
     "remove{eid}, move{eid,ref,where}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, tableCols{eid,widths(%), 표에 table-layout:fixed도 넣음}, " +
     "setStyle{eid,set:{속성:값},unset:[속성]}(인라인 style만. 글꼴·크기·굵기·색·줄 간격·정렬·너비·높이·padding·margin·배경·테두리. 색은 문서 토큰 var(--이름) 우선, 글꼴은 doc_structure theme.fonts·일반 계열만, position·left·top·그림자·vw·!important 금지), " +
     "tableRowHeight{eid(tr),height(px)|null}, duplicate{eid}(바로 뒤 복제, 안의 id는 뺌). 글자 안 span style은 color·font-family·font-size·font-weight만 남는다. " +
+    "자유 배치: toPinned{eid,box:{left(%),top(px),width(%)},minHeight?(섹션 최소 높이 px)}(doc_structure에 pinBase가 있는 블록만. 좌표는 기준 섹션 기준, left·width는 섹션 너비 %, 이미 고정이면 위치·너비만 바뀜), " +
+    "place{base(pinBase 또는 base로 표시된 섹션 eid),node:{kind:image,src,alt?}|{kind:textbox,text?},box,minHeight?}(섹션 끝에 고정 요소로 넣음), unpin{eid}(흐름으로 되돌림). " +
+    "겹침 순서는 문서 순서(앞뒤는 같은 섹션 안 move). 표·코드 블록·표 안 요소·목록 항목은 고정하지 않는다. 640px 이하 화면에서는 고정 요소가 흐름으로 돌아간다. minHeight를 빼면 섹션 최소 높이를 top까지만 맞추므로 요소 높이만큼 더해 보내라. " +
     "DOCX·PPTX 연산(table·image는 doc_structure의 id): tableRow{table,at,op}, tableCol{table,at,op}, tableCols{table,widths}, replaceImage{image,asset:\"asset:<sha>\"}. XLSX: colWidth{sheet,col(0부터),width(글자 수)}";
   /** 연산 실패에 고칠 방법을 붙인다(명세 15절: 잘못된 연산에 진단·fix) */
   const withFix = (e: unknown): never => {
@@ -517,7 +520,8 @@ export function registerTools(server: McpServer, host: ToolHost) {
     if (e.status === 400) throw new ToolError(`${e.message}\n→ 쓸 수 있는 연산: ${STRUCT_OPS}`, 400);
     return LOCAL_ONLY(e) as never;
   };
-  interface Block { eid: string; tag: string; text: string; table?: { rows: number; cols: number; widths: number[] | null; merged: boolean }; image?: { src: string; alt: string; width: number | null }; editable: boolean; style?: Record<string, string>; depth?: number }
+  interface Block { eid: string; tag: string; text: string; table?: { rows: number; cols: number; widths: number[] | null; merged: boolean }; image?: { src: string; alt: string; width: number | null }; editable: boolean; style?: Record<string, string>; depth?: number;
+    pinned?: boolean; pinBase?: string | null; isBase?: boolean }
   interface Structure { rev: number; baseVersion: string; entry: string; kind: string; blocks?: Block[];
     theme?: { fonts: string[]; tokens: { name: string; value: string }[]; dark: boolean };
     tables?: { id: string; where: string; rows: number; cols: number; widths: number[]; merged: boolean; header: string[] }[];
@@ -525,7 +529,7 @@ export function registerTools(server: McpServer, host: ToolHost) {
 
   server.registerTool("doc_structure", {
     title: "문서 구조 읽기",
-    description: "HTML·DOCX·PPTX·XLSX 작업본의 구조를 읽는다: HTML은 블록(eid·태그·글자·인라인 style, 표 행·열·너비, 그림)과 setStyle에 쓸 글꼴·색 토큰, 오피스는 표·그림·시트 id. doc_ops 전에 반드시 읽는다(eid는 저장할 때마다 바뀐다).",
+    description: "HTML·DOCX·PPTX·XLSX 작업본의 구조를 읽는다: HTML은 블록(eid·태그·글자·인라인 style, 표 행·열·너비, 그림, 자유 배치의 [고정]·pinBase·(base))과 setStyle에 쓸 글꼴·색 토큰, 오피스는 표·그림·시트 id. doc_ops 전에 반드시 읽는다(eid는 저장할 때마다 바뀐다).",
     inputSchema: { ref: REF },
     annotations: { readOnlyHint: true },
   }, safe(async ({ ref }) => {
@@ -539,7 +543,8 @@ export function registerTools(server: McpServer, host: ToolHost) {
         const extra = b.table ? ` [표 ${b.table.rows}×${b.table.cols}${b.table.widths ? ` 너비 ${b.table.widths.join("/")}%` : ""}${b.table.merged ? " 병합 있음" : ""}]`
           : b.image ? ` [그림 ${b.image.src}${b.image.alt ? ` "${b.image.alt}"` : ""}]` : "";
         const style = b.style && Object.keys(b.style).length ? ` style{${Object.entries(b.style).map(([k, v]) => `${k}:${v}`).join(";")}}` : "";
-        return `${"  ".repeat(b.depth ?? 0)}${b.eid} <${b.tag}>${extra}${style}${b.text ? ` ${b.text.slice(0, 60)}` : ""}${b.editable ? "" : " (글자 고치기 불가)"}`;
+        const pin = `${b.pinned ? " [고정]" : ""}${b.pinBase ? ` pinBase=${b.pinBase}` : ""}${b.isBase ? " (base)" : ""}`;
+        return `${"  ".repeat(b.depth ?? 0)}${b.eid} <${b.tag}>${extra}${style}${pin}${b.text ? ` ${b.text.slice(0, 60)}` : ""}${b.editable ? "" : " (글자 고치기 불가)"}`;
       }).join("\n");
     }
     return [head,
