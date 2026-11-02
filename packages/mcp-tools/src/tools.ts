@@ -506,7 +506,9 @@ export function registerTools(server: McpServer, host: ToolHost) {
   // ---------- 구조 편집·수정본(5.0 M7): HTML·DOCX·PPTX·XLSX 연산, 수정본 목록·되돌리기 ----------
 
   const STRUCT_OPS = "HTML 연산(eid로 대상): setText{eid,html(인라인 마크만)}, setAttr{eid,name:src|alt|href,value}, setWidth{eid,percent|null}, insert{ref,where:before|after,node:{kind:table,rows,cols,header?}|{kind:image,src(상대 경로·https·asset:<sha>),alt?,width?}|{kind:paragraph,text?}|{kind:heading,level:2|3|4,text?}}, " +
-    "remove{eid}, move{eid,ref,where}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, tableCols{eid,widths(%)}. " +
+    "remove{eid}, move{eid,ref,where}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, tableCols{eid,widths(%), 표에 table-layout:fixed도 넣음}, " +
+    "setStyle{eid,set:{속성:값},unset:[속성]}(인라인 style만. 글꼴·크기·굵기·색·줄 간격·정렬·너비·높이·padding·margin·배경·테두리. 색은 문서 토큰 var(--이름) 우선, 글꼴은 doc_structure theme.fonts·일반 계열만, position·left·top·그림자·vw·!important 금지), " +
+    "tableRowHeight{eid(tr),height(px)|null}, duplicate{eid}(바로 뒤 복제, 안의 id는 뺌). 글자 안 span style은 color·font-family·font-size·font-weight만 남는다. " +
     "DOCX·PPTX 연산(table·image는 doc_structure의 id): tableRow{table,at,op}, tableCol{table,at,op}, tableCols{table,widths}, replaceImage{image,asset:\"asset:<sha>\"}. XLSX: colWidth{sheet,col(0부터),width(글자 수)}";
   /** 연산 실패에 고칠 방법을 붙인다(명세 15절: 잘못된 연산에 진단·fix) */
   const withFix = (e: unknown): never => {
@@ -515,14 +517,15 @@ export function registerTools(server: McpServer, host: ToolHost) {
     if (e.status === 400) throw new ToolError(`${e.message}\n→ 쓸 수 있는 연산: ${STRUCT_OPS}`, 400);
     return LOCAL_ONLY(e) as never;
   };
-  interface Block { eid: string; tag: string; text: string; table?: { rows: number; cols: number; widths: number[] | null; merged: boolean }; image?: { src: string; alt: string; width: number | null }; editable: boolean }
+  interface Block { eid: string; tag: string; text: string; table?: { rows: number; cols: number; widths: number[] | null; merged: boolean }; image?: { src: string; alt: string; width: number | null }; editable: boolean; style?: Record<string, string>; depth?: number }
   interface Structure { rev: number; baseVersion: string; entry: string; kind: string; blocks?: Block[];
+    theme?: { fonts: string[]; tokens: { name: string; value: string }[]; dark: boolean };
     tables?: { id: string; where: string; rows: number; cols: number; widths: number[]; merged: boolean; header: string[] }[];
     images?: { id: string; where: string; media: string }[]; sheets?: { id: string; name: string; widths: number[] }[] }
 
   server.registerTool("doc_structure", {
     title: "문서 구조 읽기",
-    description: "HTML·DOCX·PPTX·XLSX 작업본의 구조를 읽는다: HTML은 블록(eid·태그·글자, 표 행·열·너비, 그림), 오피스는 표·그림·시트 id. doc_ops 전에 반드시 읽는다(eid는 저장할 때마다 바뀐다).",
+    description: "HTML·DOCX·PPTX·XLSX 작업본의 구조를 읽는다: HTML은 블록(eid·태그·글자·인라인 style, 표 행·열·너비, 그림)과 setStyle에 쓸 글꼴·색 토큰, 오피스는 표·그림·시트 id. doc_ops 전에 반드시 읽는다(eid는 저장할 때마다 바뀐다).",
     inputSchema: { ref: REF },
     annotations: { readOnlyHint: true },
   }, safe(async ({ ref }) => {
@@ -530,10 +533,13 @@ export function registerTools(server: McpServer, host: ToolHost) {
     const s = await api<Structure>(`/docs/${r.menu}/${r.doc}/work/structure`).catch(LOCAL_ONLY);
     const head = `${s.entry} (${s.kind}) · rev ${s.rev}(기준 ${versionLabel(s.baseVersion)})`;
     if (s.blocks) {
-      return `${head}\n` + s.blocks.map((b) => {
+      const t = s.theme;
+      const theme = t ? `\n글꼴: ${[...t.fonts, "sans-serif", "serif", "monospace", "system-ui"].join(", ")}\n색 토큰: ${t.tokens.map((x) => `var(${x.name})=${x.value}`).join(", ") || "없음"}${t.dark ? " · 다크 모드 있음(색은 토큰을 쓰세요)" : " · 다크 모드 없음"}` : "";
+      return `${head}${theme}\n` + s.blocks.map((b) => {
         const extra = b.table ? ` [표 ${b.table.rows}×${b.table.cols}${b.table.widths ? ` 너비 ${b.table.widths.join("/")}%` : ""}${b.table.merged ? " 병합 있음" : ""}]`
           : b.image ? ` [그림 ${b.image.src}${b.image.alt ? ` "${b.image.alt}"` : ""}]` : "";
-        return `${b.eid} <${b.tag}>${extra}${b.text ? ` ${b.text.slice(0, 60)}` : ""}${b.editable ? "" : " (글자 고치기 불가)"}`;
+        const style = b.style && Object.keys(b.style).length ? ` style{${Object.entries(b.style).map(([k, v]) => `${k}:${v}`).join(";")}}` : "";
+        return `${"  ".repeat(b.depth ?? 0)}${b.eid} <${b.tag}>${extra}${style}${b.text ? ` ${b.text.slice(0, 60)}` : ""}${b.editable ? "" : " (글자 고치기 불가)"}`;
       }).join("\n");
     }
     return [head,

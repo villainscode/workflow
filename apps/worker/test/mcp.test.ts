@@ -111,6 +111,9 @@ describe("원격 MCP", () => {
     expect(st.isError).toBe(false);
     const p = /^(e\d+) <p> /m.exec(st.text)!;
     expect(st.text).toMatch(/guide\.html \(html\) · rev 0/);
+    // 속성 편집 견본(6.0 V2): 쓸 수 있는 글꼴·색 토큰
+    expect(st.text).toMatch(/^글꼴: .*sans-serif, serif, monospace, system-ui$/m);
+    expect(st.text).toMatch(/^색 토큰: /m);
     const ok = await tool(token, "doc_ops", { ref: "process/guide", ops: [{ t: "insert", ref: p[1], where: "after", node: { kind: "table", rows: 2, cols: 2 } }] });
     expect(ok.isError).toBe(false);
     expect(ok.text).toMatch(/수정본 1로 저장했습니다/);

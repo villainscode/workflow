@@ -95,6 +95,36 @@ describe("Cloudflare 화면", { skip }, () => {
       + '<div data-eid="b2" style="position:absolute;left:500px;top:700px;width:100px;height:100px;background:#1c2026"></div>'
       + '<div data-eid="b3" style="position:absolute;left:1300px;top:650px;width:300px;height:100px;background:#0e6b57"></div></section>');
     writeFileSync(join(ws.docs, "notes/style-deck/meta.yaml"), "title: 서식 덱\ncategory: sdlc\nmenu: notes\nkind: deck\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: deck.json\n");
+    // HTML 속성 편집(6.0 V2): 색 토큰·다크 모드·Google Fonts 글꼴, 표, 그림(200×100 PNG)
+    {
+      const { deflateSync, crc32 } = await import("node:zlib");
+      const chunk = (type: string, data: Buffer) => {
+        const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+        const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([Buffer.from(type), data])));
+        return Buffer.concat([len, Buffer.from(type), data, crc]);
+      };
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(200, 0); ihdr.writeUInt32BE(100, 4); ihdr[8] = 8; ihdr[9] = 2;
+      const raw = Buffer.alloc((200 * 3 + 1) * 100, 0x80);
+      for (let y = 0; y < 100; y++) raw[y * 601] = 0;
+      const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+      mkdirSync(join(ws.docs, "notes/style-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/style-html/v0.0/pic.png"), png);
+      writeFileSync(join(ws.docs, "notes/style-html/v0.0/page.html"), `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>서식 문서</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR&amp;display=swap" rel="stylesheet">
+<style>:root{--accent:#1f5fbf;--ink:#1c2026}@media (prefers-color-scheme: dark){:root{--accent:#80a8f0}}
+body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px}</style>
+</head><body>
+<main>
+<h2>서식 제목</h2>
+<p>서식 바꿀 문단</p>
+<table><tr><th>가</th><th>나</th></tr><tr><td>다</td><td>라</td></tr></table>
+<figure><img src="pic.png" alt="점" style="width:40%"></figure>
+</main>
+</body></html>
+`);
+      writeFileSync(join(ws.docs, "notes/style-html/meta.yaml"), "title: 서식 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
+    }
     // PDF(5.0 M6): 폭이 다른 3쪽 + 양식 글자 칸
     {
       const { PDFDocument } = await import("pdf-lib");
@@ -518,6 +548,110 @@ describe("Cloudflare 화면", { skip }, () => {
     await page.keyboard.down("Meta"); await page.keyboard.press("z"); await page.keyboard.up("Meta");
     await status("수정본 7");
     assert.equal(await order(), "b1,b2,b3");
+  });
+
+  test("TC-CFUI-20 HTML 속성 편집(6.0 V2): 속성 패널 크기·토큰 색 → 새로 고침 뒤 유지, 글자 도구 막대로 일부 글자 크기, 표 열 끌기·행 높이·그림 크기 손잡이, ⌘Z, ⌘D 복제, 레이어", async () => {
+    const D = "/docs/notes/style-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text();
+    };
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    const fire = (sel: string, type: "click" | "dblclick") => page.evaluate((f: string, s: string, t: string) => {
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector(s)!.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
+    }, FRAME, sel, type);
+    const key = (k: string, shift = false) => page.evaluate((f: string, key: string, shiftKey: boolean) => {
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, shiftKey, bubbles: true, cancelable: true }));
+    }, FRAME, k, shift);
+    const dragBy = async (sel: string, dx: number, dy: number) => {
+      const h = await page.waitForSelector(sel, { timeout: 10_000 });
+      const b = (await h!.boundingBox())!;
+      const x = b.x + b.width / 2, y = b.y + b.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      for (let i = 1; i <= 5; i++) await page.mouse.move(x + (dx * i) / 5, y + (dy * i) / 5);
+      await page.mouse.up();
+    };
+    const openEditor = async () => {
+      await open("/team/sdlc/notes/style-html", "서식 HTML");
+      await page.click('button[aria-label="구조 편집 (표·그림)"]');
+      await ready("main > p[data-eid]");
+    };
+    await openEditor();
+
+    // 속성 패널: 문단 크기 22px → 토큰 색(--accent)
+    await fire("main > p", "click");
+    await page.waitForSelector('input[aria-label="서식 크기"]');
+    await page.click('input[aria-label="서식 크기"]');
+    await page.keyboard.type("22px");
+    await page.keyboard.press("Enter");
+    await status("수정본 1");
+    await ready("main > p[data-eid]");
+    await page.click('button[aria-label="서식 글자색 --accent"]');
+    await status("수정본 2");
+    assert.match(await work(), /<p style="font-size:22px;color:var\(--accent\)">서식 바꿀 문단<\/p>/);
+    // 새로 고침 뒤에도 남고, 다시 고르면 패널에 보인다
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await openEditor();
+    await fire("main > p", "click");
+    await page.waitForFunction(() => document.querySelector<HTMLInputElement>('input[aria-label="서식 크기"]')?.value === "22px", { timeout: 10_000 });
+    assert.equal(await page.evaluate((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentWindow!.getComputedStyle(
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("main > p")!).fontSize, FRAME), "22px");
+
+    // 글자 도구 막대: 두 번 눌러 편집 → 앞 두 글자 골라 크기 28px → Enter
+    await fire("main > p", "dblclick");
+    await page.waitForSelector('[data-text-toolbar] select[aria-label="글자 크기"]');
+    await page.evaluate((f: string) => {
+      const w = document.querySelector<HTMLIFrameElement>(f)!.contentWindow!;
+      const t = w.document.querySelector('[contenteditable="true"]')!.firstChild!;
+      const r = w.document.createRange(); r.setStart(t, 0); r.setEnd(t, 2);
+      const sel = w.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+    }, FRAME);
+    await new Promise((r) => setTimeout(r, 100));
+    await page.select('[data-text-toolbar] select[aria-label="글자 크기"]', "28px");
+    await new Promise((r) => setTimeout(r, 100));
+    assert.ok(await page.$("[data-text-toolbar]"), "막대를 써도 글자 편집이 이어진다");
+    await page.keyboard.press("Enter");
+    await status("수정본 3");
+    assert.match(await work(), /<p style="font-size:22px;color:var\(--accent\)"><span style="font-size:28px">서식<\/span> 바꿀 문단<\/p>/);
+
+    // 표: 칸을 골라 열 경계 끌기 → 행 높이 → 그림 크기
+    await ready("td[data-eid]");
+    await fire("td", "click");
+    await dragBy('[data-handle="col"]', 120, 0);
+    await status("수정본 4");
+    const widths = (await api(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "table").table.widths;
+    assert.ok(widths[0] > 55, `첫 열이 넓어진다: ${widths}`);
+    assert.match(await work(), /<table style="table-layout:fixed">/);
+    await ready("td[data-eid]");
+    await dragBy('[data-handle="row"]', 0, 30);
+    await status("수정본 5");
+    assert.match(await work(), /<tr style="height:\d+px"><td>다/);
+    await ready("img[data-eid]");
+    await fire("img", "click");
+    await dragBy('[data-handle="image"]', 100, 0);
+    await status("수정본 6");
+    const imgWidth = () => work().then((h) => /<img src="pic\.png" alt="점" style="width:([\d.]+)%">/.exec(h)?.[1]);
+    assert.ok(Number(await imgWidth()) > 45, `그림이 커진다: ${await imgWidth()}`);
+
+    // ⌘Z: 그림 크기 전으로(수정본 5 내용으로 새 수정본 7)
+    await ready("img[data-eid]");
+    await key("z");
+    await status("수정본 7");
+    assert.equal(await imgWidth(), "40");
+    // ⌘D: 제목 복제
+    await ready("h2[data-eid]");
+    await fire("h2", "click");
+    await key("d");
+    await status("수정본 8");
+    assert.equal((await work()).match(/<h2>서식 제목<\/h2>/g)!.length, 2);
+    // 레이어 패널: 블록 트리
+    await page.waitForFunction(() => document.querySelector('[role="tree"]')?.textContent?.includes("제목 2 · 서식 제목"), { timeout: 10_000 });
   });
 
   test("TC-CFUI-15 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 고정 위치 그림이 되고, 서명 주소로 그린다", async () => {

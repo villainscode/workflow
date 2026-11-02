@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 157개(실제 테스트 205건: `npm test` 171건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 72건 + Cloudflare 화면 테스트 19건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 28건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 157개(실제 테스트 205건: `npm test` 171건 + `npm run test:ui` 34건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 73건 + Cloudflare 화면 테스트 20건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 34건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -315,6 +315,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-13 | 슬라이드 덱 보기: 목록 썸네일, 1920×1080을 창에 맞춰 그림, →로 다음 슬라이드·발표자 노트 | 5.0 M4 |
 | TC-CFUI-14 | 슬라이드 편집: 한글 조합 입력(CDP IME 이벤트) → Esc 확정 → 새로 고침 뒤 유지, 고정 요소 끌기(화면 이동량 ÷ 배율, 맞춤선 6px 안), 표 열 넣기·열 경계 손잡이 끌기(이웃 두 열만, 합 100), ⌘Z, 다른 사람이 지운 요소를 고치면 알림·최신본, 버전으로 저장 | 명세 15절 |
 | TC-CFUI-19 | 요소 편집기(6.0 V1): 글자 도구 막대로 고른 글자만 크기 64px·색(막대를 눌러도 글자 편집이 이어짐) → 새로 고침 뒤 유지, 블록 글꼴 칸(덱 faces), 표 행 높이(tr), 고정 상자 3개 위 맞춤·가로 간격 같게, 레이어 패널 아래로(문서 순서), ⌘Z | 6.0 4.1·4.3 |
+| TC-CFUI-20 | HTML 속성 편집(6.0 V2): 속성 패널에서 문단 크기 22px·토큰 색(`var(--accent)`) → 새로 고침 뒤 패널·화면에 유지, 글자 편집 중 도구 막대로 고른 두 글자만 28px(막대 목록을 써도 편집이 이어짐), 칸을 골라 열 경계 끌기(colgroup·`table-layout:fixed`)·행 높이 손잡이·그림 크기 손잡이(감싸는 상자 대비 %), ⌘Z로 그림 크기 되돌림, ⌘D 제목 복제, 레이어 패널 | 6.0 4.2 |
 | TC-CFUI-18 | HTML 문서 PDF 내보내기(확인 창 → 진행 막대(만드는 중·내려받는 중 %) → 내려받기)·API(A4 쪽, 두 번째는 캐시로 빠름, HTML이 아닌 문서는 400), 덱 화면에는 PDF 버튼 없음, 슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 5.0 M8 |
 | TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
 | TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
@@ -379,7 +380,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-40 | PDF 쪽: 회전(누적)·지우기·옮기기·다른 PDF 끼워 넣기, 범위 밖·잘못된 각도·PDF 아닌 파일 400, 마지막 쪽은 못 지움, 빈 연산은 원본 그대로 | 5.0 4.5 |
 | TC-ED-41 | PDF 양식: 칸 목록(글자·체크·목록), 한글 글자·체크·목록 채우기(우리 글꼴로 칸 모양), 없는 칸 400 | 5.0 4.5 |
 
-### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`, `site/test/unit.test.ts`, 화면은 TC-CFUI-19)
+### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`, `site/test/unit.test.ts`, `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20)
 
 계획은 `spec/REQUIREMENT-6.0.md`. 마일스톤마다 케이스를 더한다.
 
@@ -387,6 +388,13 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 |---|---|---|
 | TC-VE-01 | 글자 일부 서식: 슬라이드 글자 안 span에 색·글꼴·크기를 함께 쓰고 정해진 순서(color·font-family·font-size)로 정규화, 허용 밖 선언·틀린 단위는 버리고 진단, 글꼴 이름 주입(`;`·`<`) 거부, 직렬화 왕복 안정 (`slide.test.ts`) | 6.0 4.1 |
 | TC-VE-02 | 정렬·분배 계산(공통 `editor/align.ts`): 여럿은 감싸는 상자 기준, 하나는 바깥(슬라이드) 기준, 분배는 위치 순으로 처음·끝 고정에 간격 같게, 2개 이하는 그대로 (`unit.test.ts`) | 6.0 4.1 |
+| TC-VE-03 | HTML `setStyle`: style 속성만 다시 쓴다(기존 선언 순서 유지, 같은 속성은 제자리, 새 속성은 끝, 빈 값이면 속성 지움, 큰따옴표는 작은따옴표), 넣고 지우면 원본과 같고 같은 값이면 그대로. 허용 밖(position·left·그림자·vw·`url()`·`!important`·틀린 margin·불러오지 않은 글꼴·z-index)은 400과 고칠 방법, 토큰 색·em·rem·margin `auto` 허용 (`structedit-html.test.ts`) | D-55 |
+| TC-VE-04 | HTML 글자 일부 서식: span style은 color·font-family·font-size·font-weight만 정해진 순서로 남기고 그 밖 선언·이벤트 속성·불러오지 않은 글꼴은 버린다, setText가 문서 글꼴로 거른다 | 6.0 4.2 |
+| TC-VE-05 | HTML 표: 행 높이(`tableRowHeight`, tr `height` px·지우기, 4~2000px 밖·tr 아닌 요소는 400), 표 너비는 setStyle width, 열 너비(`tableCols`)는 `table-layout:fixed`를 한 번만 함께 넣는다(TC-ED-13·18도 맞춤) | 6.0 4.2 |
+| TC-VE-06 | HTML 복제(`duplicate`): 바로 뒤에 같은 들여쓰기로, 안의 id는 뺀다, 표 칸은 거부. 고를 수 있는 요소에 div(글자 편집은 안 됨), 블록 목록에 인라인 style·감싸는 블록·깊이 | 6.0 4.2 |
+| TC-VE-07 | 문서 견본(`docTheme`): 글꼴은 Google Fonts 링크·`@font-face`·글꼴 변수(일반 계열 빼고 처음 나온 순서), 색은 `:root` 색 변수의 처음 값과 다크 모드 여부 | 6.0 4.2 |
+| TC-VE-08 | 리포 실제 HTML 문서 전체: 빈 연산은 바이트 동일, 문서마다 앞 40개 블록에 setStyle을 넣고 지우면 그 시작 태그 밖은 그대로(style이 없던 요소는 원본과 같다) | 6.0 7절 V2 |
+| TC-VE-09 | Worker 연결: 구조 응답에 인라인 style·깊이·문서 견본(theme), setStyle·복제는 수정본 하나(메모 「서식 1, 복제 1」), 허용 밖 스타일은 400과 고칠 방법, 같은 값이면 수정본을 만들지 않는다. MCP `doc_structure`가 글꼴·색 토큰 줄을 보여 준다(TC-CF-46) (`structedit.test.ts`) | 6.0 4.5 |
 
 ## 3. 수동 확인 케이스
 

@@ -62,6 +62,24 @@ describe("구조 편집", () => {
     expect((await call(`${D}/edit-view`)).headers.get("content-security-policy")).toBe("sandbox allow-same-origin");
   });
 
+  it("TC-VE-09 HTML 속성 편집 연결: 구조에 인라인 style·감싸는 블록·문서 견본(글꼴·색 토큰), setStyle·표 행 높이·복제는 수정본(메모 자동), 허용 밖 스타일은 400과 고칠 방법", async () => {
+    const s = await getJson(`${D}/work/structure`);
+    expect(s.theme).toMatchObject({ fonts: expect.any(Array), tokens: expect.any(Array), dark: expect.any(Boolean) });
+    const p = s.blocks.find((b: any) => b.tag === "p");
+    expect(p).toMatchObject({ style: {}, depth: expect.any(Number) });
+    const r = await (await ops(D, 0, [{ t: "setStyle", eid: p.eid, set: { "font-size": "20px", color: "#c00" } }, { t: "duplicate", eid: p.eid }])).json<any>();
+    expect(r).toMatchObject({ rev: 1, changed: true });
+    const html = await (await workText(D, "guide.html")).text();
+    expect(html.match(/<p style="font-size:20px;color:#c00">/g)!.length).toBe(2);
+    expect((await getJson(`${D}/revisions`)).revisions[0].summary).toBe("서식 1, 복제 1");
+    const bad = await ops(D, 1, [{ t: "setStyle", eid: (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p").eid, set: { "box-shadow": "0 0 2px #000" } }]);
+    expect(bad.status).toBe(400);
+    expect((await bad.json<any>()).error).toMatch(/허용하지 않는 CSS 속성: box-shadow \(장식·효과 속성은/);
+    // 같은 값이면 수정본을 만들지 않는다
+    const same = await (await ops(D, 1, [{ t: "setStyle", eid: (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p").eid, set: { color: "#c00" } }])).json<any>();
+    expect(same).toMatchObject({ rev: 1, changed: false });
+  });
+
   it("TC-ED-26 HTML 그림에 asset:<sha>를 주면 대표 파일 옆 assets/에 연결하고 상대 경로로 바꾼다. 없는 자산·기준 rev 다름·잘못된 연산은 거부", async () => {
     const a = await putAsset();
     const p = (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p");

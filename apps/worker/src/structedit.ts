@@ -1,4 +1,4 @@
-import { applyOps, markEids, outline, type HtmlOp } from "@workflow/core/structedit/html";
+import { applyOps, docTheme, markEids, outline, type HtmlOp } from "@workflow/core/structedit/html";
 import { applyOoxmlOps, MAX_OPS, ooxmlStructure, type OoxmlKind, type OoxmlOp } from "@workflow/core/structedit/ooxml";
 import { assetRow } from "./assets.ts";
 import { getBlob } from "./blobs.ts";
@@ -30,11 +30,11 @@ async function entryOf(env: Bindings, ws: Workspace, menu: string, docSlug: stri
   return { doc, st, kind: kindOf(st.manifest.entry), data: await getBlob(env.BLOBS, ws.id, file.sha256) };
 }
 
-/** 편집 화면용 목록: HTML은 블록(표·그림 포함), 오피스는 표·그림·시트 */
+/** 편집 화면용 목록: HTML은 블록(표·그림 포함)과 속성 패널 견본(글꼴·색 토큰), 오피스는 표·그림·시트 */
 export async function readStructure(env: Bindings, ws: Workspace, menu: string, docSlug: string) {
   const { st, kind, data } = await entryOf(env, ws, menu, docSlug);
   const common = { baseVersion: st.baseVersion, rev: st.rev, entry: st.manifest.entry, kind };
-  if (kind === "html") return { ...common, blocks: outline(new TextDecoder().decode(data)) };
+  if (kind === "html") { const html = new TextDecoder().decode(data); return { ...common, blocks: outline(html), theme: docTheme(html) }; }
   return { ...common, ...ooxmlStructure(kind, data) };
 }
 
@@ -105,6 +105,7 @@ export async function applyStructOps(env: Bindings, ws: Workspace, user: User | 
 const OP_NAME: Record<string, string> = {
   setText: "글자", setAttr: "속성", setWidth: "너비", insert: "넣기", remove: "지우기", move: "옮기기",
   tableRow: "표 행", tableCol: "표 열", tableCols: "표 열 너비", replaceImage: "그림 교체", colWidth: "열 너비",
+  setStyle: "서식", tableRowHeight: "표 행 높이", duplicate: "복제",
 };
 /** 메모가 없으면 연산 종류로 만든다. 예: "표 행 2, 그림 교체 1" */
 function summarize(ops: StructOp[]) {

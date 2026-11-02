@@ -24,6 +24,9 @@ export interface StructCtx {
   /** 연산을 적용해 수정본으로 저장한다. 성공하면 true */
   run: (ops: unknown[], summary?: string) => Promise<boolean>;
   setMessage: (m: string) => void;
+  /** 이 화면에서 만든 수정본 사이 되돌리기·다시 하기(⌘Z·⇧⌘Z) */
+  undo: () => void;
+  redo: () => void;
 }
 
 export function StructEditor({ menu, doc, onExit }: { menu: string; doc: string; onExit: (savedVersion?: string) => void }) {
@@ -129,7 +132,8 @@ export function StructEditor({ menu, doc, onExit }: { menu: string; doc: string;
 
   if (error) return <EmptyState title="구조를 불러올 수 없습니다" body={String((error as Error).message)} />;
   if (!s) return <EmptyState title="불러오는 중…" />;
-  const ctx: StructCtx = { menu, doc, s, busy, run, setMessage };
+  const ctx: StructCtx = { menu, doc, s, busy, run, setMessage,
+    undo: () => void travel(undo.current, redo.current), redo: () => void travel(redo.current, undo.current) };
 
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">

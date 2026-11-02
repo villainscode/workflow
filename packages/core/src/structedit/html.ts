@@ -1,5 +1,7 @@
 import { parse, parseFragment } from "parse5";
 import type { DefaultTreeAdapterMap } from "parse5";
+import { parseStyle } from "../slide/css.ts";
+import { checkDocStyle, docColors, docFonts, mergeStyle, PIN_ONLY, problemText } from "./docstyle.ts";
 
 /**
  * HTML 구조 편집(5.0 M3, spec/REQUIREMENT-5.0.md 4.1). 2.0 텍스트 편집과 같은 원리를 요소 단위로 넓혔다:
@@ -8,6 +10,7 @@ import type { DefaultTreeAdapterMap } from "parse5";
  * - 요소 id(eid)는 그 요소 시작 태그의 원본 위치("e<바이트 위치>")다. 같은 파일에서는 늘 같고, 파일이 바뀌면 다시 읽어야 한다.
  * - 연산은 하나씩 적용하고 적용할 때마다 다시 파싱한다(정확성이 우선, 문서는 수십~수백 KB).
  * - 새로 넣는 표·그림은 문서에 이미 있는 같은 종류 요소의 class를 따른다(문서 디자인 체계 유지).
+ * - 속성 편집(6.0 V2, D-55): setStyle은 요소의 style 속성만 다시 쓴다(허용 목록은 docstyle.ts). 되돌리기는 수정본으로 한다(연산마다 수정본 하나).
  */
 
 type Node = DefaultTreeAdapterMap["node"];
@@ -31,14 +34,20 @@ export type HtmlOp =
   | { t: "move"; eid: Eid; ref: Eid; where: Where }
   | { t: "tableRow"; eid: Eid; at: number; op: "add" | "remove" }
   | { t: "tableCol"; eid: Eid; at: number; op: "add" | "remove" }
-  | { t: "tableCols"; eid: Eid; widths: number[] };
+  | { t: "tableCols"; eid: Eid; widths: number[] }
+  /** 인라인 style만 바꾼다(D-55 허용 목록). unset은 지울 속성 */
+  | { t: "setStyle"; eid: Eid; set?: Record<string, string>; unset?: string[] }
+  /** 표 행(tr) 높이 px, null이면 지움 */
+  | { t: "tableRowHeight"; eid: Eid; height: number | null }
+  /** 요소를 바로 뒤에 복제한다(안의 id 속성은 뺀다) */
+  | { t: "duplicate"; eid: Eid };
 
 export class StructEditError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
 /** 고를 수 있는 요소(편집 사본에 data-eid를 붙이는 것) */
-const BLOCKS = new Set(["section", "article", "header", "footer", "figure", "figcaption", "table", "img", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+const BLOCKS = new Set(["section", "article", "header", "footer", "div", "figure", "figcaption", "table", "img", "p", "h1", "h2", "h3", "h4", "h5", "h6",
   "ul", "ol", "li", "blockquote", "pre", "dl", "dt", "dd", "caption", "tr", "th", "td", "aside", "details", "summary", "hr"]);
 /** 글자를 바꿀 수 있는 요소(안쪽 HTML을 인라인 마크로만 다시 쓴다) */
 const TEXT_BLOCKS = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "th", "td", "figcaption", "caption", "dt", "dd", "blockquote", "summary"]);
@@ -103,8 +112,17 @@ const splice = (html: string, s: number, e: number, text: string) => html.slice(
 const DROP = new Set(["script", "style", "template", "iframe", "object", "embed", "noscript", "svg", "math", "textarea", "select"]);
 const INLINE = new Set(["b", "strong", "i", "em", "u", "code", "br", "sub", "sup", "mark", "span", "a", "small", "s"]);
 
-/** 글자 칸에 넣을 HTML을 인라인 마크만 남기고 다시 쓴다. 링크는 http(s)·#·상대 경로만 */
-export function sanitizeInline(input: string): string {
+// 글자 일부 서식(6.0 V2): span에 남기는 속성과 순서
+const SPAN_PROPS = ["color", "font-family", "font-size", "font-weight"];
+
+/** span style에서 허용 속성만(값 검사 통과) 정해진 순서로 남긴다. 큰따옴표는 작은따옴표로 */
+function spanStyle(style: string, fonts?: string[]): string {
+  const decl = new Map(parseStyle(style).map(([k, v]) => [k, v.replace(/"/g, "'")]));
+  return SPAN_PROPS.filter((k) => decl.has(k) && !checkDocStyle(k, decl.get(k)!, fonts)).map((k) => `${k}:${decl.get(k)}`).join(";");
+}
+
+/** 글자 칸에 넣을 HTML을 인라인 마크만 남기고 다시 쓴다. 링크는 http(s)·#·상대 경로만, span은 글자색·글꼴·크기·굵기 style만 */
+export function sanitizeInline(input: string, fonts?: string[]): string {
   const frag = parseFragment(input);
   const out: string[] = [];
   const walk = (n: Node) => {
@@ -122,6 +140,10 @@ export function sanitizeInline(input: string): string {
       const ok = /^(https?:\/\/|mailto:|#)/i.test(href) || (!/^[a-z][\w+.-]*:/i.test(href) && !href.startsWith("//") && !href.includes("\\") && href !== "");
       if (!ok) { for (const c of n.childNodes) walk(c); return; }
       attrs = ` href="${escAttr(href)}"`;
+    }
+    if (n.tagName === "span") {
+      const st = spanStyle(attr(n, "style") ?? "", fonts);
+      if (st) attrs = ` style="${escAttr(st)}"`;
     }
     out.push(`<${n.tagName}${attrs}>`);
     for (const c of n.childNodes) walk(c);
@@ -241,7 +263,7 @@ export function applyOp(html: string, op: HtmlOp): string {
       if (!TEXT_BLOCKS.has(el.tagName)) throw new StructEditError(400, `${el.tagName}의 글자는 이 방식으로 고칠 수 없습니다`);
       if (kids(el).some((c) => !INLINE.has(c.tagName))) throw new StructEditError(400, "안에 다른 블록이 있는 요소는 글자를 통째로 바꿀 수 없습니다");
       const l = locOf(el)!;
-      return splice(html, l.innerStart, l.innerEnd, sanitizeInline(op.html));
+      return splice(html, l.innerStart, l.innerEnd, sanitizeInline(op.html, docFonts(html)));
     }
     case "setAttr": {
       const el = need(ctx, op.eid);
@@ -351,7 +373,46 @@ export function applyOp(html: string, op: HtmlOp): string {
       const s = tableShape(table);
       const n = s.merged ? (colgroupWidths(s.colgroup)?.length ?? colCount(s)) : colCount(s);
       if (op.widths.length !== n) throw new StructEditError(400, `열이 ${n}개인데 너비가 ${op.widths.length}개입니다`);
-      return writeColgroup(html, table, s, normalizeWidths(op.widths));
+      // colgroup은 표 시작 태그 뒤라 먼저 고쳐도 시작 태그 위치는 그대로다. 열 너비가 지켜지게 table-layout:fixed를 함께 넣는다(6.0 4.2)
+      const out = writeColgroup(html, table, s, normalizeWidths(op.widths));
+      return /table-layout/i.test(attr(table, "style") ?? "") ? out : writeStyle(out, table, mergeStyle(attr(table, "style") ?? "", { "table-layout": "fixed" }));
+    }
+    case "setStyle": {
+      const el = need(ctx, op.eid);
+      const set = op.set ?? {}, unset = op.unset ?? [];
+      if (!Object.keys(set).length && !unset.length) throw new StructEditError(400, "set이나 unset이 필요합니다");
+      const fonts = docFonts(html);
+      const problems = Object.entries(set).map(([k, v]) => [k, checkDocStyle(k, v, fonts)] as const).filter(([, x]) => x);
+      const pinned = unset.filter((k) => PIN_ONLY.has(k.trim().toLowerCase()));
+      if (problems.length) throw new StructEditError(400, problems.map(([, x]) => problemText(x!)).join(" · "));
+      if (pinned.length) throw new StructEditError(400, `${pinned.join(", ")}는 속성 편집으로 지우지 않습니다`);
+      return writeStyle(html, el, mergeStyle(attr(el, "style") ?? "", set, unset));
+    }
+    case "tableRowHeight": {
+      const tr = need(ctx, op.eid, "tr");
+      if (op.height !== null && !(Number.isFinite(op.height) && op.height >= 4 && op.height <= 2000)) throw new StructEditError(400, "행 높이는 4~2000px입니다");
+      const style = attr(tr, "style") ?? "";
+      return writeStyle(html, tr, op.height === null ? mergeStyle(style, {}, ["height"]) : mergeStyle(style, { height: `${Math.round(op.height)}px` }));
+    }
+    case "duplicate": {
+      const el = need(ctx, op.eid);
+      if (["td", "th", "caption", "figcaption", "summary"].includes(el.tagName)) throw new StructEditError(400, `${el.tagName}은(는) 복제할 수 없습니다(표 칸은 열 연산으로 넣으세요)`);
+      const l = locOf(el)!;
+      // 안의 id 속성은 빼서 같은 id가 두 번 생기지 않게 한다
+      const ids: [number, number][] = [];
+      const walk = (n: Node) => {
+        if (isEl(n)) { const a = n.sourceCodeLocation?.attrs?.id; if (a) ids.push([a.startOffset, a.endOffset]); }
+        if ("childNodes" in n) n.childNodes.forEach(walk);
+      };
+      walk(el);
+      let piece = html.slice(l.start, l.end);
+      for (const [a, b] of ids.sort((x, y) => y[0] - x[0])) {
+        let s0 = a - l.start;
+        while (s0 > 0 && /[ \t]/.test(piece[s0 - 1])) s0--;
+        piece = piece.slice(0, s0) + piece.slice(b - l.start);
+      }
+      const ind = indentAt(html, l.start);
+      return splice(html, l.end, l.end, ind ? `\n${ind}${piece}` : piece);
     }
   }
 }
@@ -368,6 +429,12 @@ function setAttribute(html: string, el: Element, name: string, value: string): s
   // 태그 이름 바로 뒤에 넣는다
   const at = l.startTag!.startOffset + 1 + el.tagName.length;
   return splice(html, at, at, " " + text);
+}
+
+/** style 속성을 새 값으로(빈 값이면 속성을 지운다). 같으면 원본 그대로 */
+function writeStyle(html: string, el: Element, style: string): string {
+  if (style === (attr(el, "style") ?? "")) return html;
+  return style ? setAttribute(html, el, "style", style) : removeAttribute(html, el, "style");
 }
 
 function removeAttribute(html: string, el: Element, name: string): string {
@@ -388,15 +455,25 @@ export interface Block {
   image?: { src: string; alt: string; width: number | null };
   /** 글자를 바꿀 수 있는가 */
   editable: boolean;
+  /** 요소의 인라인 style(속성 패널이 보여 준다) */
+  style: Record<string, string>;
+  /** 감싸는 블록(없으면 null)과 깊이(레이어 패널) */
+  parent: Eid | null;
+  depth: number;
 }
 
 /** 고를 수 있는 요소 목록(문서 순서) */
 export function outline(html: string): Block[] {
   const ctx = parseDoc(html);
   const textOf = (n: Node): string => (n.nodeName === "#text" ? (n as DefaultTreeAdapterMap["textNode"]).value : "childNodes" in n ? n.childNodes.map(textOf).join("") : "");
+  const blockParent = (el: Element) => { let p = ctx.parents.get(el) ?? null; while (p && !(p.sourceCodeLocation?.startTag && ctx.byEid.get(eidOf(p)) === p)) p = ctx.parents.get(p) ?? null; return p; };
+  const depth = new Map<Element, number>();
   return [...ctx.byEid.values()].map((el) => {
+    const parent = blockParent(el);
+    depth.set(el, parent ? (depth.get(parent) ?? 0) + 1 : 0);
     const b: Block = { eid: eidOf(el), tag: el.tagName, text: textOf(el).replace(/\s+/g, " ").trim().slice(0, 120),
-      editable: TEXT_BLOCKS.has(el.tagName) && !kids(el).some((c) => !INLINE.has(c.tagName)) };
+      editable: TEXT_BLOCKS.has(el.tagName) && !kids(el).some((c) => !INLINE.has(c.tagName)),
+      style: Object.fromEntries(parseStyle(attr(el, "style") ?? "")), parent: parent ? eidOf(parent) : null, depth: depth.get(el)! };
     if (el.tagName === "table") {
       const s = tableShape(el);
       b.table = { rows: s.rows.length, cols: colCount(s), widths: colgroupWidths(s.colgroup), merged: s.merged };
@@ -406,6 +483,11 @@ export function outline(html: string): Block[] {
     }
     return b;
   });
+}
+
+/** 속성 패널 견본: 문서가 쓰는 글꼴과 :root 색 토큰(다크 모드 여부) */
+export function docTheme(html: string) {
+  return { fonts: docFonts(html), ...docColors(html) };
 }
 
 /** 편집 사본: 고를 수 있는 요소마다 data-eid를 붙인다(원본 파일에는 쓰지 않는다). baseHref가 있으면 상대 경로 리소스가 그곳에서 읽히도록 <base>를 넣는다 */

@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Columns3, Heading2, ImagePlus, ImageUp, Pilcrow, Rows3, Table2, Trash2 } from "lucide-react";
-import { editViewUrl, uploadAsset, type Block } from "../../lib/structedit.ts";
+import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Columns3, CopyPlus, Heading2, ImagePlus, ImageUp, Pilcrow, Rows3, Table2, Trash2 } from "lucide-react";
+import { editViewUrl, uploadAsset, type Block, type DocTheme } from "../../lib/structedit.ts";
 import { injectStyle } from "../../lib/textedit.ts";
 import { useConfirm } from "../../components/confirm/ConfirmProvider.tsx";
 import { IconButton } from "../../components/IconButton.tsx";
+import { TextToolbarView } from "../../editor/TextToolbar.tsx";
+import { LayerPanel, type LayerItem } from "../../editor/LayerPanel.tsx";
+import { HtmlStylePanel, GENERIC, fontValue } from "./HtmlStylePanel.tsx";
+import { HtmlHandles } from "./HtmlHandles.tsx";
+import { inlineText } from "./inlineText.ts";
 import type { StructCtx } from "./StructEditor.tsx";
 
 /**
@@ -11,7 +16,12 @@ import type { StructCtx } from "./StructEditor.tsx";
  * 연산은 서버가 원본 바이트에 패치한다(packages/core/src/structedit/html.ts). 저장할 때마다 사본을 다시 읽는다(eid는 위치라 바뀐다).
  * 글자는 두 번 눌러 그 자리에서 고치고(인라인 서식만 남는다), 바깥을 누르거나 Enter면 저장, Esc면 취소.
  * 그림 파일을 문서 위에 끌어 놓거나 붙여 넣으면 고른 요소 뒤에(없으면 문서 끝 블록 뒤에) 넣는다.
+ * 6.0 V2 요소 편집: 속성 패널(서식, HtmlStylePanel), 글자 편집 중 도구 막대(editor/TextToolbar + inlineText),
+ * 표 열 경계·행 높이·표 너비·그림 크기 손잡이(HtmlHandles), 복제(⌘D), 되돌리기(⌘Z·⇧⌘Z), 부모 고르기(Esc), 레이어 패널.
  */
+
+const SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "28px", "32px"];
+const NO_THEME: DocTheme = { fonts: [], tokens: [], dark: false };
 
 const EDIT_CSS = `
 [data-eid]{cursor:default}
@@ -32,9 +42,17 @@ const rowsOf = (t: Element) => [...t.querySelectorAll(":scope > tr, :scope > the
 
 export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   const { menu, doc, s, busy, run, setMessage } = ctx;
+  const theme = s.theme ?? NO_THEME;
   const confirm = useConfirm();
   const frame = useRef<HTMLIFrameElement>(null);
   const [sel, setSel] = useState<string | null>(null);
+  // 사본을 스크롤하거나 크기가 바뀌면 손잡이 자리를 다시 잰다
+  const [, setTick] = useState(0);
+  const bump = useCallback(() => setTick((n) => n + 1), []);
+  // 글자 편집 중인 요소와 도구 막대 명령
+  const [editing, setEditing] = useState<{ el: HTMLElement; api: ReturnType<typeof inlineText>; done: (save: boolean) => void } | null>(null);
+  const ctxRef = useRef(ctx);
+  ctxRef.current = ctx;
   // 고른 칸의 행·열(표 안을 골랐을 때)
   const [cell, setCell] = useState<{ row: number; col: number } | null>(null);
   const blocks = new Map((s.blocks ?? []).map((b) => [b.eid, b]));
@@ -83,6 +101,19 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   }, [setMessage]);
   const anchorRef = useRef(anchorEid);
   anchorRef.current = anchorEid;
+  const duplicate = useCallback(() => {
+    const eid = anchorRef.current;
+    if (eid) void runRef.current([{ t: "duplicate", eid }], "복제");
+  }, []);
+  /** 고르기(사본 안 누르기·레이어 패널·Esc 공통): 순번을 기억해 다시 읽은 사본에서 잇는다 */
+  const pick = useCallback((el: Element | null) => {
+    const doc = d();
+    setSel(el?.getAttribute("data-eid") ?? null);
+    selKey.current = el && doc ? { index: [...doc.querySelectorAll("[data-eid]")].indexOf(el), tag: el.tagName } : null;
+    const td = el?.closest("td, th");
+    const tb = td?.closest("table");
+    setCell(td && tb ? { row: rowsOf(tb).indexOf(td.parentElement!), col: [...td.parentElement!.children].filter((c) => /^T[DH]$/.test(c.tagName)).indexOf(td) } : null);
+  }, []);
 
   // 사본이 열리면: 스타일, 고르기(클릭), 글자 편집(더블클릭), 링크 막기, 그림 끌어 놓기·붙여 넣기
   const onLoad = useCallback(() => {
@@ -99,27 +130,55 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       const t = e.target as Element;
       if (t.closest("a, button, summary, label, form")) e.preventDefault();
       if (t.closest('[contenteditable="true"]')) return;
-      const el = t.closest("[data-eid]");
-      setSel(el?.getAttribute("data-eid") ?? null);
-      selKey.current = el ? { index: [...doc.querySelectorAll("[data-eid]")].indexOf(el), tag: el.tagName } : null;
-      const td = t.closest("td, th");
-      const tb = td?.closest("table");
-      setCell(td && tb ? { row: rowsOf(tb).indexOf(td.parentElement!), col: [...td.parentElement!.children].filter((c) => /^T[DH]$/.test(c.tagName)).indexOf(td) } : null);
+      pick(t.closest("[data-eid]"));
     }, true);
+    doc.addEventListener("scroll", bump, { passive: true });
+    doc.defaultView?.addEventListener("resize", bump);
+    void doc.fonts?.ready.then(bump);
+    doc.addEventListener("keydown", (e) => {
+      if ((e.target as Element).closest?.('[contenteditable="true"]')) return;
+      const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
+      if (mod && k === "z") { e.preventDefault(); if (e.shiftKey) ctxRef.current.redo(); else ctxRef.current.undo(); }
+      else if (mod && k === "d") { e.preventDefault(); duplicate(); }
+      else if (e.key === "Escape") {
+        // 부모 블록 고르기
+        const cur = doc.querySelector("[data-sel]");
+        const up = cur?.parentElement?.closest("[data-eid]");
+        if (up) { e.preventDefault(); pick(up); }
+      }
+    });
     doc.addEventListener("dblclick", (e) => {
       const el = (e.target as Element).closest<HTMLElement>("[data-eid]");
       if (!el || el.getAttribute("data-editable") !== "1") return;
       const before = el.innerHTML;
       el.setAttribute("contenteditable", "true");
       el.focus();
+      const api = inlineText(doc, el);
+      const refresh = () => bump();
+      el.addEventListener("keyup", refresh);
+      el.addEventListener("mouseup", refresh);
+      el.addEventListener("input", refresh);
+      let finished = false;
       const done = (save: boolean) => {
+        if (finished) return;
+        finished = true;
         el.removeEventListener("blur", onBlur);
         el.removeEventListener("keydown", onKey);
+        el.removeEventListener("keyup", refresh);
+        el.removeEventListener("mouseup", refresh);
+        el.removeEventListener("input", refresh);
+        api.dispose();
+        setEditing(null);
         el.removeAttribute("contenteditable");
         if (!save || el.innerHTML === before) { el.innerHTML = before; return; }
         void runRef.current([{ t: "setText", eid: el.getAttribute("data-eid"), html: el.innerHTML }], "글자 고침");
       };
-      const onBlur = () => done(true);
+      setEditing({ el, api, done });
+      // 도구 막대(바깥 문서)의 목록·입력칸으로 포커스가 옮겨 가면 편집을 이어 간다. 막대를 떠나면 막대가 끝낸다(onLeave)
+      const onBlur = () => setTimeout(() => {
+        if (document.activeElement?.closest("[data-text-toolbar]") || doc.activeElement === el) return;
+        done(true);
+      }, 0);
       const onKey = (k: KeyboardEvent) => {
         if (k.isComposing || k.keyCode === 229) return;
         if (k.key === "Enter" && !k.shiftKey) { k.preventDefault(); el.blur(); }
@@ -142,7 +201,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       const f = [...(e.clipboardData?.files ?? [])].find((x) => x.type.startsWith("image/"));
       if (f) { e.preventDefault(); void insertImage(f, anchorRef.current); }
     });
-  }, [insertImage]);
+  }, [insertImage, pick, bump, duplicate]);
 
   const b = sel ? blocks.get(sel) : undefined;
   const tb = table ? blocks.get(table.getAttribute("data-eid")!) : undefined;
@@ -160,17 +219,42 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     if (ref) void run([{ t: "move", eid: anchorEid, ref, where: dir < 0 ? "before" : "after" }], dir < 0 ? "위로 옮김" : "아래로 옮김");
   };
 
+  const layers = layerItems(s.blocks ?? []);
+  const moveLayer = (id: string, dir: -1 | 1) => {
+    const it = layers.find((x) => x.id === id), list = s.blocks ?? [];
+    const sibs = list.filter((x) => x.parent === list.find((y) => y.eid === id)?.parent);
+    const ref = sibs[sibs.findIndex((x) => x.eid === id) + dir];
+    if (it && ref) void run([{ t: "move", eid: id, ref: ref.eid, where: dir < 0 ? "before" : "after" }], dir < 0 ? "위로 옮김" : "아래로 옮김");
+  };
+  const fonts = [...theme.fonts, ...GENERIC].map((f) => ({ label: f, value: fontValue(f) }));
+  const palette = theme.tokens.map((t) => ({ value: `var(${t.name})`, label: t.name, swatch: t.value }));
+  const ts = editing?.api.read();
+
   return (
     <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_17rem]">
-      <iframe
-        key={s.rev}
-        ref={frame}
-        src={editViewUrl(menu, doc, s.rev)}
-        title="구조 편집"
-        className="block h-full w-full border-0 bg-surface"
-        sandbox="allow-same-origin"
-        onLoad={onLoad}
-      />
+      <div className="flex min-h-0 flex-col">
+        {editing && ts && (
+          <TextToolbarView state={ts} cmd={wrapBump(editing.api.cmd, bump)} fonts={fonts} sizes={SIZES} palette={palette}
+            isEditor={(el) => el.tagName === "IFRAME"} onLeave={() => editing.done(true)}
+            note={theme.dark && ts.color && !ts.color.startsWith("var(") ? "직접 고른 색은 다크 모드에서 바뀌지 않습니다" : undefined} />
+        )}
+        <div className="relative min-h-0 flex-1">
+          <iframe
+            key={s.rev}
+            ref={frame}
+            src={editViewUrl(menu, doc, s.rev)}
+            title="구조 편집"
+            className="block h-full w-full border-0 bg-surface"
+            sandbox="allow-same-origin"
+            onLoad={onLoad}
+          />
+          {!editing && (
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-label="손잡이">
+              <HtmlHandles selEl={selEl} blocks={blocks} busy={busy} apply={(ops, summary) => void run(ops, summary)} />
+            </div>
+          )}
+        </div>
+      </div>
       <aside className="min-h-0 overflow-y-auto border-l border-line bg-surface p-3 text-sm" aria-label="고른 요소">
         {!b ? (
           <p className="text-xs text-muted">문서에서 고칠 요소를 누르세요. 그림 파일을 문서 위에 끌어 놓거나 붙여 넣어도 됩니다.</p>
@@ -182,6 +266,9 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               {b.text && <p className="mt-0.5 line-clamp-2 text-xs text-muted">{b.text}</p>}
               {b.editable && <p className="mt-1 text-xs text-muted">두 번 누르면 글자를 고칩니다.</p>}
             </section>
+
+            <HtmlStylePanel key={b.eid} b={b} el={selEl as HTMLElement | null} theme={theme} busy={busy}
+              apply={(set, unset, summary) => void run([{ t: "setStyle", eid: b.eid, ...(Object.keys(set).length ? { set } : {}), ...(unset.length ? { unset } : {}) }], summary)} />
 
             {tb?.table && <TableSection ctx={ctx} eid={tb.eid} t={tb.table} cell={cell} onRemove={() => remove(tb.eid, "표")} />}
             {b.image && <ImageSection ctx={ctx} b={b} />}
@@ -209,6 +296,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               <section className="flex flex-wrap gap-1">
                 <IconButton icon={ArrowUp} label="위로 옮기기" variant="outline" disabled={busy} onClick={() => move(-1)} />
                 <IconButton icon={ArrowDown} label="아래로 옮기기" variant="outline" disabled={busy} onClick={() => move(1)} />
+                <IconButton icon={CopyPlus} label="복제 (⌘D)" variant="outline" disabled={busy} onClick={duplicate} />
                 <IconButton icon={Trash2} label={`${NAME[ab.tag] ?? ab.tag} 지우기`} variant="outline" disabled={busy}
                   onClick={() => void remove(ab.eid, NAME[ab.tag] ?? ab.tag)} />
               </section>
@@ -217,10 +305,16 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               <section className="flex flex-wrap gap-1">
                 <IconButton icon={ArrowUp} label="표 위로 옮기기" variant="outline" disabled={busy} onClick={() => move(-1)} />
                 <IconButton icon={ArrowDown} label="표 아래로 옮기기" variant="outline" disabled={busy} onClick={() => move(1)} />
+                <IconButton icon={CopyPlus} label="표 복제 (⌘D)" variant="outline" disabled={busy} onClick={duplicate} />
               </section>
             )}
           </div>
         )}
+        <div className="mt-4 max-h-72 overflow-y-auto border-t border-line pt-3">
+          <LayerPanel items={layers} selected={sel ? [sel] : []}
+            onSelect={(id) => { const el = node(id); if (el) { pick(el); el.scrollIntoView({ block: "nearest" }); } }}
+            onMove={moveLayer} />
+        </div>
       </aside>
     </div>
   );
@@ -302,6 +396,15 @@ function ImageSection({ ctx, b }: { ctx: StructCtx; b: Block }) {
           onPointerUp={() => { if (width !== (img.width ?? 100)) void run([{ t: "setWidth", eid: b.eid, percent: width === 100 ? null : width }], "그림 너비"); }}
           onKeyUp={() => { if (width !== (img.width ?? 100)) void run([{ t: "setWidth", eid: b.eid, percent: width === 100 ? null : width }], "그림 너비"); }} />
       </label>
+      <div className="flex items-center gap-1 text-xs">
+        <span className="text-muted">정렬</span>
+        {([["left", AlignLeft, "그림 왼쪽", { "margin-left": "0", "margin-right": "auto" }], ["center", AlignCenter, "그림 가운데", { "margin-left": "auto", "margin-right": "auto" }],
+          ["right", AlignRight, "그림 오른쪽", { "margin-left": "auto", "margin-right": "0" }]] as const).map(([k, icon, label, m]) => (
+          <IconButton key={k} icon={icon} label={label} size={16} disabled={busy}
+            active={b.style["margin-left"] === m["margin-left"] && b.style["margin-right"] === m["margin-right"]}
+            onClick={() => void run([{ t: "setStyle", eid: b.eid, set: { display: "block", ...m } }], label)} />
+        ))}
+      </div>
       <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs font-medium text-muted hover:bg-sunken hover:text-fg ${busy ? "pointer-events-none opacity-30" : ""}`}>
         <ImageUp size={16} aria-hidden /> 그림 바꾸기
         <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only"
@@ -317,4 +420,23 @@ function ImageSection({ ctx, b }: { ctx: StructCtx; b: Block }) {
       </label>
     </section>
   );
+}
+
+/** 명령을 부른 뒤 막대 상태(굵게·색 등)를 다시 읽는다 */
+function wrapBump<T extends object>(cmd: T, bump: () => void): T {
+  return Object.fromEntries(Object.entries(cmd).map(([k, f]) => [k, (...a: unknown[]) => { const r = (f as (...x: unknown[]) => unknown)(...a); bump(); return r; }])) as T;
+}
+
+/** 블록 목록 → 레이어 항목(같은 부모 안 처음·끝, 표 안 요소와 목록 항목은 옮기지 않는다) */
+function layerItems(blocks: Block[]): LayerItem[] {
+  const byParent = new Map<string | null, Block[]>();
+  for (const b of blocks) byParent.set(b.parent, [...(byParent.get(b.parent) ?? []), b]);
+  return blocks.map((b) => {
+    const sibs = byParent.get(b.parent)!;
+    return {
+      id: b.eid, depth: b.depth, first: sibs[0] === b, last: sibs[sibs.length - 1] === b,
+      label: `${NAME[b.tag] ?? b.tag}${b.text ? ` · ${b.text.slice(0, 24)}` : ""}`,
+      movable: !INNER.has(b.tag.toUpperCase()),
+    };
+  });
 }

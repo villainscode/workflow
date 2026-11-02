@@ -8,9 +8,11 @@ import { API } from "./base.ts";
  */
 
 export type { Block };
+/** HTML 속성 패널 견본: 문서가 쓰는 글꼴, :root 색 토큰, 다크 모드 여부(6.0 V2) */
+export interface DocTheme { fonts: string[]; tokens: { name: string; value: string }[]; dark: boolean }
 export interface Structure {
   baseVersion: string; rev: number; entry: string; kind: "html" | "docx" | "pptx" | "xlsx";
-  blocks?: Block[]; tables?: OoxmlTable[]; images?: OoxmlImage[]; sheets?: OoxmlSheet[];
+  blocks?: Block[]; theme?: DocTheme; tables?: OoxmlTable[]; images?: OoxmlImage[]; sheets?: OoxmlSheet[];
 }
 export interface WorkFile { path: string; sha256: string; size: number; mime: string; url: string }
 export interface Work { baseVersion: string; rev: number; fromRevision: boolean; entry: string; files: WorkFile[] }
