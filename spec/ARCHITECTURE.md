@@ -35,6 +35,7 @@ npm workspaces 모노레포. `npm install`은 리포 루트에서 한 번 한다
 | Markdown 편집 | CodeMirror 6. MarkFlow 에디터를 가져와 고쳐 썼다(D-30) |
 | PDF 편집(5.0 M6) | 화면 pdf.js(pdfjs-dist 6)로 쪽을 그리고 덧그릴 것을 놓은 뒤, 브라우저에서 pdf-lib로 그려 넣어 수정본으로 올린다. 한글은 나눔고딕(OFL, `web/public/fonts/`)을 harfbuzz wasm(harfbuzzjs)으로 쓴 글자만 잘라 넣는다(pdf-lib 자체 부분 글꼴은 한글이 빠진다, M0). 서버·Worker에는 글꼴·wasm을 싣지 않는다 |
 | 슬라이드 편집(5.0 M4) | 렌더러는 노드 트리 → React 요소(innerHTML 없음). 글자 Tiptap 3(한글 IME), 이동·크기·맞춤선 react-moveable, 슬라이드 순서 @dnd-kit. 되돌리기는 core 역연산(immer·zustand 대신), 색은 덱 팔레트 + 브라우저 색 고르기(react-colorful 대신) |
+| 요소 편집기(6.0 V1~V3) | 문서 종류와 무관한 화면 조각만 `web/src/editor/`에 둔다: 글자 도구 막대(`TextToolbar`, 상태·명령 어댑터로 Tiptap(덱)과 contenteditable(HTML)이 같이 씀), 정렬·분배 계산(`align.ts`), 레이어 패널(`LayerPanel`), draw.io·svgedit 편집기. 캔버스는 덱(1920×1080 좌표, react-moveable)과 HTML(편집 사본 iframe 위 손잡이 층, `structedit/HtmlHandles.tsx`·`pinBox.ts`)이 겹치는 부분이 없어 따로 둔다. HTML 연산(`setStyle`·`tableRowHeight`·`duplicate`·`toPinned`·`place`·`unpin`·`svgAttr`)은 core `structedit/html.ts`, 허용 스타일(D-55)은 `structedit/docstyle.ts` |
 | Markdown 미리보기 | unified(remark·rehype), KaTeX, highlight.js, Mermaid |
 | 문서 뷰어 | DOCX는 docx-preview, XLSX·CSV는 SheetJS 0.20(공식 CDN 배포본), 버전 비교는 jsdiff |
 | draw.io 보기 | 로컬은 drawio CLI가 SVG로 바꾼다. Cloudflare는 draw.io 공식 뷰어(viewer.diagrams.net)를 iframe으로 연다 |

@@ -534,6 +534,8 @@ export function registerTools(server: McpServer, host: ToolHost) {
   /** 연산 실패에 고칠 방법을 붙인다(명세 15절: 잘못된 연산에 진단·fix) */
   const withFix = (e: unknown): never => {
     if (!(e instanceof ToolError)) throw e;
+    // 오피스 편집 세션(6.0 VO) 잠금은 다시 읽어도 풀리지 않는다
+    if (e.status === 409 && e.message.includes("오피스 편집기")) throw new ToolError(`${e.message}\n→ 사람이 오피스 편집기를 닫아 저장이 끝난 뒤(doc_structure의 "오피스 편집 중"이 사라진 뒤) 다시 보내세요.`, 409);
     if (e.status === 409) throw new ToolError(`${e.message}\n→ doc_structure로 최신 eid·id와 rev를 다시 읽고 연산을 고쳐 보내세요.`, 409);
     if (e.status === 400) throw new ToolError(`${e.message}\n→ 쓸 수 있는 연산: ${STRUCT_OPS}`, 400);
     return LOCAL_ONLY(e) as never;
@@ -554,7 +556,9 @@ export function registerTools(server: McpServer, host: ToolHost) {
   }, safe(async ({ ref }) => {
     const r = await resolveRef(ref);
     const s = await api<Structure>(`/docs/${r.menu}/${r.doc}/work/structure`).catch(LOCAL_ONLY);
-    const head = `${s.entry} (${s.kind}) · rev ${s.rev}(기준 ${versionLabel(s.baseVersion)})`;
+    // 오피스 편집 세션 중이면 이 문서의 쓰기는 모두 409다(6.0 VO). 상태를 못 읽으면(오피스 편집기 없는 곳) 표시하지 않는다
+    const office = await api<{ active: boolean }>(`/docs/${r.menu}/${r.doc}/office`).catch(() => null);
+    const head = `${s.entry} (${s.kind}) · rev ${s.rev}(기준 ${versionLabel(s.baseVersion)})${office?.active ? " · 오피스 편집 중(사람이 편집기를 닫을 때까지 쓰기는 409)" : ""}`;
     if (s.blocks) {
       const t = s.theme;
       const theme = t ? `\n글꼴: ${[...t.fonts, "sans-serif", "serif", "monospace", "system-ui"].join(", ")}\n색 토큰: ${t.tokens.map((x) => `var(${x.name})=${x.value}`).join(", ") || "없음"}${t.dark ? " · 다크 모드 있음(색은 토큰을 쓰세요)" : " · 다크 모드 없음"}` : "";
@@ -594,7 +598,7 @@ export function registerTools(server: McpServer, host: ToolHost) {
   interface Rev { rev: number; baseVersion: string; source: string; summary: string | null; createdAt: string; author: string | null; publishedAs: string | null }
   server.registerTool("revision_list", {
     title: "수정본 목록",
-    description: "문서의 수정본(자동 저장·에이전트 저장) 이력을 최신부터 보여 준다. 출처(human·agent·restore), 작성자, 메모, 버전으로 올린 수정본.",
+    description: "문서의 수정본(자동 저장·에이전트 저장) 이력을 최신부터 보여 준다. 출처(human·agent·restore·office), 작성자, 메모, 버전으로 올린 수정본.",
     inputSchema: { ref: REF },
     annotations: { readOnlyHint: true },
   }, safe(async ({ ref }) => {

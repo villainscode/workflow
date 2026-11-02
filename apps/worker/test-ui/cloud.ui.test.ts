@@ -225,13 +225,17 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     rmSync(persist, { recursive: true, force: true });
   });
 
-  test("TC-CFUI-06 로그인 화면(Google·개발용) → 로그인하면 내 워크스페이스로, 계정 메뉴에 멤버 관리·로그아웃", async () => {
+  test("TC-CFUI-06 로그인 화면(Google·개발용) → 로그인하면 내 워크스페이스로, 계정 메뉴에 멤버 관리·오픈소스 고지·로그아웃", async () => {
     await nav("/");
     await page.waitForFunction(() => location.pathname.startsWith("/team/"), { timeout: 15_000 });
     await (await page.waitForSelector('button[aria-label="계정 메뉴"]')).click();
     const items = await page.$$eval('[role="menuitem"]', (els: Element[]) => els.map((e) => e.textContent?.trim()));
-    assert.deepEqual(items, ["멤버·초대 관리", "로그아웃"]);
+    assert.deepEqual(items, ["멤버·초대 관리", "오픈소스 고지", "로그아웃"]);
     await page.keyboard.press("Escape");
+    // 오픈소스 고지(6.0 V5)는 정적 파일로 준다
+    const notices = await page.evaluate(async () => { const r = await fetch("/third-party-notices.txt"); return { status: r.status, text: await r.text() }; });
+    assert.equal(notices.status, 200);
+    assert.match(notices.text, /draw\.io[\s\S]*@svgedit\/svgcanvas[\s\S]*ONLYOFFICE/);
   });
 
   test("TC-CFUI-07 초대 링크를 만들어 다른 브라우저(로그인 전)에서 열면 로그인 후 그 워크스페이스로, viewer는 편집 버튼이 없다", async () => {

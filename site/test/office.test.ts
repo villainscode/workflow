@@ -33,7 +33,7 @@ after(async () => { await srv?.stop(); fake?.close(); ws.cleanup(); });
 const local = (url: string) => url.replace(/^https?:\/\/[^/]+/, "");
 
 describe("로컬 오피스 편집기(6.0 VO)", () => {
-  test("TC-VO-10 설정·파일·콜백 → 수정본(office), 잠긴 동안 다른 쓰기 409, 버전으로 저장하면 docs/에 새 버전", async () => {
+  test("TC-VO-10·14 설정·파일·콜백 → 수정본(office), 잠긴 동안 다른 쓰기(텍스트 편집·새 버전·정식 확정 포함) 409, 버전으로 저장하면 docs/에 새 버전", async () => {
     assert.deepEqual((await call(U, "GET", "/api/editor-config")).body, { drawio: null, office: true });
     assert.deepEqual((await call(U, "GET", "/api/office/status")).body, { enabled: true, ready: true });
     const up = await upload(U, { menu: "notes", title: "로컬 보고서", slug: "local-report" }, [["report.docx", docx]]);
@@ -48,6 +48,12 @@ describe("로컬 오피스 편집기(6.0 VO)", () => {
     assert.equal(Buffer.compare(Buffer.from(await file.arrayBuffer()), docx), 0);
     // 잠금
     assert.equal((await call(U, "POST", `${D}/revisions`, { baseRev: 0, put: [{ path: "memo.txt", text: "x" }] })).status, 409);
+    // TC-VO-14 텍스트 편집·새 버전 올리기·정식 확정도 409
+    const text = await call(U, "POST", `${D}/text-edit`, { baseVersion: "v0.0", changes: [] });
+    assert.equal(text.status, 409);
+    assert.match(text.body.error, /오피스 편집기에서 편집 중/);
+    assert.equal((await upload(U, { menu: "notes", doc: "local-report" }, [["report.docx", Buffer.from("다른 내용")]])).status, 409);
+    assert.equal((await call(U, "POST", `${D}/release`, {})).status, 409);
     // 콜백: 위조는 403, 다른 출처 주소는 400, 맞으면 수정본
     const cb = local(config.editorConfig.callbackUrl);
     const send = async (body: object, secret = SECRET) => {

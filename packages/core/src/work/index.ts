@@ -51,7 +51,7 @@ export async function sha256Hex(data: Uint8Array): Promise<string> {
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-const LOCKED = "오피스 편집기에서 편집 중인 문서입니다. 편집기를 닫아 저장이 끝나면 다시 할 수 있습니다";
+export const LOCKED = "오피스 편집기에서 편집 중인 문서입니다. 편집기를 닫아 저장이 끝나면 다시 할 수 있습니다";
 const conflict = (rev: number) => new WorkError(409, `다른 곳에서 먼저 저장했습니다(지금 수정본 ${rev}). 최신 내용을 받아 다시 적용하세요`);
 
 /** 같은 내용이면 같은 sha가 나오도록 경로순으로 정렬해 쓴다 */

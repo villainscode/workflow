@@ -8,6 +8,7 @@ import { saveRevision, workState, WorkError, type DocStore, type Saved } from ".
  * - 문서 키는 작업 상태(기준 버전·rev)에서 나온다. 같은 내용을 여는 사람은 같은 키라 오피스 서버의 공동 편집으로 묶이고,
  *   저장으로 rev가 바뀌면 다음에는 새 키가 된다(오피스 서버가 옛 내용을 캐시에서 주지 않게).
  * - 편집 세션이 열려 있는 동안 그 문서의 다른 쓰기(구조 편집·덱·되돌리기·버전으로 저장)는 409다(작업본 잠금, DocStore.locked).
+ *   수정본 층을 거치지 않는 텍스트 편집·Markdown 저장·새 버전 올리기·정식 확정도 409다(Worker write.ts, 로컬 server/index.ts의 needUnlocked).
  *   세션은 화면이 5분마다 연장하고(15분 만료), 오피스 서버가 닫힘(status 2·4)을 알리면 풀린다.
  * - 파일 내려주기·콜백 주소에는 짧게 서명한 토큰을 붙인다(오피스 서버는 세션 쿠키가 없다).
  * - 콜백이 가리키는 저장 파일 주소는 오피스 서버 출처만 받는다(SSRF 막기). 크기 상한 MAX_OFFICE_FILE.

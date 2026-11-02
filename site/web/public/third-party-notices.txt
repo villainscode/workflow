@@ -1,0 +1,70 @@
+문서 탐색 워크플로우 — 제3자 소프트웨어 고지
+
+이 화면과 서비스는 아래 오픈소스 소프트웨어를 씁니다. 각 소프트웨어의 저작권은 해당 저작자에게 있습니다.
+전체 의존성 목록은 저장소의 package.json(site/, apps/worker/, packages/*)에 있습니다.
+
+------------------------------------------------------------
+편집기에 함께 배포하는 것
+------------------------------------------------------------
+
+draw.io (jgraph/drawio) v32.6.1 — Apache License 2.0
+  Copyright (c) JGraph Ltd. https://github.com/jgraph/drawio
+  다이어그램 편집기. 고치지 않은 정적 웹앱을 별도 출처(draw 도메인)에서 그대로 제공합니다.
+  라이선스 전문: https://www.apache.org/licenses/LICENSE-2.0
+
+@svgedit/svgcanvas 7.4.2 — MIT License
+  Copyright (c) SVG-Edit authors. https://github.com/SVG-Edit/svgedit
+  SVG 편집 캔버스(소스를 번들에 넣고 PDF 내보내기 모듈만 뺐습니다).
+
+pathseg 1.2.1 — BSD 3-Clause (Chromium's License)
+  Copyright 2015 The Chromium Authors. All rights reserved.
+  Redistribution and use in source and binary forms, with or without modification, are permitted provided
+  that the following conditions are met:
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and
+      the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+      the following disclaimer in the documentation and/or other materials provided with the distribution.
+    * Neither the name of Google Inc. nor the names of its contributors may be used to endorse or promote
+      products derived from this software without specific prior written permission.
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+  PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY
+  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+  HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+ONLYOFFICE Docs Community Edition — GNU Affero General Public License v3
+  Copyright (c) Ascensio System SIA. https://github.com/ONLYOFFICE/DocumentServer
+  오피스 편집 서버. 공식 이미지(onlyoffice/documentserver)를 고치지 않고 그대로 컨테이너로 띄웁니다.
+  소스: https://github.com/ONLYOFFICE/DocumentServer
+  라이선스 전문: https://www.gnu.org/licenses/agpl-3.0.html
+
+------------------------------------------------------------
+화면 라이브러리 (MIT License)
+------------------------------------------------------------
+
+React, React Router, TanStack Query, Tiptap 3.32.0, react-moveable 0.56.0, pdf-lib 1.17.1, Mermaid,
+lucide-react, Hono, parse5, htmlparser2, fflate
+  각 저작자. MIT License:
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+  documentation files (the "Software"), to deal in the Software without restriction, including without
+  limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+  the Software, and to permit persons to whom the Software is furnished to do so, subject to the following
+  conditions: The above copyright notice and this permission notice shall be included in all copies or
+  substantial portions of the Software.
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+  LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+  EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+  AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+  OR OTHER DEALINGS IN THE SOFTWARE.
+
+pdf.js (pdfjs-dist 6.4.299) — Apache License 2.0
+  Copyright Mozilla Foundation. https://github.com/mozilla/pdf.js
+
+------------------------------------------------------------
+글꼴
+------------------------------------------------------------
+
+나눔고딕(NanumGothic) — SIL Open Font License 1.1. 전문은 /fonts/NanumGothic-OFL.txt

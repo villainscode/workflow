@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { LogOut, Users } from "lucide-react";
+import { FileText, LogOut, Users } from "lucide-react";
 import { WS } from "../../lib/base.ts";
 import { logout, useMe } from "../../lib/me.ts";
 import { ContextMenu, type MenuEntry } from "../sidebar/ContextMenu.tsx";
 import { MembersDialog } from "./MembersDialog.tsx";
 
-/** 헤더 오른쪽 계정 메뉴(Cloudflare): 워크스페이스 바꾸기, 멤버·초대, 로그아웃 */
+/** 헤더 오른쪽 계정 메뉴(Cloudflare): 워크스페이스 바꾸기, 멤버·초대, 오픈소스 고지, 로그아웃 */
 export function UserMenu() {
   const { me, role } = useMe();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -15,6 +15,7 @@ export function UserMenu() {
     ...me.workspaces.filter((w) => w.slug !== WS).map((w) => ({ label: `${w.name}(으)로 이동`, icon: Users, onSelect: () => { location.href = `/${w.slug}/`; } })),
     ...(me.workspaces.length > 1 ? ["separator" as const] : []),
     { label: role === "owner" ? "멤버·초대 관리" : "멤버 보기", icon: Users, onSelect: () => setMembers(true) },
+    { label: "오픈소스 고지", icon: FileText, onSelect: () => { window.open("/third-party-notices.txt", "_blank", "noopener"); } },
     { label: "로그아웃", icon: LogOut, onSelect: () => void logout() },
   ];
   const ws = me.workspaces.find((w) => w.slug === WS);

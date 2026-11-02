@@ -3,7 +3,7 @@ import type { DocStore, Manifest, ManifestFile, RevisionChange } from "@workflow
 import { getBlob, putBlob } from "./blobs.ts";
 import { blobKey, HttpError, type Bindings, type User, type Workspace } from "./env.ts";
 import { findDoc } from "./repo.ts";
-import { versionFiles, writeVersion } from "./write.ts";
+import { officeLocked, versionFiles, writeVersion } from "./write.ts";
 
 /**
  * 수정본(5.0 M1, spec/REQUIREMENT-5.0.md 5.1~5.2)의 Cloudflare 저장소. 규칙은 packages/core/src/work(로컬 사이트와 같이 쓴다, 6.0 VL)에 있고,
@@ -53,7 +53,7 @@ export function docStore(env: Bindings, ws: Workspace, doc: DocRef, user: User |
       }
     },
     // 오피스 편집 세션(6.0 VO, office.ts)이 살아 있으면 잠김
-    locked: async () => !!(await db.prepare("SELECT 1 FROM office_session WHERE document_id = ? AND expires_at > ?").bind(doc.id, Date.now()).first()),
+    locked: () => officeLocked(db, doc.id),
   };
 }
 

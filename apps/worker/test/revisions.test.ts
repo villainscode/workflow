@@ -162,7 +162,7 @@ describe("편집기 이미지 자산", () => {
     expect(await env.BLOBS.head(`ws/${await wsId()}/blobs/${asset.sha256}`)).not.toBeNull();
   });
 
-  it("TC-CF-47 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·변환·렌더링 횟수, owner 아니면 403", async () => {
+  it("TC-CF-47 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·변환·렌더링·오피스 세션 횟수, owner 아니면 403", async () => {
     const { noteUsage } = await import("../src/usage.ts");
     await save(0, [{ path: "guide.html", text: "사람" }]);
     await save(1, [{ path: "guide.html", text: "에이전트" }], {}, { "x-workflow-agent": "claude-code" });
@@ -171,8 +171,9 @@ describe("편집기 이미지 자산", () => {
     await noteUsage(env, await wsId(), "convert", "pptx");
     await noteUsage(env, await wsId(), "render", "notes/deck");
     await noteUsage(env, await wsId(), "render", "notes/deck#cover");
+    await noteUsage(env, await wsId(), "office", "notes/report");
     const u = await getJson(`${W}/usage?days=30`);
-    expect(u).toMatchObject({ days: 30, revisions: { total: 3, human: 1, agent: 1, restore: 1 }, conversions: 1, renders: 2 });
+    expect(u).toMatchObject({ days: 30, revisions: { total: 3, human: 1, agent: 1, restore: 1, office: 0 }, conversions: 1, renders: 2, officeSessions: 1 });
     expect(u.versions).toBeGreaterThanOrEqual(1);
     expect(u.storage.versionBytes).toBeGreaterThan(0);
     await addMember("team", "e@test.com", "editor");

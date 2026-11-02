@@ -284,4 +284,26 @@ describe("슬라이드 덱(5.0 M4)", () => {
     assert.match(await ok("doc_ops", { ref: "notes/mcp-struct", ops: [{ t: "svgAttr", eid: shape![1], name: "fill", value: "#336699" }] }), /수정본 \d+로 저장/);
     assert.match(await ok("doc_structure", { ref: "notes/mcp-struct" }), /<rect> fill=#336699/);
   });
+
+  test("TC-MCP-24 에이전트 시나리오(6.0 V5): 글꼴·색 토큰 바꾸기 → 그림 SVG를 섹션 안 자리에 고정해 넣기 → 고정 해제. 잘못된 스타일은 fix가 붙은 진단", async () => {
+    mkdirSync(join(ws.root, "out/pin"), { recursive: true });
+    writeFileSync(join(ws.root, "out/pin/index.html"), '<!doctype html><html><head><meta charset="utf-8"><style>:root{--accent:#2255aa}</style></head><body><main><section><h2>제목</h2><p>본문 문단</p></section></main></body></html>');
+    await ok("upload_document", { menu: "notes", title: "MCP 배치", slug: "mcp-pin", files: ["out/pin/index.html"] });
+    const st = await ok("doc_structure", { ref: "notes/mcp-pin" });
+    assert.match(st, /색 토큰: var\(--accent\)=#2255aa/);
+    const p = /(e\d+) <p>/.exec(st)![1];
+    assert.match(await ok("doc_ops", { ref: "notes/mcp-pin", ops: [{ t: "setStyle", eid: p, set: { "font-size": "1.25rem", color: "var(--accent)" } }] }), /수정본 1로 저장/);
+    assert.match(await ok("doc_structure", { ref: "notes/mcp-pin" }), /<p> style\{font-size:1.25rem;color:var\(--accent\)\}/);
+    await fail("doc_ops", { ref: "notes/mcp-pin", ops: [{ t: "setStyle", eid: p, set: { "box-shadow": "0 0 4px red" } }] }, /쓸 수 있는 연산/);
+    const asset = /^(asset:[0-9a-f]{64})/.exec(await ok("svg_put", { svg: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#ccc"/></svg>' }))![1];
+    const st2 = await ok("doc_structure", { ref: "notes/mcp-pin" });
+    const base = /(e\d+) <section>[^\n]*\(base\)/.exec(st2)?.[1];
+    assert.ok(base, st2);
+    assert.match(await ok("doc_ops", { ref: "notes/mcp-pin", ops: [{ t: "place", base, node: { kind: "image", src: asset, alt: "도형" }, box: { left: 50, top: 20, width: 20 }, minHeight: 200 }] }), /수정본 \d+로 저장/);
+    const st3 = await ok("doc_structure", { ref: "notes/mcp-pin" });
+    const pinned = /(e\d+) <img>[^\n]*\[고정\]/.exec(st3)?.[1];
+    assert.ok(pinned, st3);
+    assert.match(await ok("doc_ops", { ref: "notes/mcp-pin", ops: [{ t: "unpin", eid: pinned }] }), /수정본 \d+로 저장/);
+    assert.doesNotMatch(await ok("doc_structure", { ref: "notes/mcp-pin" }), /\[고정\]/);
+  });
 });

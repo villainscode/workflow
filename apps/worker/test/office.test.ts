@@ -83,6 +83,17 @@ describe("오피스 편집기(6.0 VO)", () => {
     expect(view.config.document.permissions.edit).toBe(false);
   });
 
+  it("TC-VO-13 잠금: 편집 세션 동안 텍스트 편집·새 버전 올리기·정식 확정도 409(오피스 저장이 그 사이 바뀐 대표 파일을 덮어쓰지 않게)", async () => {
+    await (await json("POST", `${D}/office/session`)).json<any>();
+    const doc = D.split("/").pop()!;
+    const text = await json("POST", `${D}/text-edit`, { baseVersion: "v0.0", changes: [] });
+    expect(text.status).toBe(409);
+    expect((await text.json<any>()).error).toContain("오피스 편집기에서 편집 중");
+    expect((await upload("team", { menu: "notes", doc }, [["report.docx", docx("다른 내용")]])).status).toBe(409);
+    expect((await json("POST", `${D}/release`, {})).status).toBe(409);
+    expect((await getJson(D)).currentVersion).toBe("v0.0");
+  });
+
   it("TC-VO-09 HTML 문서는 오피스 편집기로 열지 않는다(400), 준비 상태는 편집 서버 healthcheck", async () => {
     const up = await (await upload("team", { menu: "notes", title: "페이지" }, [["page.html", "<p>x</p>"]])).json<any>();
     expect((await json("POST", `${W}/docs/notes/${up.doc}/office/session`)).status).toBe(400);

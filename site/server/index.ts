@@ -125,6 +125,11 @@ app.get<{ Params: { menu: string; doc: string } }>("/api/docs/:menu/:doc", async
   };
 });
 
+/** 오피스 편집 세션(6.0 VO) 동안은 새 버전을 만들지 않는다. 그 사이 바뀐 대표 파일을 오피스 저장이 덮어쓰지 않게(Worker write.ts와 같다) */
+const needUnlocked = async (menu: string, doc: string) => {
+  if (await office.sessionLocked(local.officeSessions(menu, doc))) throw new WorkError(409, work.LOCKED);
+};
+
 /**
  * 업로드. multipart 필드: menu, doc?, parent?(새 하위 문서의 상위 문서), title?, slug?, version?, note?, entry?, paths(JSON 배열, 파일 순서와 같은 상대 경로)
  * 그리고 files(여러 개). 폴더째 올릴 때는 paths로 하위 경로를 넘긴다.
@@ -139,6 +144,7 @@ app.post("/api/upload", async (req) => {
   const paths: string[] = fields.paths ? JSON.parse(fields.paths) : [];
   const files: IncomingFile[] = raw.map((f, i) => ({ path: paths[i] || f.name, data: f.data }));
 
+  if (fields.doc) await needUnlocked(fields.menu, fields.doc);
   const result = upload(DOCS_ROOT, {
     menu: fields.menu, doc: fields.doc || undefined, parent: fields.parent || undefined, title: fields.title, slug: fields.slug,
     version: fields.version, note: fields.note, entry: fields.entry || undefined, origin: fields.origin || undefined, files,
@@ -150,6 +156,7 @@ app.post("/api/upload", async (req) => {
 app.post<{ Params: { menu: string; doc: string }; Body: { baseVersion: string; content: string; note?: string; version?: string } }>(
   "/api/docs/:menu/:doc/edit",
   async (req) => {
+    await needUnlocked(req.params.menu, req.params.doc);
     const result = saveEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
     reindex("edit", docEvent(req, result));
     return result;
@@ -201,12 +208,14 @@ app.post<DocParams & { Querystring: { to?: string }; Body: { baseVersion: string
   return reply.type(mimeOf(r.entry)).send(Buffer.from(r.data));
 });
 app.post<DocParams & { Body: { baseVersion: string; changes: Change[]; note?: string } }>("/api/docs/:menu/:doc/text-edit", async (req) => {
+  await needUnlocked(req.params.menu, req.params.doc);
   const result = saveTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
   reindex("text-edit", docEvent(req, result, (req.body.changes ?? []).map((c) => c.id)));
   return result;
 });
 
 app.post<DocParams & { Body: { note?: string } | undefined }>("/api/docs/:menu/:doc/release", async (req) => {
+  await needUnlocked(req.params.menu, req.params.doc);
   const result = release(DOCS_ROOT, req.params.menu, req.params.doc, req.body?.note);
   reindex("release", docEvent(req, result));
   return result;
