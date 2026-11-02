@@ -14,6 +14,9 @@ import { Login } from "./components/account/Login.tsx";
 import { NoWorkspace } from "./components/account/NoWorkspace.tsx";
 import "./styles.css";
 
+// Cloudflare 배포를 http로 열면 https로 옮긴다(정적 화면은 Worker를 거치지 않는다, apps/worker/src/https.ts)
+if (CLOUD && location.protocol === "http:" && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) location.replace(`https://${location.host}${location.pathname}${location.search}${location.hash}`);
+
 // 개발 모드에서만: 화면 요소를 가리키고 ⌘C로 복사하면 컴포넌트·파일 위치를 코딩 에이전트에 붙여 넣을 수 있다 (react-grab.com)
 if (import.meta.env.DEV) void import("react-grab");
 
