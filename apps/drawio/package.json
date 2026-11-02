@@ -1,0 +1,17 @@
+{
+  "name": "@workflow/drawio",
+  "private": true,
+  "type": "module",
+  "description": "draw.io 편집기 자체 호스팅(6.0 V4, D-57): jgraph/drawio 정적 웹앱(Apache-2.0)을 앱과 다른 출처의 정적 자산 Worker로 준다",
+  "scripts": {
+    "fetch": "node scripts/fetch.mjs",
+    "serve": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "deploy:staging": "node scripts/fetch.mjs --env staging && wrangler deploy --env staging",
+    "deploy:production": "node scripts/fetch.mjs --env production && wrangler deploy --env production"
+  },
+  "devDependencies": {
+    "fflate": "^0.8.3",
+    "wrangler": "^4.154.0"
+  }
+}

@@ -59,6 +59,28 @@ npm run dev                       # 화면 빌드 → 로컬 D1 마이그레이�
 
 이후에는 GitHub Actions(`.github/workflows/workflow-app.yml`)가 develop 푸시 → staging, main 푸시 → production으로 마이그레이션·배포한다. 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID`를 넣고, 저장소 Variables에 `DEPLOY_ENABLED=true`를 넣어야 배포 작업이 돈다(그 전에는 테스트만).
 
+## draw.io 편집기 (`apps/drawio`, 6.0 V4)
+
+HTML·슬라이드의 「다이어그램 그리기」·draw.io SVG 고치기는 앱과 다른 출처에 올린 draw.io 정적 웹앱(Apache-2.0)을 iframe으로 연다(D-57 자체 호스팅). 문서 내용은 postMessage로만 오가고 draw.io 서버로 나가지 않는다(draw.io 응답 CSP `connect-src 'self'`). `DRAWIO_ORIGIN`이 비어 있으면 화면은 draw.io 버튼을 숨긴다(svgedit로 고치는 일반 SVG는 그대로 된다).
+
+**배포 전 사용자 확인 필요**: 아래는 실제 Cloudflare 계정에 새 Worker와 도메인을 만든다.
+
+| 환경 | 만드는 것 | 앱에 넣을 값 |
+|---|---|---|
+| staging | Worker `workflow-drawio-staging`(workers.dev 주소, 정적 자산만, 약 3,065개 파일·114MB) | `apps/worker/wrangler.jsonc` env.staging `vars.DRAWIO_ORIGIN = "https://workflow-drawio-staging.<계정>.workers.dev"` |
+| production | Worker `workflow-drawio` + 사용자 지정 도메인 `draw.simplite.net`(배포할 때 자동 연결) | env.production `vars.DRAWIO_ORIGIN = "https://draw.simplite.net"` |
+
+```bash
+cd apps/drawio
+npm run deploy:staging            # draw.war v32.6.1 받기(sha256 확인) → 한도 검사 → _headers(frame-ancestors: staging 앱) → wrangler deploy
+npm run deploy:production         # frame-ancestors: https://workflow.simplite.net
+```
+
+또는 GitHub Actions의 `deploy-drawio`(workflow_dispatch, 대상 선택)를 쓴다. 저장소 Variables에 `DRAWIO_DEPLOY_ENABLED=true`를 넣어야 돈다. 그다음 앱 `DRAWIO_ORIGIN`을 넣고 앱을 다시 배포한다.
+
+- 로컬: `cd apps/drawio && npm run fetch && npm run serve`(http://127.0.0.1:8010) → 사이트를 `DRAWIO_ORIGIN=http://127.0.0.1:8010 npm run dev`로 켠다. Cloudflare 로컬(`wrangler dev`)은 `--var DRAWIO_ORIGIN:http://127.0.0.1:8010`.
+- draw.io 버전을 올릴 때: `scripts/fetch.mjs`의 `VERSION`·`SHA256`을 바꾸고 `npm run fetch && npm run check`(실제 draw.io embed 왕복·바깥 요청 0건)를 돌린다. 가장 큰 파일이 25MiB(Workers 정적 자산 파일당 한도)를 넘으면 `fetch`가 멈춘다.
+
 ## 백업과 복구
 
 - **D1**: Time Travel로 지난 30일 중 아무 시점으로 되돌린다. `npx wrangler d1 time-travel info DB --env production`으로 시점을 확인하고 `npx wrangler d1 time-travel restore DB --timestamp <ISO 시각> --env production`.

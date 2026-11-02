@@ -24,6 +24,9 @@ let vite: ChildProcess;
 let WEB = "";
 let browser: any;
 let page: any;
+// draw.io 대역(6.0 V4): 앱과 다른 출처(빈 포트)에서 embed 프로토콜만 흉내 내는 페이지
+let drawio: ReturnType<typeof createServer>;
+let DRAWIO = "";
 const meta = (menu: string, doc: string) => parse(readText(join(ws.docs, menu, doc, "meta.yaml")));
 
 /** 페이지 이동. SSE가 계속 열려 있어 networkidle 대신 domcontentloaded까지만 기다린다 */
@@ -55,7 +58,10 @@ async function clickConfirm(label?: string) {
 
 describe("화면", { skip }, () => {
   before(async () => {
-    srv = await startServer(ws);
+    const drawPort = await freePort();
+    drawio = createServer((_req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(readFileSync(join(SITE, "test/fixtures/fake-drawio.html"))); }).listen(drawPort, "127.0.0.1");
+    DRAWIO = `http://127.0.0.1:${drawPort}`;
+    srv = await startServer(ws, { DRAWIO_ORIGIN: DRAWIO });
     const webPort = await freePort();
     vite = spawn(process.execPath, [join(SITE, "../node_modules/vite/bin/vite.js")], {
       cwd: SITE, env: { ...process.env, PORT: String(srv.port), WEB_PORT: String(webPort) }, stdio: "ignore",
@@ -75,6 +81,7 @@ describe("화면", { skip }, () => {
     await browser?.close();
     vite?.kill("SIGTERM");
     await srv?.stop();
+    drawio?.close();
     ws.cleanup();
   });
 
@@ -775,6 +782,137 @@ describe("화면", { skip }, () => {
     const src = /<img src="(assets\/[0-9a-f]{16}\.png)" alt="남색" data-pin="" style="position:absolute;/.exec(saved)?.[1];
     assert.ok(src, saved);
     assert.ok(existsSync(join(ws.docs, "notes/local-pin/v0.1", src!)), "그림이 버전 폴더에 복사된다");
+  });
+
+  /** 구조 편집을 열고 사본이 준비될 때까지(편집 CSS가 들어간 뒤) 기다린다 */
+  const FRAME = 'iframe[title="구조 편집"]';
+  async function openStruct(path: string, title: string, sel: string) {
+    await open(path, title);
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+  }
+  const clickIn = (sel: string) => page.evaluate((f: string, s: string) => {
+    document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector<HTMLElement>(s)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, FRAME, sel);
+  const revText = async (menu: string, doc: string) => {
+    const w = await call(srv.url, "GET", `/api/docs/${menu}/${doc}/work`);
+    const entry = w.body.files.find((f: { path: string }) => f.path === w.body.entry);
+    return { html: await (await fetch(srv.url + entry.url)).text(), files: w.body.files as { path: string; url: string }[], rev: w.body.rev as number };
+  };
+
+  test("TC-VE-29 로컬 SVG(6.0 V4): SVG 파일을 그림처럼 넣으면 소독된 파일 참조(assets/….svg), 「SVG 고치기」는 svgedit 캔버스로 열어 도형 색·위치를 바꿔 새 SVG로 저장", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 SVG", slug: "local-svg" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 SVG</h1><p>도식 자리</p></main></body></html>"]]);
+    const file = join(ws.root, "box.svg");
+    writeFileSync(file, '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect id="r1" x="20" y="20" width="100" height="50" fill="#cccccc" onclick="alert(1)"/><script>alert(2)</script></svg>');
+    await openStruct("/sdlc/notes/local-svg", "로컬 SVG", "main > p[data-eid]");
+    await clickIn("main > p");
+    await (await page.waitForSelector('input[aria-label="그림 넣기"]')).uploadFile(file);
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    const r1 = await revText("notes", "local-svg");
+    const src = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="box">/.exec(r1.html)?.[1];
+    assert.ok(src, r1.html);
+    const stored = await (await fetch(srv.url + r1.files.find((f) => f.path === src)!.url)).text();
+    assert.doesNotMatch(stored, /script|onclick/);
+    // svgedit로 고치기
+    await page.waitForFunction((f: string) => !!document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelector("main img[data-eid]"), { timeout: 15_000 }, FRAME);
+    await clickIn("main img");
+    await clickButton("SVG 고치기");
+    await page.waitForFunction(() => !!(window as any).svgCanvas && !!document.querySelector("#svgedit-host #svgcontent #r1"), { timeout: 20_000 });
+    await page.evaluate(() => {
+      const c = (window as any).svgCanvas;
+      c.clearSelection();
+      c.addToSelection([document.querySelector("#svgcontent #r1")]);
+      c.setColor("fill", "#ff0000");
+      c.moveSelectedElements(30, 10);
+    });
+    await clickButton("저장");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    const r2 = await revText("notes", "local-svg");
+    const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="box">/.exec(r2.html)?.[1];
+    assert.ok(src2 && src2 !== src, r2.html);
+    const edited = await (await fetch(srv.url + r2.files.find((f) => f.path === src2)!.url)).text();
+    assert.match(edited, /viewBox="0 0 200 100"/);
+    assert.match(edited, /<rect[^>]*fill="#ff0000"/);
+    assert.match(edited, /<rect[^>]*x="50"/);
+    assert.doesNotMatch(edited, /Layer 1|class="layer"/);
+    assert.equal(await page.$("dialog[open]"), null);
+  });
+
+  test("TC-VE-30 로컬 draw.io(6.0 V4, 대역 페이지): 「다이어그램」으로 새로 그려 저장하면 draw.io SVG(content 보존)가 그림으로 들어가고, 「SVG 고치기」는 draw.io로 다시 열어 이어서 고친다. 다른 출처 메시지는 무시", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 다이어그램", slug: "local-drawio" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 다이어그램</h1><p>여기 뒤에</p></main></body></html>"]]);
+    await openStruct("/sdlc/notes/local-drawio", "로컬 다이어그램", "main > p[data-eid]");
+    await clickIn("main > p");
+    await clickButton("다이어그램");
+    const frameOf = async () => {
+      await page.waitForSelector('iframe[title="draw.io 편집기"]', { timeout: 10_000 });
+      for (let i = 0; i < 100; i++) {
+        const f = page.frames().find((x: any) => x.url().startsWith(DRAWIO));
+        if (f && await f.evaluate(() => typeof (window as any).addBox === "function" && !!(window as any).lastOrigin).catch(() => false)) return f;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error("draw.io 대역이 열리지 않았습니다");
+    };
+    let f = await frameOf();
+    // 같은 페이지에서 보낸 위조 save는 걸러진다(출처·보낸 창 확인)
+    await page.evaluate(() => window.postMessage(JSON.stringify({ event: "save", exit: true }), "*"));
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(await page.$('iframe[title="draw.io 편집기"]'), "위조 메시지로 닫히면 안 된다");
+    await f.evaluate(() => (window as any).addBox("첫 상자"));
+    await f.click("#save");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    await page.waitForFunction(() => !document.querySelector('iframe[title="draw.io 편집기"]'), { timeout: 5000 });
+    const r1 = await revText("notes", "local-drawio");
+    const src = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="다이어그램">/.exec(r1.html)?.[1];
+    assert.ok(src, r1.html);
+    assert.match(await (await fetch(srv.url + r1.files.find((x) => x.path === src)!.url)).text(), /^<svg[^>]* content="\[&quot;첫 상자&quot;\]"/);
+    // 다시 열어 이어서 고치기
+    await page.waitForFunction((fr: string) => !!document.querySelector<HTMLIFrameElement>(fr)?.contentDocument?.querySelector("main img[data-eid]"), { timeout: 15_000 }, FRAME);
+    await clickIn("main img");
+    await clickButton("SVG 고치기");
+    f = await frameOf();
+    await f.waitForFunction(() => document.getElementById("state")!.textContent === "첫 상자", { timeout: 5000 });
+    await f.evaluate(() => (window as any).addBox("둘째 상자"));
+    await f.click("#save");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    const r2 = await revText("notes", "local-drawio");
+    const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="다이어그램">/.exec(r2.html)?.[1];
+    assert.ok(src2 && src2 !== src);
+    assert.match(await (await fetch(srv.url + r2.files.find((x) => x.path === src2)!.url)).text(), /둘째 상자/);
+  });
+
+  test("TC-VE-31 로컬 인라인 SVG(6.0 V4): 문서의 SVG 도형을 누르면 속성 패널에서 채움 색·글자를 바꾼다(svgAttr, 수정본 하나씩)", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 인라인", slug: "local-inline-svg" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 인라인</h1><p>앞</p></main></body></html>"]]);
+    const s = await call(srv.url, "GET", "/api/docs/notes/local-inline-svg/work/structure");
+    const p = s.body.blocks.find((b: { tag: string }) => b.tag === "p");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80" viewBox="0 0 200 80"><rect width="200" height="40" fill="#cccccc"/><text x="8" y="70">원래 글자</text></svg>';
+    assert.equal((await call(srv.url, "POST", "/api/docs/notes/local-inline-svg/revisions", { baseRev: 0, ops: [{ t: "insert", ref: p.eid, where: "after", node: { kind: "svg", svg } }] })).status, 200);
+    await openStruct("/sdlc/notes/local-inline-svg", "로컬 인라인", "svg[data-eid] text[data-shape]");
+    await clickIn("svg text");
+    await page.waitForSelector('input[aria-label="도형 글자"]', { timeout: 5000 });
+    await page.click('input[aria-label="도형 글자"]', { count: 3 });
+    await page.keyboard.type("새 글자");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelector("svg rect[data-shape]"), { timeout: 15_000 }, FRAME);
+    await clickIn("svg rect");
+    await page.waitForSelector('input[aria-label="도형 채움 색"]', { timeout: 5000 });
+    await page.evaluate(() => {
+      const i = document.querySelector<HTMLInputElement>('input[aria-label="도형 채움 색"]')!;
+      i.value = "#3366cc";
+      i.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 3"), { timeout: 15_000 });
+    const { html } = await revText("notes", "local-inline-svg");
+    assert.match(html, /<rect width="200" height="40" fill="#3366cc"\/>/);
+    assert.match(html, />새 글자<\/text>/);
+    const revs = await call(srv.url, "GET", "/api/docs/notes/local-inline-svg/revisions");
+    assert.deepEqual(revs.body.revisions.slice(0, 2).map((r: { summary: string }) => r.summary), ["SVG 도형", "SVG 도형"]);
   });
 
   test("TC-UI-36 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 편집(6.0 VL)에서 글자를 두 번 눌러 고치고 Esc → 수정본 → 버전으로 저장", async () => {

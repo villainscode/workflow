@@ -66,7 +66,8 @@ async function shrink(file: File): Promise<File> {
   return new File([blob], file.name, { type: blob.type });
 }
 
-export async function uploadAsset(file: File): Promise<{ asset: string; width: number; height: number }> {
+/** SVG는 서버가 소독해 저장하고 지운 것(removed)·draw.io 여부를 돌려준다(6.0 V4) */
+export async function uploadAsset(file: File): Promise<{ asset: string; width: number; height: number; mime?: string; removed?: string[]; drawio?: boolean }> {
   const form = new FormData();
   form.append("file", await shrink(file));
   return send(await fetch(`${API}/assets`, { method: "POST", body: form }));

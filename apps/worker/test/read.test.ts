@@ -116,6 +116,18 @@ describe("사용자 콘텐츠(P2, 5.5)", () => {
     expect((await withOrigin("https://evil.example")).headers.get("access-control-allow-origin")).toBeNull();
   });
 
+  it("TC-CF-50 콘텐츠 응답은 늘 Vary: Origin, 다시 확인(304)에도 앱 출처 CORS를 붙인다(<img>로 먼저 받아 캐시된 파일을 편집기가 fetch로 다시 읽을 때)", async () => {
+    await seed();
+    const split = { ...env, FILES_ORIGIN: "https://files.test" };
+    const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
+    const d = await (await worker.fetch(new Request("http://app.test/api/w/team/docs/process/guide", { headers: { cookie: sessionCookie() } }), split, ctx)).json<Detail>();
+    const fileUrl = d.versions[1].files[0].url;
+    const first = await worker.fetch(new Request(fileUrl), split, ctx);
+    expect(first.headers.get("vary")).toBe("Origin");
+    const again = await worker.fetch(new Request(fileUrl, { headers: { origin: env.APP_ORIGIN, "if-none-match": first.headers.get("etag")! } }), split, ctx);
+    expect([again.status, again.headers.get("access-control-allow-origin"), again.headers.get("vary")]).toEqual([304, env.APP_ORIGIN, "Origin"]);
+  });
+
   it("TC-CF-08 같은 내용 파일은 R2에 한 번만(내용 주소 저장)", async () => {
     await seed();
     const ws = await env.DB.prepare("SELECT id FROM workspace WHERE slug = 'team'").first<{ id: number }>();

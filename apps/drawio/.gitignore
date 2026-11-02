@@ -1,0 +1,3 @@
+# fetch.mjs가 draw.war를 받아 푸는 곳(119MB, git에 넣지 않는다)
+public/
+.cache/

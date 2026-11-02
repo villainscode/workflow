@@ -126,7 +126,7 @@ describe("영구 삭제와 수정본", () => {
 });
 
 describe("편집기 이미지 자산", () => {
-  it("TC-ED-08 PNG를 올리면 asset:<sha>와 가로·세로, 같은 이미지는 한 번만, 서명 주소로 받는다. SVG·이미지가 아닌 것은 400", async () => {
+  it("TC-ED-08 PNG를 올리면 asset:<sha>와 가로·세로, 같은 이미지는 한 번만, 서명 주소로 받는다. SVG가 아닌 글·이미지가 아닌 것은 400(SVG는 6.0 V4부터 소독해 받는다, TC-VE-27)", async () => {
     const up = async (data: Uint8Array | string, name: string, type: string) => {
       const form = new FormData();
       form.append("file", new File([data], name, { type }));
@@ -136,7 +136,7 @@ describe("편집기 이미지 자산", () => {
     expect(a).toMatchObject({ mime: "image/png", width: 1, height: 1 });
     expect(a.asset).toBe(`asset:${a.sha256}`);
     expect((await (await up(PNG, "b.png", "image/png")).json<any>()).sha256).toBe(a.sha256);
-    expect((await up("<svg/>", "x.svg", "image/svg+xml")).status).toBe(400);
+    expect((await up("<html/>", "x.svg", "image/svg+xml")).status).toBe(400);
     expect((await up("not image", "x.png", "image/png")).status).toBe(400);
     const u = await getJson(`${W}/assets/${a.sha256}/url`);
     const img = await call(pathOf(u.url));

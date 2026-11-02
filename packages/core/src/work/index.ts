@@ -1,4 +1,6 @@
 import { mimeOf } from "../mime.ts";
+import { imageSize } from "../image.ts";
+import { sanitizeSvg, svgSize, SvgError } from "../svg.ts";
 import { safeRelPath } from "../upload.ts";
 import { applyOps as applyHtmlOps, docTheme, markEids, outline, StructEditError, type HtmlOp } from "../structedit/html.ts";
 import { applyOoxmlOps, MAX_OPS, ooxmlStructure, type OoxmlKind, type OoxmlOp } from "../structedit/ooxml.ts";
@@ -185,7 +187,30 @@ export async function structEditView(store: DocStore, baseHref: (folder: string,
   return { rev: st.rev, body: markEids(dec.decode(data), await baseHref(st.fromRevision ? `r${st.rev}` : st.baseVersion, dir)) };
 }
 
-export const ASSET_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+export const ASSET_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg" };
+export const MAX_ASSET = 10 * 1024 * 1024;
+
+/**
+ * 올릴 그림 자산 검사(Worker·로컬 공통). 래스터는 머리에서 크기를 읽고, SVG(6.0 V4)는 저장 전에 소독한 결과를 저장한다(원본은 남기지 않는다).
+ * removed는 소독에서 지운 것(화면·MCP 진단), drawio는 draw.io 편집 정보가 있는지.
+ */
+export function prepareAsset(mime: string, data: Uint8Array): { mime: string; data: Uint8Array; width: number; height: number; removed?: string[]; drawio?: boolean } {
+  if (!ASSET_EXT[mime]) throw new WorkError(400, "PNG·JPEG·WebP·GIF·SVG만 올릴 수 있습니다");
+  if (data.byteLength > MAX_ASSET) throw new WorkError(413, "10MB 이하만 올릴 수 있습니다");
+  if (mime === "image/svg+xml") {
+    try {
+      const r = sanitizeSvg(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(data));
+      return { mime, data: enc.encode(r.svg), ...svgSize(r.svg), removed: r.removed, drawio: r.drawio };
+    } catch (e) {
+      if (e instanceof SvgError) throw new WorkError(e.status, e.message);
+      if (e instanceof TypeError) throw new WorkError(400, "SVG는 UTF-8 글이어야 합니다");
+      throw e;
+    }
+  }
+  const size = imageSize(data);
+  if (!size) throw new WorkError(400, "이미지 파일을 읽을 수 없습니다");
+  return { mime, data, ...size };
+}
 
 async function needAsset(assets: AssetLookup, ref: string) {
   const sha = /^asset:([0-9a-f]{64})$/.exec(ref)?.[1];
@@ -217,8 +242,16 @@ export async function applyStructOps(store: DocStore, assets: AssetLookup,
         return rel;
       };
       const ops: HtmlOp[] = [];
+      // 인라인 SVG: asset:<sha>(svg 자산)를 그 글로 바꾼다. 글을 바로 준 경우도 html.ts가 다시 소독한다
+      const svgText = async (n: { svg?: string; src?: string }) => {
+        if (typeof n.svg === "string") return n.svg;
+        const a = await needAsset(assets, n.src ?? "");
+        if (a.mime !== "image/svg+xml") throw new WorkError(400, "인라인으로 넣을 수 있는 것은 SVG 자산뿐입니다");
+        return dec.decode(await store.getBlob(a.sha256));
+      };
       for (const op of input.ops as HtmlOp[]) {
-        if (op.t === "setAttr" && op.name === "src") ops.push({ ...op, value: await local(op.value) });
+        if ((op.t === "insert" || op.t === "place") && op.node?.kind === "svg") ops.push({ ...op, node: { kind: "svg", svg: await svgText(op.node as { svg?: string; src?: string }) } } as HtmlOp);
+        else if (op.t === "setAttr" && op.name === "src") ops.push({ ...op, value: await local(op.value) });
         else if (op.t === "insert" && op.node.kind === "image") ops.push({ ...op, node: { ...op.node, src: await local(op.node.src) } });
         else if (op.t === "place" && op.node?.kind === "image") ops.push({ ...op, node: { ...op.node, src: await local(op.node.src) } });
         else ops.push(op);
@@ -229,6 +262,7 @@ export async function applyStructOps(store: DocStore, assets: AssetLookup,
       for (const op of input.ops as StructOp[]) {
         if (op.t === "replaceImage") {
           const a = await needAsset(assets, op.asset);
+          if (a.mime === "image/svg+xml") throw new WorkError(400, "오피스 문서 그림은 PNG·JPEG·WebP·GIF로만 바꿀 수 있습니다(SVG는 HTML·슬라이드에 넣으세요)");
           ops.push({ t: "replaceImage", image: op.image, mime: a.mime, data: await store.getBlob(a.sha256) });
         } else ops.push(op as OoxmlOp);
       }
@@ -249,7 +283,7 @@ const OP_NAME: Record<string, string> = {
   setText: "글자", setAttr: "속성", setWidth: "너비", insert: "넣기", remove: "지우기", move: "옮기기",
   tableRow: "표 행", tableCol: "표 열", tableCols: "표 열 너비", replaceImage: "그림 교체", colWidth: "열 너비",
   setStyle: "서식", tableRowHeight: "표 행 높이", duplicate: "복제",
-  toPinned: "자유 배치", unpin: "흐름으로 되돌림", place: "자유 배치 넣기",
+  toPinned: "자유 배치", unpin: "흐름으로 되돌림", place: "자유 배치 넣기", svgAttr: "SVG 도형",
 };
 /** 메모가 없으면 연산 종류로 만든다. 예: "표 행 2, 그림 교체 1" */
 function summarize(ops: StructOp[]) {

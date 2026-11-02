@@ -23,6 +23,8 @@ export interface Bindings {
   GOOGLE_CLIENT_SECRET: string;
   /** 초대 없이 로그인하고 워크스페이스를 만들 수 있는 이메일(쉼표 구분) */
   SUPERADMIN_EMAILS: string;
+  /** draw.io 편집기 출처(6.0 V4, 자체 호스팅 apps/drawio, 예: https://draw.simplite.net). 비면 draw.io 버튼을 숨긴다 */
+  DRAWIO_ORIGIN?: string;
   /** "1"이면 개발용 로그인(POST /api/auth/dev-login)을 연다. 로컬·테스트에서만 */
   DEV_LOGIN?: string;
 }

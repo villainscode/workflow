@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>가짜 draw.io(embed 프로토콜 시험용)</title>
+<body>
+<p id="state">빈 그림</p>
+<button id="save" type="button">Save</button>
+<button id="exit" type="button">Exit</button>
+<script>
+// 화면 테스트용 draw.io 대역(6.0 V4). draw.io embed 프로토콜(proto=json)만 흉내 낸다: init → load → save → export(xmlsvg, 응답 format은 "svg") → exit.
+// 편집 정보는 실제 draw.io처럼 루트 <svg content="…">에 둔다(여기서는 상자 이름 목록 JSON).
+let boxes = [];
+const send = (m) => parent.postMessage(JSON.stringify(m), "*");
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const render = () => { document.getElementById("state").textContent = boxes.join(",") || "빈 그림"; };
+window.addBox = (label) => { boxes.push(label); render(); };
+window.addEventListener("message", (e) => {
+  if (e.source !== parent) return;
+  const m = JSON.parse(e.data);
+  window.lastOrigin = e.origin;
+  if (m.action === "load") {
+    const c = /content="([^"]*)"/.exec(m.xml || "");
+    boxes = c ? JSON.parse(c[1].replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&amp;/g, "&")) : [];
+    render();
+    send({ event: "load" });
+  } else if (m.action === "export" && m.format === "xmlsvg") {
+    const h = 40 * Math.max(1, boxes.length);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="${h}" viewBox="0 0 200 ${h}" content="${esc(JSON.stringify(boxes))}">` +
+      boxes.map((b, i) => `<rect x="4" y="${i * 40 + 4}" width="192" height="32" fill="#dae8fc" stroke="#6c8ebf"/><text x="12" y="${i * 40 + 26}">${esc(b)}</text>`).join("") + "</svg>";
+    const bytes = new TextEncoder().encode(svg);
+    send({ event: "export", format: "svg", data: "data:image/svg+xml;base64," + btoa(String.fromCharCode(...bytes)) });
+  }
+});
+document.getElementById("save").onclick = () => send({ event: "save", xml: "<mxfile/>", exit: true });
+document.getElementById("exit").onclick = () => send({ event: "exit" });
+send({ event: "init" });
+</script>

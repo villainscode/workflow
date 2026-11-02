@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BringToFront, Columns3, CopyPlus, Heading2, ImagePlus, ImageUp, Pilcrow, PinOff, Rows3, SendToBack, Smartphone, SquareDashedText, Table2, Trash2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BringToFront, Columns3, CopyPlus, Heading2, ImagePlus, ImageUp, Network, PenTool, Pilcrow, PinOff, Rows3, SendToBack, Smartphone, SquareDashedText, Table2, Trash2 } from "lucide-react";
 import { editViewUrl, uploadAsset, type Block, type DocTheme } from "../../lib/structedit.ts";
 import { injectStyle } from "../../lib/textedit.ts";
 import { useConfirm } from "../../components/confirm/ConfirmProvider.tsx";
@@ -10,6 +10,10 @@ import { HtmlStylePanel, GENERIC, fontValue } from "./HtmlStylePanel.tsx";
 import { HtmlHandles } from "./HtmlHandles.tsx";
 import { minHeightFor, pinBoxOf } from "./pinBox.ts";
 import { inlineText } from "./inlineText.ts";
+import { DrawioEditor } from "../../editor/DrawioEditor.tsx";
+import { SvgEditor } from "../../editor/SvgEditor.tsx";
+import { fetchSvg, IMAGE_ACCEPT, isDrawioSvg, uploadSvg } from "../../editor/svgFile.ts";
+import { useEditorConfig } from "../../lib/editorConfig.ts";
 import type { StructCtx } from "./StructEditor.tsx";
 
 /**
@@ -22,7 +26,13 @@ import type { StructCtx } from "./StructEditor.tsx";
  * 6.0 V3 자유 배치: 옮기기 손잡이로 끌면 고정 위치(HtmlHandles), 고정 요소는 방향키로 1px·Shift 8px(잠깐 멈추면 저장), 앞뒤 순서·흐름으로 되돌리기.
  * 그림 파일을 끌어 놓거나 붙여 넣으면 놓은 자리(붙여 넣기는 고른 요소 자리)에 고정 그림으로, 「글상자 넣기」는 보이는 자리에 고정 글상자로 넣는다.
  * 좁은 화면 미리보기(640px)에서는 고정 요소가 흐름으로 돌아간 모습을 본다.
+ * 6.0 V4 SVG: SVG 파일도 그림처럼 넣는다(파일 참조, 서버가 소독). 「다이어그램 그리기」는 draw.io(자체 호스팅)로 그려 넣고,
+ * SVG 그림은 draw.io SVG면 draw.io로, 아니면 svgedit 캔버스로 고쳐 새 자산으로 바꾼다. 인라인 SVG는 도형을 눌러 채움·선·글자를 고친다(svgAttr).
  */
+
+const IMAGE_RE = /^image\/(png|jpeg|webp|gif|svg\+xml)$/;
+/** 열려 있는 SVG 편집기 */
+type SvgEdit = { kind: "drawio" | "svgedit"; svg?: string; title: string; save: (svg: string) => Promise<void> };
 
 const SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "28px", "32px"];
 const NO_THEME: DocTheme = { fonts: [], tokens: [], dark: false };
@@ -72,6 +82,10 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   // 좁은 화면(640px) 미리보기, 처음 고정 위치로 바꿨을 때 한 줄 안내
   const [narrow, setNarrow] = useState(false);
   const [pinNote, setPinNote] = useState(false);
+  // SVG 편집기(draw.io·svgedit)와 고른 인라인 SVG 도형
+  const [svgEdit, setSvgEdit] = useState<SvgEdit | null>(null);
+  const [shape, setShape] = useState<string | null>(null);
+  const { drawio } = useEditorConfig();
   const blocks = new Map((s.blocks ?? []).map((b) => [b.eid, b]));
   const runRef = useRef(run);
   runRef.current = run;
@@ -145,7 +159,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
 
   /** 그림 파일 → 자산 → 놓은 자리(at)가 있으면 그 섹션에 고정 그림, 없으면 고른 요소(또는 마지막 블록) 뒤에 넣기 */
   const insertImage = useCallback(async (file: File, ref: string | null, at?: { x: number; y: number; target: Element | null }) => {
-    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { setMessage("PNG·JPEG·WebP·GIF만 넣을 수 있습니다"); return; }
+    if (!IMAGE_RE.test(file.type)) { setMessage("PNG·JPEG·WebP·GIF·SVG만 넣을 수 있습니다"); return; }
     const doc = d();
     const base = at && doc ? placeBase(doc, at.target) : null;
     if (base && at) {
@@ -220,6 +234,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       const t = e.target as Element;
       if (t.closest("a, button, summary, label, form")) e.preventDefault();
       if (t.closest('[contenteditable="true"]')) return;
+      setShape(t.closest("[data-shape]")?.getAttribute("data-shape") ?? null);
       pick(t.closest("[data-eid]"));
     }, true);
     doc.addEventListener("scroll", bump, { passive: true });
@@ -339,6 +354,28 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     const c = base.getBoundingClientRect();
     void place(base, { x: c.left + base.clientWidth * 0.2, y: Math.max(c.top + 16, 16) }, { kind: "textbox", text: "새 글상자" });
   };
+  /** draw.io로 새 다이어그램: 저장하면 SVG 자산으로 올려 고른 요소 뒤(없으면 끝 블록 뒤)에 그림으로 넣는다 */
+  const drawNew = () => setSvgEdit({ kind: "drawio", title: "새 다이어그램", save: async (svg) => {
+    const a = await uploadSvg(svg, "diagram.svg");
+    const target = anchorRef.current ?? [...(d()?.body.querySelectorAll(":scope > [data-eid], :scope > * > [data-eid]") ?? [])].pop()?.getAttribute("data-eid");
+    if (!target) throw new Error("다이어그램을 넣을 자리를 먼저 고르세요");
+    if (!await runRef.current([{ t: "insert", ref: target, where: "after", node: { kind: "image", src: a.asset, alt: "다이어그램" } }], "다이어그램 넣기")) throw new Error("넣지 못했습니다");
+  } });
+  /** SVG 그림 고치기: draw.io SVG면 draw.io, 아니면 svgedit. 저장하면 새 자산으로 바꾼다 */
+  const editSvgImage = async (eid: string, url: string) => {
+    try {
+      const svg = await fetchSvg(url);
+      const save = async (out: string) => {
+        const a = await uploadSvg(out);
+        if (!await runRef.current([{ t: "setAttr", eid, name: "src", value: a.asset }], "SVG 고침")) throw new Error("저장하지 못했습니다");
+        if (a.removed?.length) setMessage(`SVG에서 허용하지 않는 것을 지웠습니다: ${a.removed.join(", ")}`);
+      };
+      if (isDrawioSvg(svg)) {
+        if (!drawio) { setMessage("draw.io로 만든 SVG는 draw.io 편집기로 고칩니다. 이 사이트에는 draw.io 편집기가 설정되지 않았습니다(DRAWIO_ORIGIN)"); return; }
+        setSvgEdit({ kind: "drawio", svg, title: "다이어그램 고치기", save });
+      } else setSvgEdit({ kind: "svgedit", svg, title: "SVG 고치기", save });
+    } catch (e) { setMessage(String((e as Error).message)); }
+  };
   const fonts = [...theme.fonts, ...GENERIC].map((f) => ({ label: f, value: fontValue(f) }));
   const palette = theme.tokens.map((t) => ({ value: `var(${t.name})`, label: t.name, swatch: t.value }));
   const ts = editing?.api.read();
@@ -354,6 +391,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
         {!editing && (
           <div className="flex flex-wrap items-center gap-1 border-b border-line bg-surface px-2 py-1">
             <IconButton icon={SquareDashedText} label="글상자 넣기 (보이는 자리에 고정 위치)" text="글상자" size={16} disabled={busy || narrow} onClick={addTextbox} />
+            {drawio && <IconButton icon={Network} label="다이어그램 그리기 (draw.io, 고른 요소 뒤에 SVG로 넣기)" text="다이어그램" size={16} disabled={busy} onClick={drawNew} />}
             <IconButton icon={Smartphone} label={narrow ? "넓은 화면으로 돌아가기" : "좁은 화면 미리보기 (640px)"} size={16} active={narrow} onClick={() => setNarrow((v) => !v)} />
             {narrow && <span className="text-xs text-muted">640px 이하에서는 고정 위치 요소가 문서 순서대로 쌓입니다. 이 보기에서는 옮길 수 없습니다.</span>}
             {pinNote && !narrow && <span className="text-xs text-muted" role="status">옮긴 요소는 고정 위치가 됩니다. ⌘Z나 「흐름으로 되돌리기」로 되돌립니다.</span>}
@@ -394,7 +432,8 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               apply={(set, unset, summary) => void run([{ t: "setStyle", eid: b.eid, ...(Object.keys(set).length ? { set } : {}), ...(unset.length ? { unset } : {}) }], summary)} />
 
             {tb?.table && <TableSection ctx={ctx} eid={tb.eid} t={tb.table} cell={cell} onRemove={() => remove(tb.eid, "표")} />}
-            {b.image && <ImageSection ctx={ctx} b={b} />}
+            {b.image && <ImageSection ctx={ctx} b={b} url={(selEl as HTMLImageElement | null)?.src ?? ""} onEditSvg={(url) => void editSvgImage(b.eid, url)} />}
+            {b.svg && <InlineSvgSection ctx={ctx} b={b} shape={shape} onShape={setShape} />}
 
             {ab && (
               <section>
@@ -408,7 +447,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
                     onClick={() => void run([{ t: "insert", ref: ab.eid, where: "after", node: { kind: "table", rows: 3, cols: 3, header: true } }], "표 넣기")} />
                   <label className={`inline-flex cursor-pointer items-center rounded-md border border-line p-1.5 text-muted hover:bg-sunken hover:text-fg ${busy ? "pointer-events-none opacity-30" : ""}`} data-tip="그림 넣기">
                     <ImagePlus size={20} aria-hidden />
-                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" aria-label="그림 넣기"
+                    <input type="file" accept={IMAGE_ACCEPT} className="sr-only" aria-label="그림 넣기"
                       onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void insertImage(f, ab.eid); }} />
                   </label>
                 </div>
@@ -452,6 +491,12 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
             onMove={moveLayer} />
         </div>
       </aside>
+      {svgEdit?.kind === "drawio" && drawio && (
+        <DrawioEditor origin={drawio} svg={svgEdit.svg} title={svgEdit.title} onSave={svgEdit.save} onClose={() => setSvgEdit(null)} />
+      )}
+      {svgEdit?.kind === "svgedit" && svgEdit.svg && (
+        <SvgEditor svg={svgEdit.svg} title={svgEdit.title} onSave={svgEdit.save} onClose={() => setSvgEdit(null)} />
+      )}
     </div>
   );
 }
@@ -513,7 +558,7 @@ function TableSection({ ctx, eid, t, cell, onRemove }: {
   );
 }
 
-function ImageSection({ ctx, b }: { ctx: StructCtx; b: Block }) {
+function ImageSection({ ctx, b, url, onEditSvg }: { ctx: StructCtx; b: Block; url: string; onEditSvg: (url: string) => void }) {
   const { busy, run, setMessage } = ctx;
   const img = b.image!;
   const [alt, setAlt] = useState(img.alt);
@@ -543,7 +588,7 @@ function ImageSection({ ctx, b }: { ctx: StructCtx; b: Block }) {
       </div>
       <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs font-medium text-muted hover:bg-sunken hover:text-fg ${busy ? "pointer-events-none opacity-30" : ""}`}>
         <ImageUp size={16} aria-hidden /> 그림 바꾸기
-        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only"
+        <input type="file" accept={IMAGE_ACCEPT} className="sr-only"
           onChange={async (e) => {
             const f = e.target.files?.[0];
             e.target.value = "";
@@ -554,6 +599,51 @@ function ImageSection({ ctx, b }: { ctx: StructCtx; b: Block }) {
             } catch (err) { setMessage(String((err as Error).message)); }
           }} />
       </label>
+      {/\.svg(?:[?#].*)?$/i.test(img.src) && url && (
+        <IconButton icon={PenTool} label="SVG 고치기 (draw.io SVG는 draw.io로)" text="SVG 고치기" variant="outline" disabled={busy} onClick={() => onEditSvg(url)} />
+      )}
+    </section>
+  );
+}
+
+/** 인라인 SVG 도형(6.0 V4): 문서에서 도형을 누르거나 목록에서 골라 채움·선 색과 글자를 바꾼다(svgAttr) */
+function InlineSvgSection({ ctx, b, shape, onShape }: { ctx: StructCtx; b: Block; shape: string | null; onShape: (eid: string | null) => void }) {
+  const { busy, run } = ctx;
+  const shapes = b.svg!.shapes;
+  // 저장하면 eid(위치)가 바뀐다. 고른 도형은 순번으로 잇는다
+  const last = useRef(-1);
+  const at = shapes.findIndex((x) => x.eid === shape);
+  const idx = at >= 0 ? at : shape ? last.current : -1;
+  last.current = idx;
+  const cur = idx >= 0 ? shapes[idx] ?? null : null;
+  const [text, setText] = useState(cur?.text ?? "");
+  useEffect(() => setText(cur?.text ?? ""), [cur?.eid, cur?.text]);
+  const set = (name: "fill" | "stroke" | "text", value: string) => { if (cur) void run([{ t: "svgAttr", eid: cur.eid, name, value }], "SVG 도형"); };
+  const hex = (v: string | null) => (v && /^#[0-9a-f]{6}$/i.test(v) ? v : "#000000");
+  return (
+    <section className="space-y-2">
+      <h3 className="text-xs font-semibold text-muted">인라인 SVG · 도형 {shapes.length}개{b.svg!.drawio ? " · draw.io" : ""}</h3>
+      <select className="w-full rounded border border-line bg-surface px-1 py-1 text-xs" aria-label="SVG 도형 고르기" value={cur?.eid ?? ""}
+        onChange={(e) => onShape(e.target.value || null)}>
+        <option value="">도형 고르기 (문서에서 눌러도 됩니다)</option>
+        {shapes.map((x, i) => <option key={x.eid} value={x.eid}>{i + 1}. &lt;{x.tag}&gt;{x.text ? ` ${x.text.slice(0, 20)}` : ""}{x.fill ? ` · ${x.fill}` : ""}</option>)}
+      </select>
+      {cur && (
+        <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-xs">
+          <span className="text-muted">채움</span>
+          <ColorField key={`f${cur.eid}${cur.fill}`} label="도형 채움 색" value={hex(cur.fill)} disabled={busy} onCommit={(v) => set("fill", v)} />
+          <span className="text-muted">선</span>
+          <ColorField key={`s${cur.eid}${cur.stroke}`} label="도형 선 색" value={hex(cur.stroke)} disabled={busy} onCommit={(v) => set("stroke", v)} />
+          {cur.text !== null && (
+            <>
+              <span className="text-muted">글자</span>
+              <input aria-label="도형 글자" value={text} disabled={busy} className="rounded border border-line bg-surface px-2 py-0.5"
+                onChange={(e) => setText(e.target.value)} onBlur={() => { if (text !== cur.text) set("text", text); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }} />
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -575,4 +665,18 @@ function layerItems(blocks: Block[]): LayerItem[] {
       movable: !INNER.has(b.tag.toUpperCase()),
     };
   });
+}
+
+/** 색 고르기: 고르는 동안(input)은 저장하지 않고, 고르기를 마쳤을 때(change) 한 번 저장한다(연산 하나 = 수정본 하나) */
+function ColorField({ label, value, disabled, onCommit }: { label: string; value: string; disabled?: boolean; onCommit: (v: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const commit = useRef(onCommit);
+  commit.current = onCommit;
+  useEffect(() => {
+    const el = ref.current;
+    const on = () => { if (el) commit.current(el.value); };
+    el?.addEventListener("change", on);
+    return () => el?.removeEventListener("change", on);
+  }, []);
+  return <input ref={ref} type="color" aria-label={label} defaultValue={value} disabled={disabled} className="h-6 w-10 border border-line" />;
 }

@@ -8,6 +8,15 @@ on:
   pull_request:
   push:
     branches: [develop, main]
+  # draw.io 편집기 Worker(apps/drawio, 6.0 V4)는 손으로만 배포한다(앱과 달리 draw.io 버전을 올릴 때만 바뀐다)
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "draw.io 배포 대상(staging·production)"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
 
 concurrency:
   group: workflow-app-${{ github.ref }}
@@ -60,3 +69,22 @@ jobs:
       - name: 배포(화면 빌드 + Worker + 변환 컨테이너)
         working-directory: apps/worker
         run: npm run deploy -- --env "$TARGET"
+
+  deploy-drawio:
+    # 자원(Worker·draw.simplite.net)을 만들기 전에는 꺼 둔다: 사용자 확인 뒤 Variables에 DRAWIO_DEPLOY_ENABLED=true(apps/worker/README.md "draw.io 편집기")
+    if: github.event_name == 'workflow_dispatch' && vars.DRAWIO_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: draw.war 받기·검사(sha256 고정, 파일 수·크기 한도) + 배포
+        working-directory: apps/drawio
+        run: node scripts/fetch.mjs --env "${{ inputs.target }}" && npx wrangler deploy --env "${{ inputs.target }}"

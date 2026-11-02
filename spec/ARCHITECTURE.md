@@ -38,6 +38,7 @@ npm workspaces 모노레포. `npm install`은 리포 루트에서 한 번 한다
 | Markdown 미리보기 | unified(remark·rehype), KaTeX, highlight.js, Mermaid |
 | 문서 뷰어 | DOCX는 docx-preview, XLSX·CSV는 SheetJS 0.20(공식 CDN 배포본), 버전 비교는 jsdiff |
 | draw.io 보기 | 로컬은 drawio CLI가 SVG로 바꾼다. Cloudflare는 draw.io 공식 뷰어(viewer.diagrams.net)를 iframe으로 연다 |
+| SVG 편집(6.0 V4) | 소독은 core `svg.ts`(htmlparser2 허용 목록, 서버가 저장 전에). 새 다이어그램·draw.io SVG는 자체 호스팅 draw.io(`apps/drawio`, 앱과 다른 출처, iframe + postMessage, `editor/DrawioEditor.tsx`), 일반 SVG는 `@svgedit/svgcanvas` 7.4.2(MIT, 소스로 묶고 jspdf·svg2pdf는 빈 모듈, 열 때만 불러옴, `editor/SvgEditor.tsx`). HTML에는 파일 참조가 기본, 인라인 SVG 도형은 `svgAttr` |
 | 실시간 반영 | 로컬은 SSE, Cloudflare는 WebSocket |
 
 draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크톱은 Electron과 가상 화면이 필요해 컨테이너 이미지가 지나치게 커진다. 다이어그램 XML은 주소의 `#` 뒤에만 넣어 뷰어 서버로 전송되지 않지만, 뷰어 스크립트는 외부 사이트 것이다.
@@ -83,6 +84,7 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 | 실시간 | `src/live.ts` | Durable Object(WebSocket) |
 | 변환 | `src/convert.ts`, `apps/converter` | Containers |
 | 원격 MCP | `src/mcp.ts`, `src/consent.ts`, `packages/mcp-tools` | OAuthProvider + KV |
+| draw.io 편집기(6.0 V4) | `apps/drawio`(코드 없는 정적 자산 Worker, `scripts/fetch.mjs`가 draw.war를 풀고 `_headers`를 쓴다). 앱은 `DRAWIO_ORIGIN`(`GET {API}/editor-config`)으로 연다 | 별도 Worker·도메인 |
 | D1 스키마 | `migrations/0001~0004` | |
 
 설계에서 바꾼 것과 이유:
@@ -94,7 +96,9 @@ draw.io를 Cloudflare에서 서버 변환하지 않은 이유: draw.io 데스크
 ### 보안 경계
 
 - 사용자가 올린 파일은 앱과 다른 도메인에서만 준다. 주소에는 12~24시간 유효한 서명 토큰이 들어간다. HTML·SVG에는 sandbox CSP를 붙인다.
-- 콘텐츠 도메인은 앱 출처에만 CORS를 연다. 화면이 Markdown·표를 `fetch`로 읽기 때문이다.
+- 편집기 SVG 자산은 저장 전에 소독한다(script·on*·바깥 주소·foreignObject 안 HTML 등, core `svg.ts`). 자산 주소에도 sandbox CSP를 붙인다.
+- 콘텐츠 도메인은 앱 출처에만 CORS를 연다. 화면이 Markdown·표·SVG를 `fetch`로 읽기 때문이다. `Vary: Origin`을 늘 붙이고 304에도 CORS를 붙인다(`<img>`로 캐시된 파일을 다시 읽을 때).
+- draw.io는 앱·콘텐츠와 다른 출처(`draw.simplite.net`)다. draw.io 응답은 `frame-ancestors`(앱 출처만)·`connect-src 'self'`, 화면은 메시지의 origin·source를 확인한다.
 - 상태를 바꾸는 API는 Origin이 앱 주소일 때만 받는다. 두 도메인이 같은 사이트(simplite.net)라 SameSite 쿠키만으로는 막히지 않는다.
 - 로그인 API는 IP당 분당 20번, 쓰기 API와 HTML PDF·슬라이드 PNG(Browser Rendering)는 분당 120번까지 받는다.
 - 실시간 WebSocket 업그레이드도 Origin이 앱 주소여야 한다(교차 사이트 WebSocket 막기).

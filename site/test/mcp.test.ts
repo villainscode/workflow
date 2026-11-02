@@ -51,10 +51,10 @@ before(async () => {
 after(async () => { await client?.close(); await srv?.stop(); ws.cleanup(); });
 
 describe("도구 구성", () => {
-  test("TC-MCP-01 도구 21개(3.4 focus_in_site, 5.0 덱·구조 연산·수정본·미리보기 도구 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
+  test("TC-MCP-01 도구 22개(3.4 focus_in_site, 5.0 덱·구조 연산·수정본·미리보기 도구, 6.0 svg_put 포함), 삭제·휴지통 도구는 없다(D-24)", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     assert.deepEqual(names, ["asset_put", "create_menu", "deck_create", "deck_get", "deck_render", "doc_ops", "doc_structure", "edit_text", "find_documents", "focus_in_site", "get_document", "get_text", "list_documents",
-      "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "upload_document", "upload_version"]);
+      "release_document", "revision_list", "revision_restore", "save_markdown", "slide_patch", "slide_put", "svg_put", "upload_document", "upload_version"]);
     assert.ok(!names.some((n) => /delete|trash|purge|remove/.test(n)));
   });
 
@@ -267,5 +267,21 @@ describe("슬라이드 덱(5.0 M4)", () => {
     assert.match(await ok("doc_ops", { ref: "notes/mcp-struct", baseRev: 0, ops: [{ t: "setText", eid, html: "바뀐 묶음" }] }), /수정본 1로 저장/);
     assert.match(await ok("revision_list", { ref: "notes/mcp-struct" }), /r1 \(지금\) · agent/);
     assert.match(await ok("revision_restore", { ref: "notes/mcp-struct", rev: 0, baseRev: 1 }), /수정본 2를 만들었습니다/);
+  });
+
+  test("TC-MCP-23 svg_put: 소독해 올리고 지운 것을 진단으로 알린다. doc_ops로 인라인 SVG를 넣으면 doc_structure가 도형 eid를 보여 주고 svgAttr로 고친다(6.0 V4)", async () => {
+    const put = await ok("svg_put", { svg: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#ccc" onclick="x()"/><script>x()</script></svg>' });
+    assert.match(put, /^asset:[0-9a-f]{64} \(40×20px\)/);
+    assert.match(put, /소독에서 지운 것: (@onclick, script|script, @onclick)/);
+    const asset = /^(asset:[0-9a-f]{64})/.exec(put)![1];
+    const st = await ok("doc_structure", { ref: "notes/mcp-struct" });
+    const p = /(e\d+) <p>/.exec(st)![1];
+    const rev = Number(/rev (\d+)/.exec(st)![1]);
+    assert.match(await ok("doc_ops", { ref: "notes/mcp-struct", baseRev: rev, ops: [{ t: "insert", ref: p, where: "after", node: { kind: "svg", src: asset } }] }), /수정본 \d+로 저장/);
+    const st2 = await ok("doc_structure", { ref: "notes/mcp-struct" });
+    const shape = /\[인라인 SVG 도형 1: (e\d+)<rect> fill=#ccc\]/.exec(st2);
+    assert.ok(shape, st2);
+    assert.match(await ok("doc_ops", { ref: "notes/mcp-struct", ops: [{ t: "svgAttr", eid: shape![1], name: "fill", value: "#336699" }] }), /수정본 \d+로 저장/);
+    assert.match(await ok("doc_structure", { ref: "notes/mcp-struct" }), /<rect> fill=#336699/);
   });
 });

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { parseDocument } from "yaml";
 import { imageSize } from "@workflow/core/image";
+import { svgSize } from "@workflow/core/svg";
 import { mimeOf } from "@workflow/core/mime";
 import { DECK_ENTRY } from "@workflow/core/slide";
 import * as work from "@workflow/core/work";
@@ -30,7 +31,6 @@ CREATE TABLE IF NOT EXISTS asset (sha256 TEXT PRIMARY KEY, mime TEXT NOT NULL, s
 `;
 
 export interface AssetRow { sha256: string; mime: string; size: number; width: number | null; height: number | null }
-const MAX_ASSET = 10 * 1024 * 1024;
 
 export class LocalWork {
   readonly db: Database.Database;
@@ -191,15 +191,14 @@ export class LocalWork {
 
   // ---------- 그림 자산(편집기 공통) ----------
   putAsset(file: { mime: string; data: Uint8Array }) {
-    if (!ASSET_EXT[file.mime]) throw new WorkError(400, "PNG·JPEG·WebP·GIF만 올릴 수 있습니다");
-    if (file.data.byteLength > MAX_ASSET) throw new WorkError(413, "10MB 이하만 올릴 수 있습니다");
-    const size = imageSize(file.data);
-    if (!size) throw new WorkError(400, "이미지 파일을 읽을 수 없습니다");
-    const sha = sha256(file.data);
-    this.putBlob(sha, file.data);
+    // 크기·형식 검사와 SVG 소독은 Worker와 같은 core prepareAsset(6.0 V4)
+    const p = work.prepareAsset(file.mime, file.data);
+    const sha = sha256(p.data);
+    this.putBlob(sha, p.data);
     this.db.prepare("INSERT INTO asset (sha256, mime, size, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (sha256) DO NOTHING")
-      .run(sha, file.mime, file.data.byteLength, size.width, size.height, now());
-    return { asset: `asset:${sha}`, sha256: sha, mime: file.mime, size: file.data.byteLength, ...size };
+      .run(sha, p.mime, p.data.byteLength, p.width, p.height, now());
+    return { asset: `asset:${sha}`, sha256: sha, mime: p.mime, size: p.data.byteLength, width: p.width, height: p.height,
+      ...(p.removed ? { removed: p.removed, drawio: p.drawio } : {}) };
   }
 
   /** 자산 행. 없으면 버전 폴더에 복사된 그림(색인)에서 다시 만든다 */
@@ -208,8 +207,9 @@ export class LocalWork {
     if (row) return row;
     if (!this.hasBlob(sha)) return null;
     const data = this.getBlob(sha);
-    const size = imageSize(data);
     const mime = Object.keys(ASSET_EXT).find((m) => m === mimeOf(this.indexed(sha) ?? ""));
+    let size = mime === "image/svg+xml" ? null : imageSize(data);
+    if (mime === "image/svg+xml") try { size = svgSize(new TextDecoder().decode(data)); } catch { size = null; }
     if (!size || !mime) return null;
     this.db.prepare("INSERT INTO asset (sha256, mime, size, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (sha256) DO NOTHING")
       .run(sha, mime, data.byteLength, size.width, size.height, now());

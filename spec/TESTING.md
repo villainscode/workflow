@@ -2,7 +2,7 @@
 
 `site/`에서 만든 기능(1.x, 2.0, 3.x)을 확인하는 테스트 케이스 목록이다. 케이스마다 ID, 요구사항 근거, 확인 방법(자동·수동)을 적는다. 자동 케이스는 테스트 이름이 ID로 시작하므로, 실패한 테스트 이름으로 이 표를 찾을 수 있다.
 
-> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 165개(실제 테스트 213건: `npm test` 175건 + `npm run test:ui` 38건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 74건 + Cloudflare 화면 테스트 21건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 39건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
+> 상태: v0.7 (2026-11-02). 로컬 사이트: 자동 케이스 170개(실제 테스트 218건: `npm test` 177건 + `npm run test:ui` 41건), 수동 확인 23개, 모두 통과(LibreOffice 해당 없음 3건 건너뜀). Cloudflare(4.0, `apps/worker`): Worker 테스트 76건 + Cloudflare 화면 테스트 22건(2.7절), 모두 통과. 5.0 편집기 케이스는 2.8절(공통 구조 편집·슬라이드 형식·PDF `npm test -w @workflow/core` 45건 통과), 6.0 요소 편집기 케이스는 2.9절. Cloudflare 화면 테스트는 운영처럼 앱(127.0.0.1)과 콘텐츠(localhost) 출처를 나눠 띄우고, PDF 변환은 로컬 Docker로 변환 컨테이너를 돌린다.
 
 ---
 
@@ -183,7 +183,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 
 | ID | 확인 내용 | 근거 |
 |---|---|---|
-| TC-MCP-01 | 도구 21개(`focus_in_site`, 5.0 덱 도구 `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`·`deck_render`, 구조·수정본 도구 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
+| TC-MCP-01 | 도구 22개(`focus_in_site`, 5.0 덱 도구 `deck_create`·`deck_get`·`slide_put`·`slide_patch`·`asset_put`·`deck_render`, 구조·수정본 도구 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore`, 6.0 `svg_put` 포함)이고 삭제·휴지통 도구는 없다 | D-23, D-24 |
 | TC-MCP-02 | 사이트 서버가 꺼져 있으면 `npm run dev` 실행 안내 | 3.0 §4 |
 | TC-MCP-03 | `list_documents`: 트리·주소·draft 표시·대분류 필터 | 3.0 §4.2 |
 | TC-MCP-04 | `find_documents`: 본문 검색 결과와 "없음" 안내 | 3.0 §4.2 |
@@ -203,6 +203,7 @@ docs/notes/minutes/v0.0/     minutes.md                        Markdown 문서
 | TC-MCP-19 | 쓰기 도구의 변경 알림에 `by: claude-code`와 바뀐 조각이 담긴다 | 3.0 7.3, D-29 |
 | TC-MCP-20 | `focus_in_site`: 열린 화면이 없으면 주소 안내, 있으면 "열린 사이트 화면 n개" + `focus` 이벤트(버전·seg 포함) | 3.0 7.3 |
 | TC-MCP-22 | 로컬에서도 `doc_structure`·`doc_ops`·`revision_list`·`revision_restore`가 동작한다(작업 출처 agent, rev 0으로 되돌리기) | 6.0 VL(D-58, D-51 바꿈) |
+| TC-MCP-23 | `svg_put`: 소독해 올리고 지운 것을 진단으로 알린다. `doc_ops`로 인라인 SVG(`{kind:svg,src:asset:…}`)를 넣으면 `doc_structure`가 도형 eid·fill을 보여 주고 `svgAttr`로 고친다 | 6.0 4.5 |
 | TC-MCP-21 | `deck_create`: 형식 오류는 파일:줄:칸·fix 진단, 맞으면 덱 생성(메모 "Claude Code:"). `deck_get`은 eid가 붙은 HTML(rev 0), 로컬에서도 `slide_patch`가 수정본(버전 폴더는 그대로), `deck_render`는 Browser Rendering이 없다고 안내 | 5.0 M4, 6.0 VL |
 | TC-MCP-21 | SVG 문서도 `get_text`·`edit_text`로 고치고, 넘칠 수 있으면 "주의:"를 함께 알린다 | 2.0 확장(SVG) |
 | TC-MCP-17 | `release_document`: v1.0 approved, 메모 앞 "Claude Code:", 두 번째는 거부 | 3.0 §4.2 |
@@ -303,6 +304,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CF-46 | `doc_structure`(eid·rev) → `doc_ops`(에이전트 수정본, 메모 "Claude Code:"), 지난 rev는 409 + "→ doc_structure로 다시 읽고", 잘못된 연산은 400 + "→ 쓸 수 있는 연산", `revision_list`(출처·작성자·메모), `revision_restore`(rev 0 = 기준 버전) | 5.0 M7 |
 | TC-CF-48 | 보안: 다른 출처(또는 Origin 없이) 연 실시간 WebSocket은 403(교차 사이트 WebSocket 막기), 1000자 넘는 접속자 메시지는 버림 (`test/live.test.ts`) | 5.0 M8 보안 점검 |
 | TC-CF-49 | http로 들어온 요청은 APP_ORIGIN이 https인 배포에서 같은 주소의 https로 301(경로·쿼리 유지, 콘텐츠 도메인도), 로컬 http·https 요청은 그대로 (`test/https.test.ts`). 정적 화면은 `main.tsx`가 https로 옮긴다 | 버그 2026-11-02 |
+| TC-CF-50 | 콘텐츠 응답은 늘 `Vary: Origin`, 다시 확인(304)에도 앱 출처 CORS를 붙인다(`<img>`로 먼저 받아 캐시된 파일을 편집기가 fetch로 다시 읽을 때) (`test/read.test.ts`) | 버그 2026-11-02 |
 | TC-CF-47 | 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·PDF 변환·렌더링 횟수(캐시에 없어 실제로 만든 것만 기록), owner 아니면 403 (`test/revisions.test.ts`) | 5.0 M8 |
 | TC-CF-44 | 덱 도구: `deck_create` → `deck_get`(eid) → `slide_patch`(수정본 출처 agent, 메모 "Claude Code:") → `slide_put` 형식 오류 진단 → `asset_put`(asset:<sha>·크기) | 5.0 M4 |
 | TC-CF-44 | PDF 변환: 결과는 원본 sha256으로 R2에 캐시(캐시가 있으면 컨테이너를 부르지 않음), 다른 워크스페이스 파일 404, svg 대상·Office가 아닌 형식 400 | 4.0 P7 |
@@ -321,6 +323,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-CFUI-19 | 요소 편집기(6.0 V1): 글자 도구 막대로 고른 글자만 크기 64px·색(막대를 눌러도 글자 편집이 이어짐) → 새로 고침 뒤 유지, 블록 글꼴 칸(덱 faces), 표 행 높이(tr), 고정 상자 3개 위 맞춤·가로 간격 같게, 레이어 패널 아래로(문서 순서), ⌘Z | 6.0 4.1·4.3 |
 | TC-CFUI-20 | HTML 속성 편집(6.0 V2): 속성 패널에서 문단 크기 22px·토큰 색(`var(--accent)`) → 새로 고침 뒤 패널·화면에 유지, 글자 편집 중 도구 막대로 고른 두 글자만 28px(막대 목록을 써도 편집이 이어짐), 칸을 골라 열 경계 끌기(colgroup·`table-layout:fixed`)·행 높이 손잡이·그림 크기 손잡이(감싸는 상자 대비 %), ⌘Z로 그림 크기 되돌림, ⌘D 제목 복제, 레이어 패널 | 6.0 4.2 |
 | TC-CFUI-21 | HTML 자유 배치(6.0 V3): 문단을 옮기기 손잡이로 끌면 고정 위치(`data-pin`·left %·top px·width %, 섹션 `data-pin-box`·min-height, head 좁은 화면 규칙), 놓기 직전 미리 보기 자리와 저장 뒤 자리가 1px 이내, 첫 전환 안내, 그림 파일을 둘째 섹션 한 점에 놓으면 그 섹션 끝에 고정 그림(가운데 1px 이내), Shift+방향키 8px 이동 저장, 640px 미리보기는 static·가로 스크롤 없음·손잡이 숨김, 「흐름으로 되돌리기」면 그 섹션은 원래 시작 태그 | 6.0 4.2 |
+| TC-CFUI-22 | SVG(6.0 V4): 버전 폴더 SVG 그림을 「SVG 고치기」(svgedit)로 채움 색을 바꿔 저장하면 새 SVG 자산(`assets/<sha16>.svg`)으로 바뀌고 콘텐츠 도메인에서 image/svg+xml·sandbox CSP, viewBox 유지. SVG 파일을 「그림 넣기」로 넣으면 script·이벤트 속성이 지워진 파일 참조 | 6.0 4.4 |
 | TC-CFUI-18 | HTML 문서 PDF 내보내기(확인 창 → 진행 막대(만드는 중·내려받는 중 %) → 내려받기)·API(A4 쪽, 두 번째는 캐시로 빠름, HTML이 아닌 문서는 400), 덱 화면에는 PDF 버튼 없음, 슬라이드 PNG 960×540(작업본). 로컬은 `wrangler dev`의 Browser Rendering(Chrome) | 5.0 M8 |
 | TC-CFUI-17 | 접속자·실시간 반영·수정본 비교: 다른 사람(편집자 초대)이 같은 덱을 보면 「보는 중」, 편집을 열면 「편집 중」, 그 사람이 저장하면 내 편집 화면이 최신으로(알림), 이력에서 앞 수정본과 지금을 비교(+ 줄), 창을 닫으면 표시가 빠짐 | 5.0 M7 |
 | TC-CFUI-16 | PDF 편집: 한글 글상자·형광펜을 「적용」하면 수정본(잘린 한글 글꼴 하나), 쪽 돌리기·지우기(확인 창), 한글 양식 채우기, 되돌리기, 버전으로 저장 | 5.0 M6 |
@@ -344,7 +347,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-05 | 되돌리기: 예전 수정본 내용으로 새 수정본, 과거는 남음, 기준이 다르면 409, rev 0은 작업본의 기준 버전 파일 | 5.0 5.1 |
 | TC-ED-06 | 버전으로 올리기: R2 복사 없이 새 버전(source revision), 이력에 올린 버전, 같은 내용이면 409, 다른 곳에서 새 버전이 생기면 작업본이 그 버전에서 다시 시작(rev 번호 이어짐) | 5.0 5.1 |
 | TC-ED-07 | viewer는 저장·올리기 403·읽기만, 저장하면 활동 기록 `revision` | 4.0 5.9 |
-| TC-ED-08 | 이미지 자산: PNG → `asset:<sha>`·가로·세로, 같은 이미지는 한 번, 서명 주소로 받음, SVG·이미지 아님 400 | 5.0 4.1·5.4 |
+| TC-ED-08 | 이미지 자산: PNG → `asset:<sha>`·가로·세로, 같은 이미지는 한 번, 서명 주소로 받음, SVG가 아닌 글·이미지 아님 400(SVG는 6.0 V4부터 소독해 받는다, TC-VE-27) | 5.0 4.1·5.4 |
 | TC-ED-09 | 매일 정리: 30일 지난 수정본 삭제(작업본·버전으로 올린 것은 남김), 남은 수정본·자산의 blob은 남김 | D-50 |
 | TC-ED-10 | 수정본 있는 문서 영구 삭제: 그 문서만 쓰던 blob은 지우고, 다른 문서 수정본이 쓰는 blob은 남김 | 5.0 5.2 |
 | TC-ED-11 | HTML 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 `data-eid`와 자유 배치 표시(`data-base`·`data-root`, 6.0 V3)만 더한다 (`packages/core/test/structedit-html.test.ts`) | 5.0 4.1 |
@@ -385,7 +388,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-ED-40 | PDF 쪽: 회전(누적)·지우기·옮기기·다른 PDF 끼워 넣기, 범위 밖·잘못된 각도·PDF 아닌 파일 400, 마지막 쪽은 못 지움, 빈 연산은 원본 그대로 | 5.0 4.5 |
 | TC-ED-41 | PDF 양식: 칸 목록(글자·체크·목록), 한글 글자·체크·목록 채우기(우리 글꼴로 칸 모양), 없는 칸 400 | 5.0 4.5 |
 
-### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`·`structedit-pin.test.ts`, `site/test/unit.test.ts`·`work.test.ts`·`ui.test.ts`(TC-VE-20), `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20·21, TC-UI-35·36·37)
+### 2.9 6.0 요소 편집기 (`packages/core/test/slide.test.ts`·`structedit-html.test.ts`·`structedit-pin.test.ts`·`svg.test.ts`, `site/test/unit.test.ts`·`work.test.ts`·`ui.test.ts`(TC-VE-20·29·30·31), `apps/worker/test/structedit.test.ts`, 화면은 TC-CFUI-19·20·21·22, TC-UI-35·36·37)
 
 계획은 `spec/REQUIREMENT-6.0.md`. 마일스톤마다 케이스를 더한다.
 
@@ -403,7 +406,7 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-VE-10 | 로컬 수정본(Worker와 같은 API, 규칙은 core `work`): HTML 구조 연산 → 수정본 1(docs/는 그대로), 지난 baseRev는 409, 작업본 파일·편집 사본은 `work/files/r<rev>/`에서 상대 경로가 풀린다. 「버전으로 저장」하면 docs/ 변화는 새 버전 폴더와 meta.yaml뿐(source: revision), 이력에 올린 버전, 같은 rev로 다시 올리기는 409 (`work.test.ts`) | 6.0 VL(D-58) |
 | TC-VE-11 | 로컬 되돌리기: rev 0(기준 버전)·예전 수정본으로 새 수정본, 수정본 파일 목록과 내용, 이력 출처(restore·human) | 6.0 VL |
 | TC-VE-12 | 로컬 덱 편집과 그림 자산: 자산은 `asset:<sha>`(크기·주소), 슬라이드 연산이 수정본(inverse), 형식 밖 연산은 400 진단, 「버전으로 저장」하면 가리킨 그림이 버전 폴더 `assets/`로 복사된다 | 6.0 VL |
-| TC-VE-13 | 로컬 그림 자산은 PNG·JPEG·WebP·GIF만(SVG 400), 없는 자산 404 | 6.0 VL |
+| TC-VE-13 | 로컬 그림 자산은 PNG·JPEG·WebP·GIF·SVG만(SVG가 아닌 글·그 밖 형식은 400, 6.0 V4부터 SVG는 소독해 받는다), 없는 자산 404 | 6.0 VL·V4 |
 | TC-VE-14 | 자유 배치 `toPinned`: 요소 style에 position·left %·top px·width %·margin:0, `data-pin`에 원래 style, 기준 섹션은 relative·min-height(올림)·`data-pin-box`, head에 좁은 화면 규칙 한 번. 다시 옮기면 위치만(오른쪽 끝이 100%를 넘지 않게 left 보정), unpin하면 원본 바이트 (`structedit-pin.test.ts`) | 6.0 4.2(D-54) |
 | TC-VE-15 | `place`: 섹션 끝(마지막 요소 다음 줄)에 고정 그림·글상자(글자는 이스케이프). 지우거나 흐름으로 되돌리면 섹션 style·규칙도 정리, 글자 블록·없는 섹션·`javascript:` 그림은 거부 | 6.0 4.2·4.5 |
 | TC-VE-16 | 고정할 수 없는 것: 표 안 요소·목록 항목·표 칸·표 자체·섹션 자체는 400, 너비 0·100% 초과·top 음수·minHeight 음수는 400, 고정 아닌 요소 unpin 400, 고정 요소를 다른 섹션으로 move는 400(같은 섹션 안 앞뒤는 된다) | 6.0 4.2 |
@@ -411,6 +414,17 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | TC-VE-18 | 리포 실제 HTML 전체: 고정할 수 있는 블록(문서마다 앞 12개) toPinned → unpin 왕복이 원본과 같고, 바뀌는 곳은 기준 섹션·요소의 시작 태그와 head 규칙뿐 | 6.0 V3 |
 | TC-VE-19 | Worker 연결: 구조에 pinBase·isBase·pinned, 그림 place(asset → `assets/` 상대 경로)·toPinned·unpin이 수정본 하나씩(메모 「자유 배치 넣기 1」·「자유 배치 1」·「흐름으로 되돌림 1」), 표 칸 고정은 400 (`structedit.test.ts`) | 6.0 4.5 |
 | TC-VE-20 | 리포 지금 버전 대표 HTML 배치 검사(브라우저): 문서마다 블록 3개를 화면과 같은 함수(`pinBox.ts`)로 재서 고정하면 375·640·641·718(A4 인쇄 폭)·800·1024·1280px 모두 가로 스크롤 없음, 고정 요소가 섹션 밖으로 넘치지 않음 (`site/test/ui.test.ts`) | 6.0 V0 남은 확인 |
+| TC-VE-21 | SVG 소독(core `svg.ts`, htmlparser2 허용 목록): V0 공격 18건(script·CDATA script·on*·`javascript:` href·foreignObject 안 img/iframe/script/a·바깥 use/image/feImage·CSS `url()`/`@import`·animate href·`data:` SVG·XXE·embed/object·처리 명령·mXSS·바깥 칠하기·base/meta·엔티티 숨김)을 다시 읽어 위험한 요소·속성이 없고 지운 것이 진단에 남는다. 이름공간 접두어 루트는 400. 두 번 소독해도 같다 (`svg.test.ts`) | 6.0 4.4·11절 |
+| TC-VE-22 | 정상 SVG 4개(draw.io xmlsvg·ERD·일러스트·HTML 인라인)는 요소 수가 같고 지운 것이 없으며 draw.io 루트 `content`가 남는다. 크기는 width·height(px), 없으면 viewBox, 그것도 없으면 300×150. 루트가 svg가 아니거나 비면 400 | 6.0 4.4 |
+| TC-VE-23 | 인라인 넣기 범위 좁히기(`scopeSvg`): id·`#id`·`url(#id)`·aria 참조에 접두어, 루트 id는 접두어, `<style>` 선택자 앞에 `#접두어`, `@규칙` style은 지움, 잘못된 접두어 400 | D-60 |
+| TC-VE-24 | svgedit 출력 정리(`tidySvgEdit`): 빠진 viewBox 다시 넣기(원래 viewBox 우선), 「Layer 1」 묶음 풀기, 소수 좌표 둘째 자리 반올림, `xmlns:svg` 지우기 | 6.0 4.4 |
+| TC-VE-25 | HTML 인라인 SVG: insert·place의 kind svg는 소독·범위 좁힘(svg1, svg2…) 뒤 넣고(루트 width·height는 지워 viewBox 비율), 블록 목록 `svg.shapes`·편집 사본 `data-shape`, `svgAttr`로 fill·stroke(색·`var(--토큰)`·none만)·글자(text·tspan만, 이스케이프), 바깥 `url()` 거부, 복제하면 새 접두어 | 6.0 4.4·4.5 |
+| TC-VE-26 | 자산 검사(`prepareAsset`, Worker·로컬 공통): SVG는 소독 결과를 저장하고 크기·지운 것·draw.io 여부, svg 아닌 루트·UTF-8 아님·허용 밖 형식은 400 | 6.0 4.4 |
+| TC-VE-27 | Worker SVG 자산: 소독한 것만 저장(지운 것 진단), 콘텐츠 도메인 `_asset`은 image/svg+xml·`sandbox` CSP·nosniff. HTML에 파일 참조(`assets/<sha16>.svg`, 버전 파일도 sandbox CSP)·인라인(asset → 글, svg1)·`svgAttr`(메모 「SVG 도형 1」), PNG 자산을 인라인으로 넣기 400, 오피스 그림을 SVG로 바꾸기 400 (`structedit.test.ts`) | 6.0 4.4 |
+| TC-VE-28 | 로컬 SVG 자산: 소독해 저장(지운 것), 앱 출처 raw는 `sandbox` CSP, HTML에 파일 참조로 넣고 버전으로 저장하면 버전 폴더 `assets/`에 소독된 SVG (`work.test.ts`) | 6.0 4.4·VL |
+| TC-VE-29 | 로컬 화면: SVG 파일을 「그림 넣기」로 넣으면 소독된 파일 참조, 「SVG 고치기」는 svgedit 캔버스(도형 고르기·채움·옮기기) → 저장하면 새 SVG 자산(viewBox 유지, Layer 1 없음)으로 바뀐다 (`ui.test.ts`) | D-56 B안 |
+| TC-VE-30 | 로컬 화면 draw.io(대역 페이지 `test/fixtures/fake-drawio.html`, 다른 출처): 「다이어그램」으로 그려 저장하면 draw.io SVG(`content` 보존)가 그림으로, 「SVG 고치기」는 draw.io로 다시 열어 이어서 고친다. 같은 페이지의 위조 save 메시지는 무시. 실제 draw.io 왕복은 `apps/drawio` `npm run check`(draw.io를 올릴 때) | D-56·D-57 |
+| TC-VE-31 | 로컬 화면 인라인 SVG: 문서의 도형을 누르면 속성 패널에서 글자(Enter)·채움 색(고르기를 마칠 때 한 번)을 바꾼다, 수정본 하나씩(「SVG 도형」) | 6.0 4.4 |
 
 ## 3. 수동 확인 케이스
 
@@ -470,3 +484,4 @@ Worker 테스트는 Workers 런타임(Miniflare) 안에서 돈다. D1 마이그�
 | 2026-10-30 | (Cloudflare staging) PDF 내보내기가 「Navigation timeout of 30000 ms exceeded」로 실패 | 렌더링 문서를 열 때 `networkidle0`(0.5초 동안 요청 없음)을 기다렸는데, 실제 Browser Rendering에서는 이 신호가 오지 않아 거의 매번 30초를 넘겼다. 로컬 `wrangler dev`는 로컬 Chrome이라 드러나지 않았다 | `load`까지만 기다리고 그 뒤 글꼴·그림을 기다림(`apps/worker/src/render.ts`) | 실제 Browser Rendering(원격 바인딩 시험 Worker)에서 `networkidle0` 3번 모두 시간 초과·`load` 3번 모두 4~5초 성공 확인, TC-CFUI-18 |
 | 2026-11-02 | 로컬 사이트에서 슬라이드 덱이 덱으로 그려지지 않고(대표 파일이 JSON 글로 보임) 슬라이드 편집 버튼도 나오지 않음 | 화면이 대표 파일을 `path === "deck.json"`으로 알아보는데, 로컬 색인의 파일 경로는 리포 기준(`docs/<메뉴>/…/vN.N/deck.json`)이다. Cloudflare만 버전 안 상대 경로라 드러나지 않았다 | 버전 안 상대 경로 `relPath`·`isDeck`(`web/src/lib/api.ts`)로 보기·발표·편집 버튼·덱 파일 읽기를 맞춤 | TC-UI-36 (수정 전 슬라이드 편집 버튼 없음으로 실패 확인) |
 | 2026-11-02 | (production) `http://workflow.simplite.net`으로 열고 로그인하면 Google이 「400 redirect_uri_mismatch」 | 콜백 주소를 요청 주소의 출처로 만드는데, http로 열면 https로 옮기는 곳이 없어 `http://…/api/auth/google/callback`을 보냈다(Google에는 https만 등록). 같은 이유로 세션 쿠키에 Secure도 빠질 수 있었다 | Worker 진입점에서 APP_ORIGIN이 https면 http 요청을 https로 301(`apps/worker/src/https.ts`), Worker를 거치지 않는 정적 화면은 `main.tsx`에서 https로 이동 | TC-CF-49 (수정 전 실패 확인) |
+| 2026-11-02 | (Cloudflare 화면 테스트) 구조 편집에서 「SVG 고치기」가 「Failed to fetch」 | 편집 사본의 `<img>`가 먼저 받은 SVG(CORS 헤더 없음)가 브라우저 캐시에 있으면, 편집기의 fetch가 같은 주소를 다시 확인(If-None-Match)하고 Worker가 CORS·Vary 없는 304를 돌려줘 CORS로 막혔다 | 콘텐츠 응답에 `Vary: Origin`을 늘 붙이고 304에도 앱 출처 CORS를 붙임(`apps/worker/src/content.ts`) | TC-CF-50 (수정 전 실패 확인), TC-CFUI-22 |

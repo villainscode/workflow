@@ -299,6 +299,8 @@ ws.get("/assets/:sha/url", async (c) => {
   const a = await assetRow(c.env.DB, c.var.ws.id, c.req.param("sha"));
   if (!a) throw new HttpError(404, "없는 이미지입니다");
   return c.json({ url: `${await contentBase(c)}/_asset/${a.sha256}`, width: a.width, height: a.height, mime: a.mime });
+/** 편집기 설정(6.0 V4): draw.io 출처. 화면이 iframe으로 연다 */
+ws.get("/editor-config", (c) => c.json({ drawio: c.env.DRAWIO_ORIGIN || null }));
 });
 
 /** 워크스페이스 내보내기(owner): docs/ 모양 zip. 가져오기 CLI로 다시 넣을 수 있다 */

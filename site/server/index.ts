@@ -356,8 +356,13 @@ app.get<{ Params: { sha: string } }>("/api/assets/:sha/url", async (req) => {
 app.get<{ Params: { sha: string } }>("/api/assets/:sha/raw", async (req, reply) => {
   const a = local.asset(req.params.sha);
   if (!a) throw new WorkError(404, "없는 이미지입니다");
+  // SVG 자산(소독함)도 앱 출처에서 직접 열리면 스크립트가 돌지 않게 sandbox
+  if (a.mime === "image/svg+xml") reply.header("Content-Security-Policy", "sandbox").header("X-Content-Type-Options", "nosniff");
   return reply.type(a.mime).header("Cache-Control", "private, max-age=31536000, immutable").send(Buffer.from(local.getBlob(a.sha256)));
 });
+
+// 편집기 설정(6.0 V4): draw.io 출처. 로컬은 apps/drawio의 `npm run serve` 주소를 DRAWIO_ORIGIN으로 준다(없으면 버튼을 숨긴다)
+app.get("/api/editor-config", async () => ({ drawio: process.env.DRAWIO_ORIGIN || null }));
 
 app.post("/api/reindex", async () => { reindex("manual"); return { ok: true, warnings }; });
 

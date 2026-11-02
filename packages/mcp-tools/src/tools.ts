@@ -488,7 +488,7 @@ export function registerTools(server: McpServer, host: ToolHost) {
 
   server.registerTool("asset_put", {
     title: "그림 올리기",
-    description: "PNG·JPEG·WebP·GIF 그림을 올리고 슬라이드에 쓸 asset:<sha256> 주소를 받는다(같은 그림은 한 번만 저장). SVG는 받지 않는다.",
+    description: "PNG·JPEG·WebP·GIF 그림을 올리고 슬라이드에 쓸 asset:<sha256> 주소를 받는다(같은 그림은 한 번만 저장). SVG는 svg_put으로 올린다.",
     inputSchema: {
       base64: z.string().describe("그림 파일 내용(base64)"),
       mime: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
@@ -503,14 +503,32 @@ export function registerTools(server: McpServer, host: ToolHost) {
     return `${res.asset} (${res.width}×${res.height}px)`;
   }));
 
+  server.registerTool("svg_put", {
+    title: "SVG 올리기",
+    description: "SVG를 그림 자산으로 올리고 asset:<sha256> 주소를 받는다. 저장 전에 서버가 소독한다(script·on* 속성·javascript:·바깥 주소 href·url()·foreignObject 안 HTML 등을 지움). " +
+      "지운 것을 진단으로 돌려준다. draw.io SVG(루트 content 속성)는 편집 정보를 남긴다. HTML에는 insert·place의 {kind:image,src:\"asset:…\"}(파일 참조, 기본) 또는 {kind:svg,src:\"asset:…\"}(인라인), 슬라이드에는 <img src=\"asset:…\">로 넣는다.",
+    inputSchema: {
+      svg: z.string().max(5_000_000).describe("SVG 글(UTF-8, 맨 바깥이 <svg>)"),
+      name: z.string().optional(),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  }, safe(async ({ svg, name }) => {
+    const form = new FormData();
+    form.append("file", new File([new TextEncoder().encode(svg)], name ?? "image.svg", { type: "image/svg+xml" }));
+    const res = await api<{ asset: string; width: number; height: number; removed?: string[]; drawio?: boolean }>("/assets", { method: "POST", body: form }).catch(LOCAL_ONLY);
+    const diag = res.removed?.length ? `\n소독에서 지운 것: ${res.removed.join(", ")} → 필요한 내용이면 허용되는 방식(인라인 속성·#id 참조·래스터 data: 그림)으로 고쳐 다시 올리세요.` : "\n소독에서 지운 것 없음.";
+    return `${res.asset} (${res.width}×${res.height}px${res.drawio ? ", draw.io 편집 정보 있음" : ""})${diag}`;
+  }));
+
   // ---------- 구조 편집·수정본(5.0 M7): HTML·DOCX·PPTX·XLSX 연산, 수정본 목록·되돌리기 ----------
 
-  const STRUCT_OPS = "HTML 연산(eid로 대상): setText{eid,html(인라인 마크만)}, setAttr{eid,name:src|alt|href,value}, setWidth{eid,percent|null}, insert{ref,where:before|after,node:{kind:table,rows,cols,header?}|{kind:image,src(상대 경로·https·asset:<sha>),alt?,width?}|{kind:paragraph,text?}|{kind:heading,level:2|3|4,text?}}, " +
+  const STRUCT_OPS = "HTML 연산(eid로 대상): setText{eid,html(인라인 마크만)}, setAttr{eid,name:src|alt|href,value}, setWidth{eid,percent|null}, insert{ref,where:before|after,node:{kind:table,rows,cols,header?}|{kind:image,src(상대 경로·https·asset:<sha>, SVG 자산도 파일 참조로 들어감),alt?,width?}|{kind:svg,src:asset:<svg sha>}(인라인 SVG, 소독·id 범위 좁힘)|{kind:paragraph,text?}|{kind:heading,level:2|3|4,text?}}, " +
     "remove{eid}, move{eid,ref,where}, tableRow{eid,at,op:add|remove}, tableCol{eid,at,op:add|remove}, tableCols{eid,widths(%), 표에 table-layout:fixed도 넣음}, " +
     "setStyle{eid,set:{속성:값},unset:[속성]}(인라인 style만. 글꼴·크기·굵기·색·줄 간격·정렬·너비·높이·padding·margin·배경·테두리. 색은 문서 토큰 var(--이름) 우선, 글꼴은 doc_structure theme.fonts·일반 계열만, position·left·top·그림자·vw·!important 금지), " +
     "tableRowHeight{eid(tr),height(px)|null}, duplicate{eid}(바로 뒤 복제, 안의 id는 뺌). 글자 안 span style은 color·font-family·font-size·font-weight만 남는다. " +
     "자유 배치: toPinned{eid,box:{left(%),top(px),width(%)},minHeight?(섹션 최소 높이 px)}(doc_structure에 pinBase가 있는 블록만. 좌표는 기준 섹션 기준, left·width는 섹션 너비 %, 이미 고정이면 위치·너비만 바뀜), " +
-    "place{base(pinBase 또는 base로 표시된 섹션 eid),node:{kind:image,src,alt?}|{kind:textbox,text?},box,minHeight?}(섹션 끝에 고정 요소로 넣음), unpin{eid}(흐름으로 되돌림). " +
+    "place{base(pinBase 또는 base로 표시된 섹션 eid),node:{kind:image,src,alt?}|{kind:textbox,text?}|{kind:svg,src},box,minHeight?}(섹션 끝에 고정 요소로 넣음), unpin{eid}(흐름으로 되돌림). " +
+    "SVG: 기본은 파일 참조(svg_put → image src). 인라인 SVG 안 도형은 svgAttr{eid(doc_structure의 svg 도형 eid),name:fill|stroke|text,value(색 #rrggbb·var(--토큰)·none, 또는 글자)}. " +
     "겹침 순서는 문서 순서(앞뒤는 같은 섹션 안 move). 표·코드 블록·표 안 요소·목록 항목은 고정하지 않는다. 640px 이하 화면에서는 고정 요소가 흐름으로 돌아간다. minHeight를 빼면 섹션 최소 높이를 top까지만 맞추므로 요소 높이만큼 더해 보내라. " +
     "DOCX·PPTX 연산(table·image는 doc_structure의 id): tableRow{table,at,op}, tableCol{table,at,op}, tableCols{table,widths}, replaceImage{image,asset:\"asset:<sha>\"}. XLSX: colWidth{sheet,col(0부터),width(글자 수)}";
   /** 연산 실패에 고칠 방법을 붙인다(명세 15절: 잘못된 연산에 진단·fix) */
@@ -521,7 +539,8 @@ export function registerTools(server: McpServer, host: ToolHost) {
     return LOCAL_ONLY(e) as never;
   };
   interface Block { eid: string; tag: string; text: string; table?: { rows: number; cols: number; widths: number[] | null; merged: boolean }; image?: { src: string; alt: string; width: number | null }; editable: boolean; style?: Record<string, string>; depth?: number;
-    pinned?: boolean; pinBase?: string | null; isBase?: boolean }
+    pinned?: boolean; pinBase?: string | null; isBase?: boolean;
+    svg?: { shapes: { eid: string; tag: string; fill: string | null; stroke: string | null; text: string | null }[]; drawio: boolean } }
   interface Structure { rev: number; baseVersion: string; entry: string; kind: string; blocks?: Block[];
     theme?: { fonts: string[]; tokens: { name: string; value: string }[]; dark: boolean };
     tables?: { id: string; where: string; rows: number; cols: number; widths: number[]; merged: boolean; header: string[] }[];
@@ -541,7 +560,8 @@ export function registerTools(server: McpServer, host: ToolHost) {
       const theme = t ? `\n글꼴: ${[...t.fonts, "sans-serif", "serif", "monospace", "system-ui"].join(", ")}\n색 토큰: ${t.tokens.map((x) => `var(${x.name})=${x.value}`).join(", ") || "없음"}${t.dark ? " · 다크 모드 있음(색은 토큰을 쓰세요)" : " · 다크 모드 없음"}` : "";
       return `${head}${theme}\n` + s.blocks.map((b) => {
         const extra = b.table ? ` [표 ${b.table.rows}×${b.table.cols}${b.table.widths ? ` 너비 ${b.table.widths.join("/")}%` : ""}${b.table.merged ? " 병합 있음" : ""}]`
-          : b.image ? ` [그림 ${b.image.src}${b.image.alt ? ` "${b.image.alt}"` : ""}]` : "";
+          : b.image ? ` [그림 ${b.image.src}${b.image.alt ? ` "${b.image.alt}"` : ""}]`
+          : b.svg ? ` [인라인 SVG${b.svg.drawio ? " draw.io" : ""} 도형 ${b.svg.shapes.length}: ${b.svg.shapes.slice(0, 12).map((x) => `${x.eid}<${x.tag}>${x.fill ? ` fill=${x.fill}` : ""}${x.text ? ` "${x.text.slice(0, 20)}"` : ""}`).join(", ")}${b.svg.shapes.length > 12 ? " …" : ""}]` : "";
         const style = b.style && Object.keys(b.style).length ? ` style{${Object.entries(b.style).map(([k, v]) => `${k}:${v}`).join(";")}}` : "";
         const pin = `${b.pinned ? " [고정]" : ""}${b.pinBase ? ` pinBase=${b.pinBase}` : ""}${b.isBase ? " (base)" : ""}`;
         return `${"  ".repeat(b.depth ?? 0)}${b.eid} <${b.tag}>${extra}${style}${pin}${b.text ? ` ${b.text.slice(0, 60)}` : ""}${b.editable ? "" : " (글자 고치기 불가)"}`;

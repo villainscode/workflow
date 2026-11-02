@@ -114,7 +114,7 @@ export function EditCanvas({ slide, family, selection, setSelection, apply, onUn
   // 그림 끌어 놓기·붙여 넣기 → 고정 위치 그림(가운데, 긴 변 896px 안)
   const insertImages = useCallback(async (files: File[], at?: { x: number; y: number }) => {
     for (const f of files) {
-      if (!/^image\/(png|jpeg|webp|gif)$/.test(f.type)) { setMessage("PNG·JPEG·WebP·GIF만 넣을 수 있습니다"); continue; }
+      if (!/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(f.type)) { setMessage("PNG·JPEG·WebP·GIF·SVG만 넣을 수 있습니다"); continue; }
       try {
         const a = await uploadAsset(f);
         const k = Math.min(1, 896 / a.width, 640 / a.height);

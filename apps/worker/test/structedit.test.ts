@@ -107,6 +107,44 @@ describe("구조 편집", () => {
     expect((await bad.json<any>()).error).toMatch(/따로 고정하지 않습니다/);
   });
 
+  it("TC-VE-27 SVG 자산: 올리면 소독한 것만 저장(지운 것 진단), 콘텐츠 도메인에서 image/svg+xml·sandbox CSP·nosniff. HTML에 파일 참조(assets/….svg)·인라인(svg1)·svgAttr, 오피스 그림 교체는 400", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60" viewBox="0 0 120 60"><rect width="50" height="20" fill="#336699" onclick="alert(1)"/><text x="4" y="50">라벨</text><script>alert(2)</script></svg>';
+    const form = new FormData();
+    form.append("file", new File([svg], "d.svg", { type: "image/svg+xml" }));
+    const a = await (await call(`${W}/assets`, { method: "POST", body: form })).json<any>();
+    expect(a).toMatchObject({ mime: "image/svg+xml", width: 120, height: 60, drawio: false });
+    expect(a.removed.sort()).toEqual(["@onclick", "script"]);
+    const u = await getJson(`${W}/assets/${a.sha256}/url`);
+    const res = await call(pathOf(u.url));
+    expect([res.status, res.headers.get("content-type"), res.headers.get("content-security-policy"), res.headers.get("x-content-type-options")])
+      .toEqual([200, "image/svg+xml", "sandbox", "nosniff"]);
+    const body = await res.text();
+    expect(body).not.toMatch(/script|onclick|alert/);
+    expect(body).toContain("라벨");
+
+    const p = (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p");
+    expect((await ops(D, 0, [{ t: "insert", ref: p.eid, where: "after", node: { kind: "image", src: a.asset, alt: "도식" } }])).status).toBe(200);
+    const rel = `assets/${a.sha256.slice(0, 16)}.svg`;
+    expect(await (await workText(D, "guide.html")).text()).toContain(`src="${rel}"`);
+    const file = await workText(D, rel);
+    expect([file.headers.get("content-type"), file.headers.get("content-security-policy")?.startsWith("sandbox")]).toEqual(["image/svg+xml; charset=utf-8", true]);
+    // 인라인: asset을 글로 바꿔 넣고 도형은 svgAttr
+    const p1 = (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p");
+    expect((await ops(D, 1, [{ t: "insert", ref: p1.eid, where: "after", node: { kind: "svg", src: a.asset } }])).status).toBe(200);
+    const s2 = await getJson(`${D}/work/structure`);
+    const block = s2.blocks.find((b: any) => b.tag === "svg");
+    expect(block.svg.shapes.map((x: any) => x.tag)).toEqual(["rect", "text"]);
+    expect((await ops(D, 2, [{ t: "svgAttr", eid: block.svg.shapes[1].eid, name: "text", value: "바뀐 라벨" }])).status).toBe(200);
+    const html = await (await workText(D, "guide.html")).text();
+    expect(html).toContain('id="svg1"');
+    expect(html).toContain(">바뀐 라벨</text>");
+    expect(html).not.toMatch(/<script|onclick/);
+    expect((await getJson(`${D}/revisions`)).revisions[0].summary).toBe("SVG 도형 1");
+    // PNG 자산을 인라인으로 넣으면 400
+    const png = await putAsset();
+    expect((await ops(D, 3, [{ t: "insert", ref: p1.eid, where: "after", node: { kind: "svg", src: png.asset } }])).status).toBe(400);
+  });
+
   it("TC-ED-26 HTML 그림에 asset:<sha>를 주면 대표 파일 옆 assets/에 연결하고 상대 경로로 바꾼다. 없는 자산·기준 rev 다름·잘못된 연산은 거부", async () => {
     const a = await putAsset();
     const p = (await getJson(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "p");
@@ -163,5 +201,11 @@ describe("구조 편집", () => {
     const t = after.tables[0].id;
     await ops(P, 1, [{ t: "tableRow", table: t, at: 0, op: "remove" }, { t: "tableRow", table: t, at: 0, op: "remove" }]);
     expect((await ops(P, 2, [{ t: "tableRow", table: t, at: 0, op: "remove" }])).status).toBe(400);
+    // 오피스 그림은 SVG로 바꾸지 않는다(6.0 V4)
+    const f2 = new FormData();
+    f2.append("file", new File(['<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>'], "x.svg", { type: "image/svg+xml" }));
+    const svgA = await (await call(`${W}/assets`, { method: "POST", body: f2 })).json<any>();
+    const bad = await ops(P, 2, [{ t: "replaceImage", image: after.images[0].id, asset: svgA.asset }]);
+    expect([bad.status, (await bad.json<any>()).error]).toEqual([400, expect.stringMatching(/PNG·JPEG·WebP·GIF로만/)]);
   });
 });

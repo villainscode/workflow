@@ -142,7 +142,7 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 | **V1 공통 요소 편집기** | 1 | 덱 편집기에서 캔버스·선택·손잡이·스냅·속성 패널·되돌리기를 공통 모듈로 분리. 글자 도구 막대(굵게·기울임·밑줄·색·링크·글꼴·크기). 덱 미완성 마감(글꼴 칸, 행 높이, 여러 요소 정렬·분배, 레이어 패널) | 기존 덱 화면 테스트 전부 통과 + 도구 막대·정렬 화면 테스트 |
 | **V2 HTML 속성 편집** (완료) | 1.5 | HTML `setStyle`(허용 목록·역연산), 토큰 색 견본, 글자 일부 서식(span style), 표 열 끌기·행 높이·표 너비, 흐름 속 그림 손잡이·정렬, 복제, HTML 구조 편집 화면을 요소 편집기로 교체 | core: 연산 뒤 바뀌지 않은 바이트 동일·역연산 왕복. 리포 HTML 전체에 "아무것도 안 바꾸고 저장 = 바이트 동일". 화면: 글꼴 크기·색 바꾸기 → 새로 고침 뒤 유지 |
 | **V3 HTML 자유 배치** (완료, 12절) | 1.5 | 어떤 요소든 끌어 고정 위치로 전환(섹션 기준), 그림·글상자·SVG를 끌어 놓은 자리에 넣기, 이동·크기·앞뒤·스냅·정렬, 섹션 최소 높이 자동 조정, 좁은 화면 규칙 | 화면: 그림을 지정 위치에 올리고 옮긴 좌표 저장(배율별 오차 1px 이내), 640px 이하에서 가로 스크롤 없음, 다른 섹션 바이트 동일 |
-| **V4 SVG** | 2.5 | SVG 자산(서버 소독), HTML·덱에 파일 참조·인라인으로 넣기, draw.io 임베드(자체 호스팅)로 새로 그리기·고치기(`xmlsvg`), svgedit로 업로드 SVG 고치기, 인라인 SVG 색·글자 속성 편집(`svgAttr`) | 소독 테스트(스크립트·이벤트 속성·외부 주소 제거), draw.io로 그려 넣고 다시 열어 고치기, svgedit로 도형 색·위치 바꿔 저장 화면 테스트 |
+| **V4 SVG** (완료 — draw.io Worker 배포는 사용자 확인 대기, 12절) | 2.5 | SVG 자산(서버 소독), HTML·덱에 파일 참조·인라인으로 넣기, draw.io 임베드(자체 호스팅)로 새로 그리기·고치기(`xmlsvg`), svgedit로 업로드 SVG 고치기, 인라인 SVG 색·글자 속성 편집(`svgAttr`) | 소독 테스트(스크립트·이벤트 속성·외부 주소 제거), draw.io로 그려 넣고 다시 열어 고치기, svgedit로 도형 색·위치 바꿔 저장 화면 테스트 |
 | **VL 로컬 사이트 편집** (완료, 12절) | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
 | **VO 오피스 편집 서버** | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
 | **V5 에이전트·문서** | 0.5 | MCP `doc_ops` 연산 추가, `svg_put`, 스킬·가이드 갱신 | MCP 테스트: 에이전트가 글꼴·자유 배치·SVG 넣기를 연산으로 수행, 진단에 fix |
@@ -239,3 +239,17 @@ V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에�
   - A4 인쇄 폭(718px)은 640px보다 넓어 고정 배치가 그대로 인쇄되고, 위 보정으로 넘침이 없다(TC-VE-20).
 - 계획과 다른 점: 공통 캔버스(Moveable)는 이번에도 만들지 않았다. HTML 자유 배치는 배율 없는 iframe 위 손잡이 층(손잡이 둘·맞춤선 계산)이라 덱 Moveable과 겹치는 코드가 맞춤선 계산 정도였다. 여러 요소 정렬·분배는 HTML에 넣지 않았다(덱만). 고정 요소 높이는 손잡이로 바꾸지 않는다(글자·그림이 정하는 높이, 너비만).
 - 테스트: TC-VE-14~20, TC-CFUI-21, TC-UI-37, TC-ED-11 갱신.
+
+**V4 SVG (2026-11-02, D-56·D-57·D-60)**
+
+- core `svg.ts`: 소독기(`sanitizeSvg`, V0 스파이크 2의 htmlparser2 허용 목록을 옮김, 지운 것·draw.io 여부를 돌려줌, `role`·`aria-*`는 허용), 크기(`svgSize`), 인라인 범위 좁히기(`scopeSvg`: id·참조 접두어, 루트 id, `<style>` 선택자 앞 `#접두어`, `@규칙` style 지움), svgedit 출력 정리(`tidySvgEdit`). foreignObject 안 빈 XHTML 요소는 `<div></div>`로 쓴다(HTML 안에 넣으면 `<div/>`가 열린 태그로 읽힌다).
+- 자산: `image/svg+xml`을 받는다. `work.prepareAsset`(Worker·로컬 공통)이 소독한 결과만 저장하고 크기·지운 것·draw.io 여부를 돌려준다. 콘텐츠 도메인 `_asset`과 로컬 raw는 `sandbox` CSP·nosniff. 오피스 그림 교체에 SVG 자산은 400.
+- HTML: 기본은 파일 참조(그림 넣기·끌어 놓기·place에 SVG 파일 → `assets/<sha16>.svg`). 인라인은 insert·place의 `{kind:"svg", src:"asset:…"}`(작업본 층이 자산을 글로 바꾸고 html.ts가 다시 소독·범위 좁힘, 루트 width·height를 지워 viewBox 비율로). 인라인 SVG는 블록으로 고르고 안의 도형(rect·circle·ellipse·path·polygon·polyline·line·text·tspan)은 `data-shape`로 눌러 `svgAttr`(fill·stroke·글자)로 고친다. 복제하면 새 접두어로 다시 범위를 좁힌다.
+- 덱: SVG를 그림(`asset:`)으로 넣고 「SVG 고치기」·「다이어그램 그리기」. 슬라이드 형식에는 인라인 SVG가 없어 `svgAttr`는 HTML만이다(계획 4.5 표의 덱 `svgAttr`는 하지 않음).
+- draw.io(`apps/drawio`, D-57 자체 호스팅): 코드 없는 정적 자산 Worker. `scripts/fetch.mjs`가 draw.war v32.6.1(sha256 고정)을 받아 풀고(WEB-INF·META-INF 제외 3,065개, 가장 큰 파일 19.3MB) Workers 한도(20,000개·25MiB)를 검사하고, 환경별 `_headers`(frame-ancestors 앱 출처만, connect-src 'self', unsafe-eval)를 쓴다. 로컬은 `npm run serve`(127.0.0.1:8010) + 사이트 `DRAWIO_ORIGIN`. `npm run check`가 실제 draw.io 왕복(init→load→export xmlsvg→다시 load→복원, 바깥 요청 0건)을 확인한다(2026-11-02 통과). 화면은 `editor/DrawioEditor.tsx`(iframe + postMessage, origin·source 확인, 보낼 때 대상 출처 지정, export는 요청 순서로 짝짓기), 설정은 `GET {API}/editor-config`(Worker `DRAWIO_ORIGIN` 환경값, 로컬 서버 환경값). 값이 없으면 draw.io 버튼을 숨긴다.
+- svgedit: `@svgedit/svgcanvas` 7.4.2(MIT, pathseg 1.2.1 BSD형)를 소스로 묶고 jspdf·svg2pdf는 빈 모듈 별칭(`site/vite.config.ts`). 편집기(`editor/SvgEditor.tsx`)를 열 때만 불러온다(빌드 청크 gzip 62kB). 고르기·사각형·타원·선·글자·채움·선 색·굵기·지우기·되돌리기. 저장하면 `tidySvgEdit` → 새 자산(서버가 다시 소독). draw.io SVG(루트 `content`)는 draw.io로만 연다.
+- MCP: `svg_put`(올리기 + 지운 것 진단), `doc_structure`에 인라인 SVG 도형 목록, `doc_ops` 설명에 SVG 넣기·`svgAttr`.
+- 배포(사용자 확인 대기): draw.io Worker는 아직 만들지 않았다. CI에는 손으로 돌리는 `deploy-drawio` job(Variables `DRAWIO_DEPLOY_ENABLED=true`일 때만)을 두었고 절차는 `apps/worker/README.md` "draw.io 편집기". 앱 화면에는 CSP가 없어(정적 자산) `frame-src`를 더할 곳이 없다. draw.io를 막는 쪽은 draw.io 응답의 `frame-ancestors`다.
+- 함께 고친 버그: 콘텐츠 도메인 304 응답에 CORS가 없어, `<img>`로 먼저 받은 SVG를 편집기가 fetch로 다시 읽을 때 실패했다(TESTING 5절).
+- 계획과 다른 점: 덱 `svgAttr`는 하지 않았다(위). draw.io 화면 테스트는 대역 페이지로 프로토콜을 확인하고, 실제 draw.io는 `apps/drawio`의 확인 스크립트로 본다(CI에는 draw.war를 받지 않는다). 라이선스 고지 파일은 아직 없다(V6 보안·운영 마감에서 제3자 고지 목록과 함께).
+- 테스트: TC-VE-21~31, TC-CF-50, TC-CFUI-22, TC-MCP-01·23, TC-ED-08·TC-VE-13 갱신.

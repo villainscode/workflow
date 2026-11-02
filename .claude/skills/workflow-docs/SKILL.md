@@ -30,6 +30,7 @@ description: 업무 문서 사이트(localhost:8000)의 문서를 찾고, 텍스
 - 정식 확정: `release_document`.
 - **슬라이드 덱**(5.0): 새 덱은 `deck_create`(슬라이드마다 `<section id=…>` HTML 한 조각). 고칠 때는 `deck_get`으로 data-eid와 rev를 읽고 `slide_patch`(연산)로 작게 고친다. 통째 교체·새 슬라이드는 `slide_put`, 그림은 `asset_put`으로 올려 받은 `asset:<sha256>`을 src에 쓴다. 쓰기 도구가 돌려준 진단(파일:줄:칸 [코드] → fix)대로 고쳐 다시 보낸다. 사람이 고친 뒤에는 반드시 `deck_get`으로 다시 읽는다. 덱 쓰기는 로컬 사이트와 Cloudflare 워크스페이스 모두 된다(6.0 VL). `deck_render`(PNG 미리보기)만 Cloudflare 전용이다.
 - **HTML·DOCX·PPTX·XLSX 구조 고치기**(5.0, Cloudflare): `doc_structure`로 eid(HTML)·표/그림 id(오피스)와 rev를 읽고 `doc_ops`로 표 행·열·너비, 블록 넣기·지우기·옮기기, 그림을 고친다. 저장마다 HTML eid가 바뀌므로 다시 고칠 때는 `doc_structure`를 다시 읽는다. 결과는 수정본이고 버전은 사람이 만든다. 잘못 고쳤으면 `revision_list`로 보고 `revision_restore`로 되돌린다.
+- **SVG**(6.0 V4): `svg_put`으로 SVG를 올리면 서버가 소독하고(지운 것을 진단으로 알려 준다) `asset:<sha256>`을 준다. HTML에는 `doc_ops` insert·place의 `{kind:image,src:"asset:…"}`(파일 참조, 기본) 또는 `{kind:svg,src:"asset:…"}`(인라인), 슬라이드에는 `<img src="asset:…">`. 인라인 SVG 도형은 `doc_structure`의 도형 eid로 `svgAttr{eid,name:fill|stroke|text,value}`. 다이어그램 원본 규칙(`.drawio` 원본 + 파생 SVG)은 그대로다.
 
 ## 참조와 화면 표시
 - 사용자가 사이트 "참조 복사"로 복사한 주소(`…?v=<버전>&seg=12` 또는 `seg=12-15`, `seg=3,10-12`)를 붙여 넣으면 `get_text`에 그 주소를 그대로 넘겨 ▶ 표시된 조각을 확인하고 `edit_text`로 고친다. 주소의 버전이 최신이 아니면 최신 버전에서 같은 글자를 다시 찾는다.

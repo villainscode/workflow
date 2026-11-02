@@ -24,7 +24,11 @@ export async function serveContent(c: Context<AppEnv>) {
     return new Response(obj.body, { headers: {
       "content-type": a.mime, "content-length": String(a.size), etag: `"${a.sha256}"`, "cache-control": "private, max-age=31536000, immutable",
       "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
-      ...(c.env.APP_ORIGIN && c.req.header("origin") === c.env.APP_ORIGIN ? { "access-control-allow-origin": c.env.APP_ORIGIN, vary: "Origin" } : {}),
+      // SVG 자산(소독함)도 직접 열리면 스크립트가 출처 권한을 갖지 못하게(아래 버전 파일과 같은 규칙)
+      ...(a.mime === "image/svg+xml" ? { "content-security-policy": "sandbox" } : {}),
+      // Vary는 늘 붙인다(아래 버전 파일과 같은 이유)
+      vary: "Origin",
+      ...(c.env.APP_ORIGIN && c.req.header("origin") === c.env.APP_ORIGIN ? { "access-control-allow-origin": c.env.APP_ORIGIN } : {}),
     } });
   }
   // 버전 자리에 r<번호>가 오면 그 수정본(작업본 미리보기). 매니페스트에서 파일을 찾는다
@@ -33,7 +37,10 @@ export async function serveContent(c: Context<AppEnv>) {
     : await resolveContent(c.env.DB, wsId, segments);
   if (!file) return c.text("Not Found", 404);
   const etag = `"${file.sha256}"`;
-  if (c.req.header("if-none-match") === etag) return c.body(null, 304);
+  // 앱 화면이 글자 파일(Markdown·코드·표·DOCX·SVG)을 fetch로 읽는다. 콘텐츠 도메인이 따로이므로 앱 출처만 허용한다(자격 증명은 주소의 토큰뿐, 쿠키 없음).
+  // Vary는 늘, CORS는 다시 확인(304)에도 붙인다: <img>로 먼저 받아 캐시된 응답을 fetch가 304로 되살리면 CORS 헤더가 없어 실패했다(TESTING 5절)
+  const cors: Record<string, string> = { vary: "Origin", ...(c.env.APP_ORIGIN && c.req.header("origin") === c.env.APP_ORIGIN ? { "access-control-allow-origin": c.env.APP_ORIGIN } : {}) };
+  if (c.req.header("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag, ...cors } });
   const obj = await c.env.BLOBS.get(blobKey(wsId, file.sha256));
   if (!obj) return c.text("파일 본문이 없습니다", 404);
 
@@ -45,12 +52,8 @@ export async function serveContent(c: Context<AppEnv>) {
     "cache-control": "private, max-age=3600",
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
+    ...cors,
   });
-  // 앱 화면이 글자 파일(Markdown·코드·표·DOCX)을 fetch로 읽는다. 콘텐츠 도메인이 따로이므로 앱 출처만 허용한다(자격 증명은 주소의 토큰뿐, 쿠키 없음)
-  if (c.env.APP_ORIGIN && c.req.header("origin") === c.env.APP_ORIGIN) {
-    headers.set("access-control-allow-origin", c.env.APP_ORIGIN);
-    headers.set("vary", "Origin");
-  }
   // HTML·SVG는 직접 열려도 스크립트가 출처 권한을 갖지 못하게 sandbox. PDF는 Chrome이 sandbox 안에서 열지 않아 걸지 않는다(.claude/guides/site-local.md 뷰어 절)
   if (/html|svg/.test(file.mime)) {
     headers.set("content-security-policy", "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals allow-downloads");

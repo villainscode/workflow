@@ -2,6 +2,7 @@ import { parse, parseFragment } from "parse5";
 import type { DefaultTreeAdapterMap } from "parse5";
 import { parseStyle } from "../slide/css.ts";
 import { checkDocStyle, docColors, docFonts, mergeStyle, PIN_ONLY, problemText } from "./docstyle.ts";
+import { scopeSvg, SvgError } from "../svg.ts";
 
 /**
  * HTML 구조 편집(5.0 M3, spec/REQUIREMENT-5.0.md 4.1). 2.0 텍스트 편집과 같은 원리를 요소 단위로 넓혔다:
@@ -12,6 +13,8 @@ import { checkDocStyle, docColors, docFonts, mergeStyle, PIN_ONLY, problemText }
  * - 새로 넣는 표·그림은 문서에 이미 있는 같은 종류 요소의 class를 따른다(문서 디자인 체계 유지).
  * - 속성 편집(6.0 V2, D-55): setStyle은 요소의 style 속성만 다시 쓴다(허용 목록은 docstyle.ts). 되돌리기는 수정본으로 한다(연산마다 수정본 하나).
  * - 자유 배치(6.0 V3, D-54): toPinned·place·unpin. 아래 "자유 배치" 절.
+ * - SVG(6.0 V4, D-60): 기본은 파일 참조(<img src="assets/….svg">). 인라인(insert·place의 kind svg)은 소독 뒤 id·<style> 범위를 좁혀 넣고(svg.ts scopeSvg),
+ *   인라인 SVG 안 도형의 채움·선·글자는 svgAttr로 고친다(도형은 shape eid, 편집 사본의 data-shape).
  */
 
 type Node = DefaultTreeAdapterMap["node"];
@@ -24,12 +27,14 @@ export type NewNode =
   | { kind: "table"; rows: number; cols: number; header?: boolean }
   | { kind: "image"; src: string; alt?: string; width?: number }
   | { kind: "paragraph"; text?: string }
-  | { kind: "heading"; level: 2 | 3 | 4; text?: string };
+  | { kind: "heading"; level: 2 | 3 | 4; text?: string }
+  /** 인라인 SVG(소독한 SVG 글). 작업본 층이 asset:을 글로 바꿔 준다 */
+  | { kind: "svg"; svg: string };
 
 /** 고정 위치 상자: left·width는 기준 상자(가장 가까운 위치 지정 조상, 보통 섹션) 너비의 %, top은 px(6.0 11절: px만 쓰면 중간 폭에서 넘친다) */
 export interface PinBox { left: number; top: number; width: number }
 /** 끌어 놓은 자리에 새로 넣는 요소 */
-export type PlaceNode = { kind: "image"; src: string; alt?: string } | { kind: "textbox"; text?: string };
+export type PlaceNode = { kind: "image"; src: string; alt?: string } | { kind: "textbox"; text?: string } | { kind: "svg"; svg: string };
 
 export type HtmlOp =
   | { t: "setText"; eid: Eid; html: string }
@@ -52,18 +57,22 @@ export type HtmlOp =
   /** 고정 위치를 풀고 흐름(원래 style)으로 되돌린다 */
   | { t: "unpin"; eid: Eid }
   /** 기준 섹션(base, outline의 pinBase·isBase) 끝에 새 그림·글상자를 고정 위치로 넣는다 */
-  | { t: "place"; base: Eid; node: PlaceNode; box: PinBox; minHeight?: number };
+  | { t: "place"; base: Eid; node: PlaceNode; box: PinBox; minHeight?: number }
+  /** 인라인 SVG 안 도형(shape eid)의 채움·선 색이나 글자(text·tspan) */
+  | { t: "svgAttr"; eid: Eid; name: "fill" | "stroke" | "text"; value: string };
 
 export class StructEditError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
 /** 고를 수 있는 요소(편집 사본에 data-eid를 붙이는 것) */
-const BLOCKS = new Set(["section", "article", "header", "footer", "div", "figure", "figcaption", "table", "img", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+const BLOCKS = new Set(["section", "article", "header", "footer", "div", "figure", "figcaption", "table", "img", "svg", "p", "h1", "h2", "h3", "h4", "h5", "h6",
   "ul", "ol", "li", "blockquote", "pre", "dl", "dt", "dd", "caption", "tr", "th", "td", "aside", "details", "summary", "hr"]);
 /** 글자를 바꿀 수 있는 요소(안쪽 HTML을 인라인 마크로만 다시 쓴다) */
 const TEXT_BLOCKS = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "th", "td", "figcaption", "caption", "dt", "dd", "blockquote", "summary"]);
-const SKIP = new Set(["head", "script", "style", "noscript", "template", "svg", "math"]);
+const SKIP = new Set(["head", "script", "style", "noscript", "template", "math"]);
+/** 인라인 SVG 안에서 svgAttr로 고칠 수 있는 도형 */
+const SHAPES = new Set(["rect", "circle", "ellipse", "path", "polygon", "polyline", "line", "text", "tspan"]);
 
 interface Loc { start: number; end: number; innerStart: number; innerEnd: number; tagEnd: number }
 
@@ -83,20 +92,24 @@ function parseDoc(html: string) {
   // 모든 요소(원본 위치가 있는 것). 자유 배치의 기준 섹션은 고를 수 있는 블록이 아닐 수도 있다(nav 등)
   const byOffset = new Map<Eid, Element>();
   const parents = new Map<Element, Element | null>();
-  const walk = (n: Node, parent: Element | null) => {
+  // 인라인 SVG 안 도형(svgAttr 대상). SVG 안 요소는 블록으로 고르지 않는다
+  const shapes = new Map<Eid, Element>();
+  const walk = (n: Node, parent: Element | null, inSvg: boolean) => {
     if (isEl(n)) {
-      if (SKIP.has(n.tagName)) return;
+      if (SKIP.has(n.tagName) && !inSvg) return;
       parents.set(n, parent);
       if (n.sourceCodeLocation?.startTag) {
         byOffset.set(eidOf(n), n);
-        if (BLOCKS.has(n.tagName)) byEid.set(eidOf(n), n);
+        if (inSvg) { if (SHAPES.has(n.tagName)) shapes.set(eidOf(n), n); }
+        else if (BLOCKS.has(n.tagName)) byEid.set(eidOf(n), n);
       }
       parent = n;
+      if (n.tagName === "svg") inSvg = true;
     }
-    if ("childNodes" in n) for (const c of n.childNodes) walk(c, parent);
+    if ("childNodes" in n) for (const c of n.childNodes) walk(c, parent, inSvg);
   };
-  walk(doc, null);
-  return { doc, byEid, byOffset, parents, firstOf: (tag: string) => [...byEid.values()].find((e) => e.tagName === tag) };
+  walk(doc, null, false);
+  return { doc, byEid, byOffset, parents, shapes, firstOf: (tag: string) => [...byEid.values()].find((e) => e.tagName === tag) };
 }
 type Ctx = ReturnType<typeof parseDoc>;
 
@@ -251,6 +264,7 @@ function newNodeHtml(n: NewNode, ctx: ReturnType<typeof parseDoc>, html: string,
     return `<figure${cls("figure")}><img src="${escAttr(src)}" alt="${escAttr(n.alt ?? "")}"${w}></figure>`;
   }
   if (n.kind === "heading") return `<h${n.level}${cls(`h${n.level}`)}>${esc(n.text ?? "")}</h${n.level}>`;
+  if (n.kind === "svg") return `<figure${cls("figure")}>${inlineSvg(html, n.svg)}</figure>`;
   return `<p>${esc(n.text ?? "")}</p>`;
 }
 
@@ -427,14 +441,19 @@ export function applyOp(html: string, op: HtmlOp): string {
       };
       walk(el);
       let piece = html.slice(l.start, l.end);
+      // 인라인 SVG는 안의 id(그라데이션 참조 등)를 지우면 깨지므로 새 접두어로 다시 범위를 좁힌다
+      if (el.tagName === "svg") ids.length = 0;
       for (const [a, b] of ids.sort((x, y) => y[0] - x[0])) {
         let s0 = a - l.start;
         while (s0 > 0 && /[ \t]/.test(piece[s0 - 1])) s0--;
         piece = piece.slice(0, s0) + piece.slice(b - l.start);
       }
+      // style·data-pin(고정 위치)은 소독에서 남는다
+      if (el.tagName === "svg") piece = inlineSvg(html, piece);
       const ind = indentAt(html, l.start);
       return splice(html, l.end, l.end, ind ? `\n${ind}${piece}` : piece);
     }
+    case "svgAttr": return svgAttr(html, ctx, op);
     case "toPinned": return toPinned(html, ctx, op.eid, op.box, op.minHeight);
     case "unpin": return unpin(html, ctx, op.eid);
     case "place": return place(html, ctx, op);
@@ -488,7 +507,10 @@ export interface Block {
   pinned: boolean;
   pinBase: Eid | null;
   isBase: boolean;
+  /** 인라인 SVG(6.0 V4): 안의 도형(svgAttr 대상, 200개까지)과 draw.io 편집 정보가 있는지 */
+  svg?: { shapes: SvgShape[]; drawio: boolean };
 }
+export interface SvgShape { eid: Eid; tag: string; fill: string | null; stroke: string | null; text: string | null }
 
 /** 고를 수 있는 요소 목록(문서 순서) */
 export function outline(html: string): Block[] {
@@ -506,6 +528,13 @@ export function outline(html: string): Block[] {
     if (el.tagName === "table") {
       const s = tableShape(el);
       b.table = { rows: s.rows.length, cols: colCount(s), widths: colgroupWidths(s.colgroup), merged: s.merged };
+    }
+    if (el.tagName === "svg") {
+      const inside = (n: Element): boolean => { for (let p = ctx.parents.get(n) ?? null; p; p = ctx.parents.get(p) ?? null) if (p === el) return true; return false; };
+      const paint = (n: Element, k: string) => new RegExp(`(?:^|;)\\s*${k}\\s*:\\s*([^;]+)`, "i").exec(attr(n, "style") ?? "")?.[1]?.trim() ?? attr(n, k) ?? null;
+      const shapes = [...ctx.shapes.values()].filter(inside).slice(0, 200).map((n) => ({ eid: eidOf(n), tag: n.tagName, fill: paint(n, "fill"), stroke: paint(n, "stroke"),
+        text: (n.tagName === "text" || n.tagName === "tspan") && !kids(n).length ? textOf(n).trim().slice(0, 120) : null }));
+      b.svg = { shapes, drawio: attr(el, "content") !== undefined };
     }
     if (el.tagName === "img") {
       b.image = { src: attr(el, "src") ?? "", alt: attr(el, "alt") ?? "", width: Number(/width:\s*([\d.]+)%/.exec(attr(el, "style") ?? "")?.[1]) || null };
@@ -525,7 +554,7 @@ export function markEids(html: string, baseHref?: string): string {
   // 고를 수 있는 블록에는 data-eid, 자유 배치 기준 섹션에는 data-base(화면이 좌표를 잰다), 본문 뿌리에는 data-root
   const root = contentRoot(ctx);
   const inserts: (readonly [number, string])[] = [...ctx.byOffset.values()].flatMap((el) => {
-    const marks = `${ctx.byEid.has(eidOf(el)) ? ` data-eid="${eidOf(el)}"` : ""}${isBase(ctx, el) ? ` data-base="${eidOf(el)}"` : ""}${el === root ? " data-root" : ""}`;
+    const marks = `${ctx.byEid.has(eidOf(el)) ? ` data-eid="${eidOf(el)}"` : ""}${ctx.shapes.has(eidOf(el)) ? ` data-shape="${eidOf(el)}"` : ""}${isBase(ctx, el) ? ` data-base="${eidOf(el)}"` : ""}${el === root ? " data-root" : ""}`;
     return marks ? [[el.sourceCodeLocation!.startTag!.startOffset + 1 + el.tagName.length, marks] as const] : [];
   });
   const base = baseHref === undefined ? "" : `<base href="${escAttr(baseHref)}">`;
@@ -668,7 +697,8 @@ function place(html: string, ctx: Ctx, op: Extract<HtmlOp, { t: "place" }>): str
   const piece = n.kind === "image"
     ? `<img src="${escAttr(checkSrc(n.src))}" alt="${escAttr(n.alt ?? "")}" data-pin="" style="${st}">`
     : n.kind === "textbox" ? `<p data-pin="" style="${st}">${esc(n.text ?? "")}</p>`
-    : (() => { throw new StructEditError(400, "place의 node.kind는 image·textbox입니다"); })();
+    : n.kind === "svg" ? inlineSvg(html, n.svg).replace(/^<svg/, `<svg data-pin="" style="${st}"`)
+    : (() => { throw new StructEditError(400, "place의 node.kind는 image·textbox·svg입니다"); })();
   // 섹션의 마지막 요소 뒤(그리는 순서가 맨 앞), 요소가 없으면 섹션 안 처음
   const l = locOf(base)!;
   const last = kids(base).at(-1);
@@ -732,4 +762,41 @@ function ensureRule(html: string): string {
   const at = head?.sourceCodeLocation?.endTag?.startOffset ?? lastInHead?.sourceCodeLocation?.endOffset
     ?? body?.sourceCodeLocation?.startTag?.startOffset ?? 0;
   return splice(html, at, at, PIN_RULE);
+}
+
+// ---------- 인라인 SVG(6.0 V4) ----------
+
+/** 소독·범위 좁히기를 거친 인라인 SVG. 접두어는 문서에 아직 없는 svg<번호> */
+function inlineSvg(html: string, svg: string): string {
+  if (typeof svg !== "string" || !svg.trim()) throw new StructEditError(400, "svg 내용이 비어 있습니다");
+  let n = 1;
+  for (const m of html.matchAll(/\bid="svg(\d+)(?:-[^"]*)?"/g)) n = Math.max(n, Number(m[1]) + 1);
+  try {
+    // 루트의 크기 지정(width·height)은 HTML 안에서 넘치지 않게 지우고 viewBox로 비율을 지킨다
+    return scopeSvg(svg, `svg${n}`).svg.replace(/^<svg([^>]*)>/, (_m, a: string) => `<svg${a.replace(/\s(width|height)="[^"]*"/g, "")}>`);
+  } catch (e) {
+    if (e instanceof SvgError) throw new StructEditError(e.status, e.message);
+    throw e;
+  }
+}
+
+const SVG_PAINT = /^(none|currentColor|#[0-9a-fA-F]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\)|var\(--[A-Za-z0-9_-]+\)|[a-z]{3,20})$/;
+
+function svgAttr(html: string, ctx: Ctx, op: Extract<HtmlOp, { t: "svgAttr" }>): string {
+  const el = ctx.shapes.get(op.eid);
+  if (!el) throw new StructEditError(409, `SVG 도형 ${op.eid}을(를) 찾을 수 없습니다. 문서가 바뀌었으면 다시 불러오세요(outline의 svg.shapes)`);
+  const v = String(op.value ?? "").trim();
+  if (op.name === "text") {
+    if (el.tagName !== "text" && el.tagName !== "tspan") throw new StructEditError(400, "글자는 text·tspan 도형만 바꿉니다");
+    if (kids(el).length) throw new StructEditError(400, "안에 tspan이 있는 글자는 tspan을 골라 바꾸세요");
+    if (v.length > 500) throw new StructEditError(400, "글자는 500자까지입니다");
+    const l = locOf(el)!;
+    return splice(html, l.innerStart, l.innerEnd, esc(v));
+  }
+  if (op.name !== "fill" && op.name !== "stroke") throw new StructEditError(400, "svgAttr의 name은 fill·stroke·text입니다");
+  if (!SVG_PAINT.test(v)) throw new StructEditError(400, `${op.name} 값이 맞지 않습니다: ${v} (#rrggbb·rgb()·색 이름·none·var(--토큰))`);
+  // style 속성에 같은 속성이 있으면 그쪽이 이기므로 style을 고친다
+  const style = attr(el, "style") ?? "";
+  if (new RegExp(`(^|;)\\s*${op.name}\\s*:`, "i").test(style)) return writeStyle(html, el, mergeStyle(style, { [op.name]: v }));
+  return setAttribute(html, el, op.name, v);
 }

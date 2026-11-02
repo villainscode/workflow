@@ -4,7 +4,7 @@
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, execSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -74,7 +74,7 @@ describe("Cloudflare 화면", { skip }, () => {
     // 변환(PPTX)·draw.io 문서
     const { addFixtureDoc } = await import("../../../site/test/helpers.ts");
     addFixtureDoc(ws.docs, "notes", "slides", "sample-slides.pptx", "pptx");
-    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { mkdirSync } = await import("node:fs");
     mkdirSync(join(ws.docs, "notes/flow/v0.0"), { recursive: true });
     writeFileSync(join(ws.docs, "notes/flow/v0.0/flow.drawio"), '<mxfile><diagram name="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="시작" vertex="1" parent="1"><mxGeometry x="10" y="10" width="80" height="40" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>');
     writeFileSync(join(ws.docs, "notes/flow/meta.yaml"), "title: 흐름도\ncategory: sdlc\nmenu: notes\nkind: drawio\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: flow.drawio\n");
@@ -145,6 +145,11 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
 </body></html>
 `);
       writeFileSync(join(ws.docs, "notes/pin-html/meta.yaml"), "title: 배치 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
+      // SVG(6.0 V4): 버전 폴더의 SVG 그림 하나
+      mkdirSync(join(ws.docs, "notes/svg-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/svg-html/v0.0/shape.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120"><rect id="r1" x="10" y="10" width="120" height="60" fill="#cccccc"/></svg>');
+      writeFileSync(join(ws.docs, "notes/svg-html/v0.0/page.html"), '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>t</title></head><body><main><h1>SVG 문서</h1><p>도식</p><figure><img src="shape.svg" alt="도형"></figure></main></body></html>');
+      writeFileSync(join(ws.docs, "notes/svg-html/meta.yaml"), "title: SVG 문서\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
     }
     // PDF(5.0 M6): 폭이 다른 3쪽 + 양식 글자 칸
     {
@@ -673,6 +678,51 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     assert.equal((await work()).match(/<h2>서식 제목<\/h2>/g)!.length, 2);
     // 레이어 패널: 블록 트리
     await page.waitForFunction(() => document.querySelector('[role="tree"]')?.textContent?.includes("제목 2 · 서식 제목"), { timeout: 10_000 });
+  });
+
+  test("TC-CFUI-22 SVG(6.0 V4): 버전 폴더 SVG 그림을 「SVG 고치기」(svgedit)로 색을 바꿔 저장하면 새 SVG 자산(assets/….svg)으로 바뀌고 콘텐츠 도메인에서 sandbox CSP로 준다. SVG 파일을 그림으로 넣으면 소독된다", async () => {
+    const D = "/docs/notes/svg-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return { html: await (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text(), files: w.files as { path: string; url: string }[] };
+    };
+    const inFrame = (body: string) => page.evaluate((f: string, b: string) => new Function("d", b)(document.querySelector<HTMLIFrameElement>(f)!.contentDocument!), FRAME, body);
+    await open("/team/sdlc/notes/svg-html", "SVG 문서");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector("img[data-eid]") && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME);
+    await inFrame('d.querySelector("img").dispatchEvent(new MouseEvent("click", { bubbles: true }))');
+    await clickText("SVG 고치기", "aside");
+    await page.waitForFunction(() => !!(window as any).svgCanvas && !!document.querySelector("#svgcontent #r1"), { timeout: 20_000 });
+    await page.evaluate(() => {
+      const c = (window as any).svgCanvas;
+      c.clearSelection(); c.addToSelection([document.querySelector("#svgcontent #r1")]); c.setColor("fill", "#00aa55");
+    });
+    await clickText("저장", "dialog[open]");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    const w1 = await work();
+    const src = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="도형">/.exec(w1.html)?.[1];
+    assert.ok(src, w1.html);
+    const res = await fetch(w1.files.find((f) => f.path === src)!.url);
+    assert.equal(res.headers.get("content-type"), "image/svg+xml; charset=utf-8");
+    assert.match(res.headers.get("content-security-policy") ?? "", /^sandbox/);
+    const body = await res.text();
+    assert.match(body, /fill="#00aa55"/);
+    assert.match(body, /viewBox="0 0 240 120"/);
+    // SVG 파일을 그림으로 넣기: 소독된 자산
+    const file = join(ws.root, "evil.svg");
+    writeFileSync(file, '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle r="9" cx="10" cy="10" onmouseover="alert(1)"/><script>alert(2)</script></svg>');
+    await page.waitForFunction((f: string) => !!document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelector("p[data-eid]"), { timeout: 15_000 }, FRAME);
+    await inFrame('d.querySelector("p").dispatchEvent(new MouseEvent("click", { bubbles: true }))');
+    await (await page.waitForSelector('input[aria-label="그림 넣기"]')).uploadFile(file);
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    const w2 = await work();
+    const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="evil">/.exec(w2.html)?.[1];
+    assert.ok(src2, w2.html);
+    assert.doesNotMatch(await (await fetch(w2.files.find((f) => f.path === src2)!.url)).text(), /script|onmouseover/);
   });
 
   test("TC-CFUI-21 HTML 자유 배치(6.0 V3): 옮기기 손잡이로 끌면 고정 위치(놓은 자리와 1px 이내), 그림 파일을 놓은 자리에 고정 그림, 방향키 이동, 흐름으로 되돌리기, 640px 미리보기는 가로 스크롤 없음", async () => {

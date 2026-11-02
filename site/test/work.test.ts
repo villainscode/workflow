@@ -123,10 +123,34 @@ describe("로컬 수정본(6.0 VL)", () => {
     assert.match(readText(join(dir, "slides/cover.html")), new RegExp(a.asset));
   });
 
-  test("TC-VE-13 그림 자산은 PNG·JPEG·WebP·GIF만(SVG는 400), 없는 자산은 404", async () => {
+  test("TC-VE-13 그림 자산은 PNG·JPEG·WebP·GIF·SVG만(SVG가 아닌 글은 400), 없는 자산은 404", async () => {
     const form = new FormData();
-    form.append("file", new File(["<svg/>"], "x.svg", { type: "image/svg+xml" }));
+    form.append("file", new File(["<html/>"], "x.svg", { type: "image/svg+xml" }));
     assert.equal((await fetch(U + "/api/assets", { method: "POST", body: form })).status, 400);
+    const f2 = new FormData();
+    f2.append("file", new File(["x"], "x.txt", { type: "text/plain" }));
+    assert.equal((await fetch(U + "/api/assets", { method: "POST", body: f2 })).status, 400);
     assert.equal((await call(U, "GET", `/api/assets/${"0".repeat(64)}/url`)).status, 404);
+  });
+
+  test("TC-VE-28 로컬 SVG 자산: 소독해 저장(지운 것 진단), 앱 출처 raw는 sandbox CSP, HTML에 파일 참조로 넣고 버전으로 저장하면 버전 폴더 assets/에 SVG가 생긴다", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><circle cx="20" cy="20" r="10" fill="#c00" onload="x()"/><script>x()</script></svg>';
+    const form = new FormData();
+    form.append("file", new File([svg], "c.svg", { type: "image/svg+xml" }));
+    const a = await (await fetch(U + "/api/assets", { method: "POST", body: form })).json() as { asset: string; sha256: string; width: number; height: number; removed: string[] };
+    assert.deepEqual([a.width, a.height, a.removed.sort()], [80, 40, ["@onload", "script"]]);
+    const u = await call(U, "GET", `/api/assets/${a.sha256}/url`);
+    const raw = await fetch(U + u.body.url);
+    assert.deepEqual([raw.headers.get("content-type"), raw.headers.get("content-security-policy")], ["image/svg+xml", "sandbox"]);
+    assert.doesNotMatch(await raw.text(), /script|onload/);
+    const s = await call(U, "GET", "/api/docs/process/guide/work/structure");
+    const h1 = s.body.blocks.find((b: { tag: string }) => b.tag === "h1");
+    const r = await call(U, "POST", "/api/docs/process/guide/revisions", { baseRev: s.body.rev, ops: [{ t: "insert", ref: h1.eid, where: "after", node: { kind: "image", src: a.asset, alt: "원" } }] });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const p = await call(U, "POST", "/api/docs/process/guide/publish", { baseRev: r.body.rev });
+    assert.equal(p.status, 200, JSON.stringify(p.body));
+    const rel = `assets/${a.sha256.slice(0, 16)}.svg`;
+    assert.match(readText(join(ws.docs, `process/guide/${p.body.version}/guide.html`)), new RegExp(`<img src="${rel}" alt="원">`));
+    assert.doesNotMatch(readText(join(ws.docs, `process/guide/${p.body.version}/${rel}`)), /script/);
   });
 });

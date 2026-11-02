@@ -1,0 +1,19 @@
+// draw.io 편집기 정적 자산 Worker(6.0 V4, D-57 자체 호스팅). 코드 없이 public/(scripts/fetch.mjs가 draw.war를 풀어 만든다)만 준다.
+// 앱(workflow-app)·콘텐츠 도메인과 다른 출처여야 한다: 사용자 HTML이 draw.io의 localStorage·창에 닿지 않게(spec/REQUIREMENT-6.0.md 4.4).
+// 응답 헤더(CSP frame-ancestors·connect-src 'self')는 fetch.mjs가 public/_headers로 쓴다.
+// **배포 전 사용자 확인 필요**: 이 Worker와 도메인(production custom domain)은 실제 Cloudflare 계정에 새로 생긴다(apps/worker/README.md "draw.io 편집기").
+{
+  "name": "workflow-drawio",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "public", "not_found_handling": "404-page" },
+  "env": {
+    // workers.dev 주소: https://workflow-drawio-staging.<계정>.workers.dev → 앱 staging의 DRAWIO_ORIGIN
+    "staging": { "name": "workflow-drawio-staging", "workers_dev": true },
+    // draw.simplite.net(custom domain) → 앱 production의 DRAWIO_ORIGIN
+    "production": {
+      "name": "workflow-drawio",
+      "workers_dev": false,
+      "routes": [{ "pattern": "draw.simplite.net", "custom_domain": true }]
+    }
+  }
+}
