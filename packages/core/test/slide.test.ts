@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { applyOps, checkDeck, parseSlide, renderDeckHtml, renderSlideHtml, serializeSlide, SLIDE_BASE_CSS, SlideError, slidePath, type Slide, type SlideOp } from "../src/slide/index.ts";
+import { applyOps, checkDeck, parseSlide, sanitizeInline, renderDeckHtml, renderSlideHtml, serializeSlide, SLIDE_BASE_CSS, SlideError, slidePath, type Slide, type SlideOp } from "../src/slide/index.ts";
 
 /** 5.0 M4: 슬라이드 형식(명세 docs/slide-editor-spec.html 03·04·07절). 케이스 목록은 spec/TESTING.md 2.8 */
 
@@ -54,7 +54,7 @@ describe("슬라이드 형식", () => {
   <p style="margin-top:24px;z-index:2">a</p>
   <div onclick="x()" style="font-size:2em;background:url(x.png)">b</div>
   <script>alert(1)</script>
-  <p>c <a href="http://x.com">d</a> <span style="font-size:40px">e</span> <em>f</em></p>
+  <p>c <a href="http://x.com">d</a> <span style="font-weight:700">e</span> <em>f</em></p>
   <img src="https://x.com/a.png" alt="">
 </section>`;
     const r = parseSlide(bad);
@@ -67,6 +67,26 @@ describe("슬라이드 형식", () => {
     assert.equal(parseSlide("<div>x</div>").diagnostics[0].code, "root");
     assert.equal(parseSlide('<section id="Bad Id"></section>').diagnostics[0].code, "id");
     assert.equal(parseSlide('<section id="a"><p data-eid="x">1</p><p data-eid="x">2</p></section>').diagnostics[0].code, "eid-dup");
+  });
+
+  test("TC-VE-01 글자 일부 서식: span에 색·글꼴·크기를 함께 쓸 수 있고 정해진 순서로 정규화, 허용 밖 선언은 버리고 진단", () => {
+    const diags: Parameters<typeof sanitizeInline>[1] = [];
+    // Tiptap TextStyle이 내는 모양(공백·순서가 다르다)
+    const out = sanitizeInline('<span style="font-size: 48px; font-family: \'Noto Sans KR\'; color: #0e6b57">가</span>', diags);
+    assert.deepEqual(diags, []);
+    assert.equal(out, '<span style="color:#0e6b57;font-family:&#39;Noto Sans KR&#39;;font-size:48px">가</span>'.replace(/&#39;/g, "'"));
+    assert.equal(sanitizeInline('<span style="font-size:32px">나</span>'), '<span style="font-size:32px">나</span>');
+    // 허용 밖(굵기) 선언은 버리고 남은 것만, 크기 단위가 틀리면 그 선언도 버린다
+    const bad: Parameters<typeof sanitizeInline>[1] = [];
+    assert.equal(sanitizeInline('<span style="color:#123456;font-weight:700">다</span>', bad), '<span style="color:#123456">다</span>');
+    assert.equal(sanitizeInline('<span style="font-size:2em">라</span>', bad), "라");
+    assert.deepEqual(bad.map((d) => d.code), ["inline-style", "inline-style"]);
+    // 주입: 글꼴 이름에 ;·< 가 들어가면 버린다
+    assert.equal(sanitizeInline('<span style="font-family:x;background:url(a)">마</span>'), '<span style="font-family:x">마</span>');
+    assert.equal(sanitizeInline('<span style="font-family:\'a<b\'">바</span>'), "바");
+    // 슬라이드 왕복: 직렬화한 뒤 다시 읽어도 같다
+    const s = parseSlide('<section id="s"><p>앞 <span style="font-size:48px;color:#0e6b57">큰 글자</span></p></section>').slide!;
+    assert.equal(serializeSlide(parseSlide(serializeSlide(s)).slide!), serializeSlide(s));
   });
 
   test("TC-ED-30 연산마다 적용 후 역연산을 적용하면 원본과 같다", () => {

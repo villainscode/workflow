@@ -10,6 +10,7 @@ import { loadSite, saveSite } from "../server/sitefiles.ts";
 import { scanDocs } from "../server/scan.ts";
 import { DDL } from "../server/schema.ts";
 import { makeWorkspace, sleep } from "./helpers.ts";
+import { alignBoxes, distributeBoxes } from "../web/src/editor/align.ts";
 
 test("TC-VER-01 첫 버전은 v0.0, 이후 수정마다 minor +1", () => {
   assert.equal(nextVersion([]), "v0.0");
@@ -90,4 +91,19 @@ test("TC-IDX-01 문제가 있어도 색인을 멈추지 않고 경고로 모은�
   assert.ok(!warnings.some((w) => w.includes("_trash")));
   const titles = sqlite.prepare("SELECT title FROM document ORDER BY title").all().map((r: any) => r.title);
   assert.ok(titles.includes("샘플 프로세스 가이드") && titles.includes("주간 회의록"), "정상 문서는 색인됨");
+});
+
+test("TC-VE-02 정렬·분배(요소 편집기 공통 계산): 여럿은 감싸는 상자 기준, 하나는 바깥 기준, 분배는 처음·끝 고정에 간격 같게", () => {
+  const a = { left: 100, top: 50, width: 200, height: 100 }, b = { left: 400, top: 300, width: 100, height: 50 }, c = { left: 900, top: 120, width: 100, height: 80 };
+  assert.deepEqual(alignBoxes([a, b], "left").map((x) => x.left), [100, 100]);
+  assert.deepEqual(alignBoxes([a, b], "right").map((x) => x.left), [300, 400]);
+  assert.deepEqual(alignBoxes([a, b], "hcenter").map((x) => x.left), [200, 250]);
+  assert.deepEqual(alignBoxes([a, b], "bottom").map((x) => x.top), [250, 300]);
+  assert.deepEqual(alignBoxes([a, b], "vcenter").map((x) => x.top), [150, 175]);
+  // 하나면 바깥(슬라이드) 기준
+  assert.deepEqual(alignBoxes([a], "hcenter", { left: 0, top: 0, width: 1920, height: 1080 })[0], { ...a, left: 860 });
+  // 분배: 순서와 상관없이 위치 순으로, 처음(a)·끝(c)은 그대로, 사이 간격 (1000-100-400)/2 = 250
+  const d = distributeBoxes([c, a, b], "x");
+  assert.deepEqual(d.map((x) => x.left), [900, 100, 550]);
+  assert.deepEqual(distributeBoxes([a, b], "x"), [a, b]);
 });

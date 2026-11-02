@@ -10,7 +10,7 @@ import { EmptyState } from "../../../components/EmptyState.tsx";
 import { FitSlide } from "../DeckViewer.tsx";
 import { RevisionPanel } from "../../structedit/RevisionPanel.tsx";
 import { EditCanvas } from "./EditCanvas.tsx";
-import { Inspector } from "./Inspector.tsx";
+import { FONT_SIZES, Inspector } from "./Inspector.tsx";
 import { SlideList } from "./SlideList.tsx";
 import { useDeckEditor } from "./useDeckEditor.ts";
 import { useOtherSave } from "../../../lib/live.ts";
@@ -28,6 +28,7 @@ export function DeckEditor({ menu, doc, onExit }: { menu: string; doc: string; o
   const [selection, setSelection] = useState<string[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLDivElement | null>(null);
   useDeckFonts(ed.deck?.index);
 
   const order = ed.deck?.index.order ?? [];
@@ -48,6 +49,7 @@ export function DeckEditor({ menu, doc, onExit }: { menu: string; doc: string; o
   const slide = deck.slides[current];
   const family = deckFamily(deck.index);
   const palette = deck.index.palette ?? ["#1c2026", "#ffffff"];
+  const fonts = Object.values(deck.index.faces ?? {}).map((f) => ({ label: f.family, value: `"${f.family}"` }));
 
   const go = async (id: string) => { await ed.flush(); setCurrent(id); };
   const travel = (fn: () => string | null) => { const sid = fn(); if (sid && sid !== current) setCurrent(sid); };
@@ -101,12 +103,15 @@ export function DeckEditor({ menu, doc, onExit }: { menu: string; doc: string; o
               message: "수정본 이력에서 예전 수정본으로 되돌려 살릴 수 있습니다." })) await ed.remove(id);
           }} />
         <div className="flex min-h-0 flex-col">
+          {/* 글자 편집 중에만 도구 막대가 이 자리에 뜬다(TextEditor가 포털로 넣는다). 높이를 미리 잡아 캔버스 크기가 바뀌지 않게 한다 */}
+          <div ref={setToolbarSlot} className="min-h-[37px]" />
           <FitSlide>{(w) => (
             <EditCanvas key={current} slide={slide} family={family} width={w} selection={selection} setSelection={setSelection}
+              toolbar={{ slot: toolbarSlot, fonts, sizes: FONT_SIZES, palette }}
               apply={(ops) => ed.apply(current, ops)} onUndo={() => travel(ed.undo)} onRedo={() => travel(ed.redo)} setMessage={ed.setMessage} />
           )}</FitSlide>
         </div>
-        <Inspector slide={slide} selection={selection} setSelection={setSelection} apply={(ops) => ed.apply(current, ops)} palette={palette} setMessage={ed.setMessage} />
+        <Inspector slide={slide} selection={selection} setSelection={setSelection} apply={(ops) => ed.apply(current, ops)} palette={palette} fonts={fonts} setMessage={ed.setMessage} />
         {historyOpen && (
           <RevisionPanel menu={menu} doc={doc} current={deck.rev} busy={ed.saving} onRestore={async (rev) => {
             await ed.flush();

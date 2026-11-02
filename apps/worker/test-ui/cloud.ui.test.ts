@@ -84,6 +84,17 @@ describe("Cloudflare 화면", { skip }, () => {
     writeFileSync(join(ws.docs, "notes/intro-deck/v0.0/slides/cover.html"), '<section id="cover" style="background:#1c2026;color:#f7f7f4;padding:128px;display:flex;flex-direction:column;justify-content:center;gap:32px"><h1>팀 소개</h1><p>2026년 10월</p><aside>인사부터</aside></section>');
     writeFileSync(join(ws.docs, "notes/intro-deck/v0.0/slides/team.html"), '<section id="team" style="padding:128px;display:flex;flex-direction:column;gap:48px"><h2>구성원</h2><table style="font-size:28px"><tr><th style="width:30%">이름</th><th style="width:70%">역할</th></tr><tr><td>가</td><td>리뷰 게이트</td></tr></table><p style="position:absolute;left:1400px;top:900px;width:400px;height:60px;font-size:24px">예시 이름</p></section>');
     writeFileSync(join(ws.docs, "notes/intro-deck/meta.yaml"), "title: 팀 소개 덱\ncategory: sdlc\nmenu: notes\nkind: deck\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: deck.json\n");
+    // 요소 편집기(6.0 V1): 덱 글꼴(faces), 고정 위치 상자 3개, 표
+    mkdirSync(join(ws.docs, "notes/style-deck/v0.0/slides"), { recursive: true });
+    writeFileSync(join(ws.docs, "notes/style-deck/v0.0/deck.json"), JSON.stringify({ v: 1, title: "서식 덱", order: ["s1"], palette: ["#1c2026", "#0e6b57"],
+      faces: { body: { family: "Noto Sans KR", href: "https://fonts.googleapis.com/css2?family=Noto+Sans+KR" }, serif: { family: "Noto Serif KR", href: "https://fonts.googleapis.com/css2?family=Noto+Serif+KR" } } }));
+    writeFileSync(join(ws.docs, "notes/style-deck/v0.0/slides/s1.html"), '<section id="s1" style="padding:128px">'
+      + '<p data-eid="t1" style="font-size:40px">서식 바꿀 글</p>'
+      + '<table data-eid="tb" style="font-size:28px"><tr data-eid="r1"><th data-eid="h1" style="width:50%">가</th><th data-eid="h2" style="width:50%">나</th></tr><tr data-eid="r2"><td data-eid="c1">다</td><td data-eid="c2">라</td></tr></table>'
+      + '<div data-eid="b1" style="position:absolute;left:200px;top:600px;width:200px;height:100px;background:#0e6b57"></div>'
+      + '<div data-eid="b2" style="position:absolute;left:500px;top:700px;width:100px;height:100px;background:#1c2026"></div>'
+      + '<div data-eid="b3" style="position:absolute;left:1300px;top:650px;width:300px;height:100px;background:#0e6b57"></div></section>');
+    writeFileSync(join(ws.docs, "notes/style-deck/meta.yaml"), "title: 서식 덱\ncategory: sdlc\nmenu: notes\nkind: deck\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: deck.json\n");
     // PDF(5.0 M6): 폭이 다른 3쪽 + 양식 글자 칸
     {
       const { PDFDocument } = await import("pdf-lib");
@@ -430,6 +441,83 @@ describe("Cloudflare 화면", { skip }, () => {
     await clickConfirm("버전으로 저장");
     await status("버전으로 저장했습니다");
     assert.equal((await api(D)).versions.length, before.versions.length + 1);
+  });
+
+  test("TC-CFUI-19 요소 편집기(6.0 V1): 글자 도구 막대로 일부 글자 크기·색 → 새로 고침 뒤 유지, 블록 글꼴 칸, 표 행 높이, 고정 요소 정렬·분배, 레이어 앞뒤, ⌘Z", async () => {
+    const D = "/docs/notes/style-deck";
+    const html = async () => (await api(`${D}/deck`)).slides[0].html as string;
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const openEditor = async () => {
+      await open("/team/sdlc/notes/style-deck", "서식 덱");
+      await page.click('button[aria-label="슬라이드 편집"]');
+      await page.waitForSelector('.deck-edit-layer [data-eid="t1"]', { timeout: 20_000 });
+    };
+    const style = async (eid: string) => (await html()).match(new RegExp(`data-eid="${eid}" style="([^"]*)"`))?.[1] ?? "";
+    await openEditor();
+
+    // 글자 도구 막대: 두 번 눌러 편집 → 앞 두 글자를 골라 크기 64px·색 → Esc
+    await page.click('.deck-edit-layer [data-eid="t1"]', { count: 2 });
+    await page.waitForSelector(".slide-text-editor.ProseMirror-focused");
+    await page.waitForSelector('[data-text-toolbar] select[aria-label="글자 크기"]');
+    await page.evaluate(() => {
+      const t = document.querySelector(".slide-text-editor p")!.firstChild!;
+      const r = document.createRange(); r.setStart(t, 0); r.setEnd(t, 2);
+      const sel = getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    await page.select('[data-text-toolbar] select[aria-label="글자 크기"]', "64px");
+    await page.click('[data-text-toolbar] button[aria-label="글자색 #0e6b57"]');
+    assert.ok(await page.$(".slide-text-editor.ProseMirror-focused"), "막대를 써도 글자 편집이 이어진다");
+    await page.keyboard.press("Escape");
+    await status("수정본 1");
+    assert.match(await html(), /<p data-eid="t1" style="font-size:40px"><span style="color:#0e6b57;font-size:64px">서식<\/span> 바꿀 글<\/p>/);
+    await openEditor();
+    assert.equal(await page.$eval('.deck-edit-layer [data-eid="t1"] span', (e: Element) => getComputedStyle(e).fontSize), "64px", "새로 고침 뒤에도 유지");
+    assert.equal(await page.$("[data-text-toolbar]"), null, "글자 편집이 아니면 막대 없음");
+
+    // 블록 글꼴 칸(덱 faces에서)
+    await page.click('.deck-edit-layer [data-eid="t1"]');
+    await page.select('aside[aria-label="속성"] select:has(option[value=\'"Noto Serif KR"\'])', '"Noto Serif KR"');
+    await status("수정본 2");
+    assert.match(await style("t1"), /font-family:&quot;Noto Serif KR&quot;/);
+
+    // 표 행 높이: 둘째 행 칸을 고르고 높이 120
+    await page.click('.deck-edit-layer [data-eid="c1"]');
+    const input = await page.evaluateHandle(() => [...document.querySelectorAll('aside[aria-label="속성"] label')].find((l) => l.textContent?.startsWith("2행 높이"))!.querySelector("input")!);
+    await (input as any).click({ count: 3 });
+    await page.keyboard.type("120");
+    await page.keyboard.press("Enter");
+    await status("수정본 3");
+    assert.match(await style("r2"), /height:120px/);
+
+    // 정렬·분배: 세 상자를 Shift로 골라 위 맞춤 → 셋 다 top 600, 가로 간격 같게 → 사이 간격 (1600-200-600)/2 = 400
+    await page.click('.deck-edit-layer [data-eid="b1"]');
+    await page.keyboard.down("Shift");
+    await page.click('.deck-edit-layer [data-eid="b2"]');
+    await page.click('.deck-edit-layer [data-eid="b3"]');
+    await page.keyboard.up("Shift");
+    await page.click('aside[aria-label="속성"] button[aria-label="위 맞춤"]');
+    await status("수정본 4");
+    for (const e of ["b1", "b2", "b3"]) assert.match(await style(e), /top:600px/, e);
+    await page.click('aside[aria-label="속성"] button[aria-label="가로 간격 같게 (3개 이상)"]');
+    await status("수정본 5");
+    assert.match(await style("b2"), /left:800px/);
+    assert.match(await style("b1"), /left:200px/);
+    assert.match(await style("b3"), /left:1300px/);
+
+    // 레이어: b1을 한 칸 아래로(문서 순서 뒤로 = 위에 그려짐) → b2 다음
+    const order = async () => [...(await html()).matchAll(/data-eid="(b\d)"/g)].map((m) => m[1]).join(",");
+    assert.equal(await order(), "b1,b2,b3");
+    const item = await page.evaluateHandle(() => [...document.querySelectorAll('[aria-label="레이어"] [role="treeitem"]')].find((li) => li.textContent?.includes("상자") && li.querySelector("button")?.textContent?.startsWith("상자 · 고정"))!);
+    await (await (item as any).$('button[aria-label="아래로 (문서 순서 한 칸 뒤)"]')).click();
+    await status("수정본 6");
+    assert.equal(await order(), "b2,b1,b3");
+
+    // ⌘Z: 레이어 옮기기를 되돌린다
+    await page.focus('[aria-label="슬라이드 편집 캔버스"]');
+    await page.keyboard.down("Meta"); await page.keyboard.press("z"); await page.keyboard.up("Meta");
+    await status("수정본 7");
+    assert.equal(await order(), "b1,b2,b3");
   });
 
   test("TC-CFUI-15 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 고정 위치 그림이 되고, 서명 주소로 그린다", async () => {
