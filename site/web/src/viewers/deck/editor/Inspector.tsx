@@ -1,15 +1,23 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronRight, Columns3, Heading2, ImagePlus, ImageUp, Pin, Rows3, Table2, Trash2, Type } from "lucide-react";
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter, AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowDown, ArrowUp, ChevronRight, Columns3, Heading2, ImagePlus, ImageUp, Pin, Rows3, Table2, Trash2, Type } from "lucide-react";
 import { findEl, type Slide, type SlideEl, type SlideOp } from "@workflow/core/slide";
 import { uploadAsset } from "../../../lib/structedit.ts";
 import { useConfirm } from "../../../components/confirm/ConfirmProvider.tsx";
 import { IconButton } from "../../../components/IconButton.tsx";
+import { CANVAS } from "@workflow/core/slide";
 import { measureBox, TEXT_TAGS } from "./EditCanvas.tsx";
+import { alignBoxes, distributeBoxes, type AlignHow, type Box } from "../../../editor/align.ts";
+import { LayerPanel, type LayerItem } from "../../../editor/LayerPanel.tsx";
+import type { FontOption } from "../../../editor/TextToolbar.tsx";
 
 /**
  * 속성 패널(명세 06절). 입력 칸은 허용 CSS 목록에서 요소 종류별 묶음만 보여 준다. 칸은 Enter·바깥 누름에서 setStyle 하나로 확정한다.
  * 위쪽 「넣기」 막대는 고른 상자(없으면 슬라이드) 끝에 글상자·제목·표·그림을 넣는다.
+ * 고정 위치 요소를 여럿 고르면 정렬·분배(editor/align), 아래쪽 레이어 패널(editor/LayerPanel)에서 고르기·문서 순서 옮기기(move).
  */
+
+/** 글자 크기 목록(속성 패널·글자 도구 막대) */
+export const FONT_SIZES = ["24px", "28px", "32px", "40px", "44px", "56px", "64px", "80px", "96px", "120px"];
 
 const NAME: Record<string, string> = {
   section: "슬라이드", div: "상자", h1: "제목 1", h2: "제목 2", h3: "제목 3", p: "문단", ul: "목록", ol: "번호 목록", li: "목록 항목",
@@ -27,8 +35,8 @@ function pathTo(root: SlideEl, eid: string): SlideEl[] {
   return walk(root, []) ?? [];
 }
 
-export function Inspector({ slide, selection, setSelection, apply, palette, setMessage }: {
-  slide: Slide; selection: string[]; setSelection: (s: string[]) => void; apply: (ops: SlideOp[]) => boolean; palette: string[]; setMessage: (m: string) => void;
+export function Inspector({ slide, selection, setSelection, apply, palette, fonts, setMessage }: {
+  slide: Slide; selection: string[]; setSelection: (s: string[]) => void; apply: (ops: SlideOp[]) => boolean; palette: string[]; fonts: FontOption[]; setMessage: (m: string) => void;
 }) {
   const confirm = useConfirm();
   const sel = selection.length === 1 ? findEl(slide.root, selection[0]) : null;
@@ -61,7 +69,9 @@ export function Inspector({ slide, selection, setSelection, apply, palette, setM
         </div>
       </section>
 
-      {!el ? (
+      {selection.length > 1 ? (
+        <ArrangeGroup slide={slide} selection={selection} apply={apply} />
+      ) : !el ? (
         <p className="text-xs text-muted">요소를 누르면 여기에서 고칩니다. Shift+클릭으로 여러 개를 고르고, 그림 파일은 슬라이드에 끌어 놓거나 붙여 넣습니다.</p>
       ) : (
         <>
@@ -77,11 +87,12 @@ export function Inspector({ slide, selection, setSelection, apply, palette, setM
             {TEXT_TAGS.has(el.tag) && el.children.every((c) => c.kind === "text") && <p className="text-xs text-muted">두 번 누르면 글자를 고칩니다(Shift+Enter 줄바꿈).</p>}
           </section>
 
-          {el.tag === "section" && <SlideGroup slide={slide} apply={apply} set={set} palette={palette} />}
-          {TEXT_TAGS.has(el.tag) && el.tag !== "div" && <TextGroup el={el} set={set} palette={palette} apply={apply} />}
+          {el.tag === "section" && <SlideGroup slide={slide} apply={apply} set={set} palette={palette} fonts={fonts} />}
+          {TEXT_TAGS.has(el.tag) && el.tag !== "div" && <TextGroup el={el} set={set} palette={palette} fonts={fonts} apply={apply} />}
           {(el.tag === "div" || el.tag === "ul" || el.tag === "ol") && <BoxGroup el={el} set={set} palette={palette} />}
           {el.tag === "img" && <ImageGroup el={el} set={set} apply={apply} setMessage={setMessage} />}
           {table && <TableGroup table={table} cell={cell} path={path} apply={apply} set={set} confirm={confirm} />}
+          {el.style.position === "absolute" && <ArrangeGroup slide={slide} selection={selection} apply={apply} />}
 
           {el.tag !== "section" && sel?.parent && !["tr", "td", "th"].includes(el.tag) && (
             <section className="space-y-2">
@@ -118,6 +129,12 @@ export function Inspector({ slide, selection, setSelection, apply, palette, setM
           )}
         </>
       )}
+      <LayerPanel items={layerItems(slide)} selected={selection}
+        onSelect={(id, add) => setSelection(add ? (selection.includes(id) ? selection.filter((x) => x !== id) : [...selection.filter((x) => x !== slide.id), id]) : [id])}
+        onMove={(id, dir) => {
+          const r = findEl(slide.root, id);
+          if (r?.parent) apply([{ t: "move", eid: id, parent: r.parent.eid, index: r.index + dir }]);
+        }} />
     </aside>
   );
 }
@@ -167,7 +184,70 @@ function ColorField({ label, value, palette, onChange }: { label: string; value:
 
 type SetFn = (eid: string, prop: string, value: string) => boolean;
 
-function SlideGroup({ slide, apply, set, palette }: { slide: Slide; apply: (ops: SlideOp[]) => boolean; set: SetFn; palette: string[] }) {
+/** 글꼴 패밀리: 덱 색인(faces)의 글꼴만 고른다. 목록 밖 값이 들어 있으면 그대로 보여 준다 */
+function FontSelect({ el, fonts, set }: { el: SlideEl; fonts: FontOption[]; set: SetFn }) {
+  const v = el.style["font-family"] ?? "";
+  const opts: [string, string][] = [["", "기본(덱 글꼴)"], ...fonts.map((f) => [f.value, f.label] as [string, string])];
+  if (v && !opts.some(([o]) => o === v)) opts.push([v, v]);
+  return <Select label="글꼴" value={v} options={opts} onChange={(x) => set(el.eid, "font-family", x)} />;
+}
+
+/** 레이어 패널 목록: 슬라이드 아래 요소 트리(글자 조각 제외). 표 안 행·칸은 표 묶음에서 다루므로 펼치지 않는다 */
+function layerItems(slide: Slide): LayerItem[] {
+  const out: LayerItem[] = [];
+  const walk = (e: SlideEl, depth: number) => {
+    const kids = e.children.filter((c): c is SlideEl => c.kind === "el");
+    kids.forEach((c, i) => {
+      const text = c.children.find((x) => x.kind === "text");
+      const snippet = text?.kind === "text" ? text.html.replace(/<[^>]+>/g, "").slice(0, 24) : c.tag === "img" ? (c.attrs.alt ?? "") : "";
+      out.push({ id: c.eid, label: `${NAME[c.tag] ?? c.tag}${c.style.position === "absolute" ? " · 고정" : ""}${snippet ? ` · ${snippet}` : ""}`, depth, first: i === 0, last: i === kids.length - 1, movable: true });
+      if (c.tag !== "table") walk(c, depth + 1);
+    });
+  };
+  walk(slide.root, 0);
+  return out;
+}
+
+/** 고정 위치 요소 정렬·분배. 하나면 슬라이드 기준, 여럿이면 고른 요소들 기준. 값은 style의 px(없으면 화면에서 잰다) */
+function ArrangeGroup({ slide, selection, apply }: { slide: Slide; selection: string[]; apply: (ops: SlideOp[]) => boolean }) {
+  const els = selection.map((eid) => findEl(slide.root, eid)?.el).filter((e): e is SlideEl => !!e && e.tag !== "section");
+  const pinned = els.filter((e) => e.style.position === "absolute");
+  if (!pinned.length) return <p className="text-xs text-muted">{els.length}개 골랐습니다. 정렬·분배는 고정 위치 요소끼리만 할 수 있습니다.</p>;
+  const boxes = (): Box[] => pinned.map((e) => {
+    const m = measureBox(e.eid);
+    const n = (k: "left" | "top" | "width" | "height") => { const v = parseFloat(e.style[k] ?? ""); return Number.isFinite(v) ? v : m?.[k] ?? 0; };
+    return { left: n("left"), top: n("top"), width: n("width"), height: n("height") };
+  });
+  const commit = (next: Box[]) => {
+    const before = boxes();
+    const ops: SlideOp[] = pinned.flatMap((e, i) => {
+      const set: Record<string, string> = {};
+      if (Math.round(next[i].left) !== Math.round(before[i].left)) set.left = `${Math.round(next[i].left)}px`;
+      if (Math.round(next[i].top) !== Math.round(before[i].top)) set.top = `${Math.round(next[i].top)}px`;
+      return Object.keys(set).length ? [{ t: "setStyle", eid: e.eid, set }] : [];
+    });
+    if (ops.length) apply(ops);
+  };
+  const slideBox = { left: 0, top: 0, width: CANVAS.width, height: CANVAS.height };
+  const al = (how: AlignHow) => () => commit(alignBoxes(boxes(), how, slideBox));
+  const ALIGN: [AlignHow, typeof AlignStartVertical, string][] = [
+    ["left", AlignStartVertical, "왼쪽 맞춤"], ["hcenter", AlignCenterVertical, "가로 가운데 맞춤"], ["right", AlignEndVertical, "오른쪽 맞춤"],
+    ["top", AlignStartHorizontal, "위 맞춤"], ["vcenter", AlignCenterHorizontal, "세로 가운데 맞춤"], ["bottom", AlignEndHorizontal, "아래 맞춤"],
+  ];
+  const base = pinned.length === 1 ? "슬라이드 기준" : `고른 ${pinned.length}개 기준`;
+  return (
+    <section className="space-y-1" aria-label="정렬">
+      <h3 className="text-xs font-semibold text-muted">정렬 · {base}{pinned.length < els.length ? ` (고정 위치 아닌 ${els.length - pinned.length}개 제외)` : ""}</h3>
+      <div className="flex flex-wrap gap-1">
+        {ALIGN.map(([how, icon, label]) => <IconButton key={how} icon={icon} label={label} variant="outline" onClick={al(how)} />)}
+        <IconButton icon={AlignHorizontalDistributeCenter} label="가로 간격 같게 (3개 이상)" variant="outline" disabled={pinned.length < 3} onClick={() => commit(distributeBoxes(boxes(), "x"))} />
+        <IconButton icon={AlignVerticalDistributeCenter} label="세로 간격 같게 (3개 이상)" variant="outline" disabled={pinned.length < 3} onClick={() => commit(distributeBoxes(boxes(), "y"))} />
+      </div>
+    </section>
+  );
+}
+
+function SlideGroup({ slide, apply, set, palette, fonts }: { slide: Slide; apply: (ops: SlideOp[]) => boolean; set: SetFn; palette: string[]; fonts: FontOption[] }) {
   const st = slide.root.style;
   const [notes, setNotes] = useState(slide.notes);
   useEffect(() => setNotes(slide.notes), [slide.notes]);
@@ -176,6 +256,7 @@ function SlideGroup({ slide, apply, set, palette }: { slide: Slide; apply: (ops:
       <h3 className="text-xs font-semibold text-muted">슬라이드</h3>
       <ColorField label="배경" value={st.background ?? ""} palette={palette} onChange={(v) => set(slide.id, "background", v)} />
       <ColorField label="글자색" value={st.color ?? ""} palette={palette} onChange={(v) => set(slide.id, "color", v)} />
+      {fonts.length > 0 && <FontSelect el={slide.root} fonts={fonts} set={set} />}
       <BoxFields el={slide.root} set={set} />
       <label className="block text-[11px] text-muted">발표자 노트
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
@@ -217,7 +298,7 @@ function BoxGroup({ el, set, palette }: { el: SlideEl; set: SetFn; palette: stri
   );
 }
 
-function TextGroup({ el, set, palette, apply }: { el: SlideEl; set: SetFn; palette: string[]; apply: (ops: SlideOp[]) => boolean }) {
+function TextGroup({ el, set, palette, fonts, apply }: { el: SlideEl; set: SetFn; palette: string[]; fonts: FontOption[]; apply: (ops: SlideOp[]) => boolean }) {
   const st = el.style;
   // 글이 상자보다 길면 경고하고 높이 늘리기를 준다(글자 크기를 자동으로 줄이지 않는다, 명세 06절)
   const [over, setOver] = useState<number | null>(null);
@@ -236,13 +317,14 @@ function TextGroup({ el, set, palette, apply }: { el: SlideEl; set: SetFn; palet
       )}
       <div className="grid grid-cols-2 gap-1">
         <Select label="크기" value={st["font-size"] ?? ""} onChange={(v) => set(el.eid, "font-size", v)}
-          options={[["", "기본"], ...["24px", "28px", "32px", "40px", "44px", "56px", "64px", "80px", "96px", "120px"].map((x) => [x, x] as [string, string]),
-            ...(st["font-size"] && !["24px", "28px", "32px", "40px", "44px", "56px", "64px", "80px", "96px", "120px"].includes(st["font-size"]) ? [[st["font-size"], st["font-size"]] as [string, string]] : [])]} />
+          options={[["", "기본"], ...FONT_SIZES.map((x) => [x, x] as [string, string]),
+            ...(st["font-size"] && !FONT_SIZES.includes(st["font-size"]) ? [[st["font-size"], st["font-size"]] as [string, string]] : [])]} />
         <Select label="굵기" value={st["font-weight"] ?? ""} onChange={(v) => set(el.eid, "font-weight", v)}
           options={[["", "기본"], ["400", "보통"], ["600", "굵게"], ["700", "더 굵게"]]} />
         <Select label="정렬" value={st["text-align"] ?? ""} onChange={(v) => set(el.eid, "text-align", v)}
           options={[["", "기본"], ["left", "왼쪽"], ["center", "가운데"], ["right", "오른쪽"]]} />
         <Field label="줄 간격" value={st["line-height"] ?? ""} placeholder="1.4" onCommit={(v) => set(el.eid, "line-height", v)} />
+        {fonts.length > 0 && <div className="col-span-2"><FontSelect el={el} fonts={fonts} set={set} /></div>}
       </div>
       <ColorField label="색" value={st.color ?? ""} palette={palette} onChange={(v) => set(el.eid, "color", v)} />
     </section>
@@ -317,7 +399,8 @@ function TableGroup({ table, cell, path, apply, set, confirm }: {
       {cell ? (
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
           <Rows3 size={16} className="text-muted" aria-label="행" />
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap items-end gap-1">
+            <div className="w-24"><Field label={`${row + 1}행 높이`} value={rows[row]?.style.height ?? ""} placeholder="자동" onCommit={(v) => set(rows[row].eid, "height", px(v))} /></div>
             <button className={btn} onClick={() => apply([{ t: "tableRow", eid: table.eid, at: row, op: "add" }])}>위에 넣기</button>
             <button className={btn} onClick={() => apply([{ t: "tableRow", eid: table.eid, at: row + 1, op: "add" }])}>아래에 넣기</button>
             <button className={`${btn} text-crit`} disabled={rows.length <= 1} onClick={() => void removeAt("tableRow", row)}>{row + 1}행 지우기</button>

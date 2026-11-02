@@ -5,6 +5,7 @@ import { uploadAsset } from "../../../lib/structedit.ts";
 import { useConfirm } from "../../../components/confirm/ConfirmProvider.tsx";
 import { SlideCanvas, SlideRenderer } from "../SlideRenderer.tsx";
 import { TextEditor } from "./TextEditor.tsx";
+import type { FontOption } from "../../../editor/TextToolbar.tsx";
 
 /**
  * 편집 캔버스(명세 06·07·08절). 1920×1080 좌표계를 창에 맞춰 줄여 그리고, 같은 변환 안에 선택 상자(Moveable)와 표 손잡이를 둔다.
@@ -29,9 +30,11 @@ export interface CanvasProps {
   onRedo: () => void;
   setMessage: (m: string) => void;
   width: number;
+  /** 글자 편집 중 도구 막대를 띄울 자리와 목록 */
+  toolbar?: { slot: HTMLElement | null; fonts: FontOption[]; sizes: string[]; palette: string[] };
 }
 
-export function EditCanvas({ slide, family, selection, setSelection, apply, onUndo, onRedo, setMessage, width }: CanvasProps) {
+export function EditCanvas({ slide, family, selection, setSelection, apply, onUndo, onRedo, setMessage, width, toolbar }: CanvasProps) {
   const confirm = useConfirm();
   const layer = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(width / 1920);
@@ -174,7 +177,7 @@ export function EditCanvas({ slide, family, selection, setSelection, apply, onUn
             <SlideRenderer slide={slide} edit family={family}
               editing={editing && editNode ? { eid: editing, content: (
                 <TextEditor key={editing} html={editNode.children.map((c) => (c as { html: string }).html).join("")}
-                  onDone={(html) => finishText(editing, html)}
+                  onDone={(html) => finishText(editing, html)} toolbar={toolbar}
                   onTab={["td", "th"].includes(editNode.tag) ? (back, html) => tabCell(editing, back, html) : undefined} />
               ) } : undefined} />
             {selection.includes(slide.id) && <div className="pointer-events-none absolute inset-0 outline outline-4 -outline-offset-4 outline-accent" />}

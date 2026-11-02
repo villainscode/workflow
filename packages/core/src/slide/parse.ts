@@ -6,7 +6,7 @@ import { parseStyle, styleText, validateStyle, type Diagnostic, type Style } fro
  * 슬라이드 한 장(제한된 HTML 한 조각)의 파서·검증·직렬화(명세 03·04절). Node·Workers·브라우저 공통(node:* 없음).
  * - 최상위는 <section id="…">  하나. 직계 <aside>는 발표자 노트.
  * - 요소마다 data-eid가 없으면 붙인다(한 번 붙은 eid는 바뀌지 않는다). section의 eid는 id와 같다.
- * - 글자는 인라인 마크(b i u a[href^=https] span[style=color] br)만 있는 조각(text 노드)으로 둔다.
+ * - 글자는 인라인 마크(b i u a[href^=https] span[style=color·font-family·font-size] br)만 있는 조각(text 노드)으로 둔다.
  * - 검증 실패는 Diagnostic(줄·칸·코드·fix)으로 모은다. 하나라도 있으면 저장하지 않는다.
  */
 
@@ -27,6 +27,8 @@ type Element = DefaultTreeAdapterMap["element"];
 const isEl = (n: Node): n is Element => "tagName" in n;
 const BLOCKS = new Set<string>(BLOCK_TAGS);
 const INLINE = new Set(["b", "i", "u", "a", "span", "br"]);
+/** span style에 쓸 수 있는 속성(이 순서로 직렬화) */
+export const SPAN_PROPS = ["color", "font-family", "font-size"] as const;
 const VOID = new Set(["img", "hr"]);
 // 표 안 thead·tbody는 형식에 없다(브라우저 파서가 tbody를 자동으로 넣으므로 투명하게 건너뛴다)
 const TRANSPARENT = new Set(["tbody", "thead", "tfoot"]);
@@ -48,7 +50,7 @@ export function sanitizeInline(html: string, diags: Diagnostic[] = [], base = { 
     if (!isEl(n)) return "";
     const where = n.sourceCodeLocation ? { line: base.line + n.sourceCodeLocation.startLine - 1, col: n.sourceCodeLocation.startCol } : base;
     if (!INLINE.has(n.tagName)) {
-      diags.push({ ...where, code: "inline-tag", message: `글자 안에 쓸 수 없는 태그: <${n.tagName}>`, fix: "b·i·u·a·span(color)·br만 씁니다" });
+      diags.push({ ...where, code: "inline-tag", message: `글자 안에 쓸 수 없는 태그: <${n.tagName}>`, fix: "b·i·u·a·span(색·글꼴·크기)·br만 씁니다" });
       return out(n.childNodes);
     }
     if (n.tagName === "br") return "<br>";
@@ -58,12 +60,16 @@ export function sanitizeInline(html: string, diags: Diagnostic[] = [], base = { 
       return `<a href="${escAttr(href)}">${out(n.childNodes)}</a>`;
     }
     if (n.tagName === "span") {
+      // 글자 일부 서식: 색·글꼴·크기만, 정해진 순서로 다시 쓴다(값 검사는 블록 CSS와 같다). 맞지 않는 선언은 버리고 진단
       const decls = parseStyle(attr(n, "style") ?? "");
-      const color = decls.find(([k]) => k === "color")?.[1];
-      if (decls.length !== 1 || !color || validateStyle("color", color)) {
-        diags.push({ ...where, code: "inline-style", message: "span에는 글자색(color)만 쓸 수 있습니다" });
+      const keep = SPAN_PROPS.flatMap((p) => {
+        const v = decls.find(([k]) => k === p)?.[1];
+        return v && !validateStyle(p, v) ? [`${p}:${v}`] : [];
+      });
+      if (!decls.length || keep.length !== decls.length) {
+        diags.push({ ...where, code: "inline-style", message: "span에는 글자색(color)·글꼴(font-family)·글자 크기(font-size)만 쓸 수 있습니다", fix: "예: <span style=\"color:#0e6b57;font-size:48px\">" });
       }
-      return color ? `<span style="color:${escAttr(color)}">${out(n.childNodes)}</span>` : out(n.childNodes);
+      return keep.length ? `<span style="${escAttr(keep.join(";"))}">${out(n.childNodes)}</span>` : out(n.childNodes);
     }
     const extra = n.attrs.filter((a) => a.name !== "data-eid");
     if (extra.length) diags.push({ ...where, code: "attr", message: `<${n.tagName}>에는 속성을 쓸 수 없습니다: ${extra.map((a) => a.name).join(", ")}` });
@@ -156,7 +162,7 @@ export function parseSlide(html: string): ParseResult {
       } else if (isEl(n)) {
         flush();
         const fix = n.tagName === "style" ? "글꼴은 덱 색인(faces)에, 스타일은 style 속성에 씁니다" : n.tagName === "script" ? "스크립트는 쓸 수 없습니다"
-          : /^(em|strong|code|small|sub|sup|mark|s|del|ins|font)$/.test(n.tagName) ? "글자 안 마크는 b·i·u·a·span(color)·br만 씁니다" : undefined;
+          : /^(em|strong|code|small|sub|sup|mark|s|del|ins|font)$/.test(n.tagName) ? "글자 안 마크는 b·i·u·a·span(색·글꼴·크기)·br만 씁니다" : undefined;
         diags.push({ ...loc(n), code: "tag", message: `허용하지 않는 태그: <${n.tagName}>`, ...(fix ? { fix } : {}) });
       }
     }

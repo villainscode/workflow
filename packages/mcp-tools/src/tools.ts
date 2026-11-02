@@ -390,7 +390,7 @@ export function registerTools(server: McpServer, host: ToolHost) {
   // ---------- 슬라이드 덱(5.0 M4, 명세 docs/slide-editor-spec.html 11절) ----------
 
   const DECK_FORMAT = "덱 형식: 캔버스 1920×1080px, 여백 128px, 글자 24px 이상. 슬라이드 한 장 = <section id=\"슬라이드id\" style=\"…\">…</section>(직계 <aside>는 발표자 노트). " +
-    "블록 section div h1 h2 h3 p ul ol li table tr th td img hr, 글자 안 마크 b i u a[href^=https] span[style=color] br. 속성은 data-eid·style·img의 src(asset:<sha256>만)·alt. " +
+    "블록 section div h1 h2 h3 p ul ol li table tr th td img hr, 글자 안 마크 b i u a[href^=https] span[style=color·font-family·font-size] br. 속성은 data-eid·style·img의 src(asset:<sha256>만)·alt. " +
     "CSS는 위치(position absolute·relative, left top width height), 배치(display flex·grid, flex-*, grid-template-columns, gap, align-*, justify-*, padding), 글자(font-*, line-height, letter-spacing, color, text-align, text-decoration), " +
     "상자(background 단색, border*, border-radius), 이미지(object-fit, object-position). 단위 px·%·fr. margin·z-index·url()·script·on* 금지. 표 열 너비는 첫 행 칸의 width:N%.";
   const SLIDE_OPS = "연산(eid로 대상 지정): setText{eid,html}, setStyle{eid,set,unset}, setAttr{eid,name:alt|src,value}, insert{parent,index,html}, remove{eid}, restore{parent,index,html}, move{eid,parent,index}, " +
