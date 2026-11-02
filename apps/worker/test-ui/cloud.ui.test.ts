@@ -658,7 +658,10 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     await page.keyboard.press("Enter");
     await status("수정본 1");
     await ready("main > p[data-eid]");
-    await page.click('button[aria-label="서식 글자색 --accent"]');
+    // 색 고르기 창(react-colorful)을 열어 문서 색 --accent
+    await page.click('button[aria-label="서식 글자색 고르기"]');
+    await page.waitForSelector('[role="dialog"][aria-label="글자색 고르기"] .react-colorful');
+    await page.select('select[aria-label="서식 글자색 문서 색"]', "var(--accent)");
     await status("수정본 2");
     assert.match(await work(), /<p style="font-size:22px;color:var\(--accent\)">서식 바꿀 문단<\/p>/);
     // 새로 고침 뒤에도 남고, 다시 고르면 패널에 보인다

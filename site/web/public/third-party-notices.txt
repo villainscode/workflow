@@ -46,7 +46,7 @@ ONLYOFFICE Docs Community Edition — GNU Affero General Public License v3
 ------------------------------------------------------------
 
 React, React Router, TanStack Query, Tiptap 3.32.0, react-moveable 0.56.0, pdf-lib 1.17.1, Mermaid,
-lucide-react, Hono, parse5, htmlparser2, fflate
+lucide-react, react-colorful 5.8.1, Hono, parse5, htmlparser2, fflate
   각 저작자. MIT License:
   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
   documentation files (the "Software"), to deal in the Software without restriction, including without

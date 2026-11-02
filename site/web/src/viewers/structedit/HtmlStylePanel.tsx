@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { HexColorInput, HexColorPicker } from "react-colorful";
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight } from "lucide-react";
 import type { Block, DocTheme } from "../../lib/structedit.ts";
 import { IconButton } from "../../components/IconButton.tsx";
@@ -7,7 +8,7 @@ import { IconButton } from "../../components/IconButton.tsx";
  * HTML 속성 패널(6.0 V2, D-55). 고른 요소의 인라인 style만 setStyle로 바꾼다. 칸에는 원본 style 값이 보이고,
  * 비어 있으면 지금 화면에 그려진 값(getComputedStyle)을 흐리게 보여 준다. 값을 비우고 확정하면 그 속성을 지운다.
  * 허용 밖 값은 서버가 거부하고 고칠 방법을 알린다(위쪽 알림 줄).
- * 색은 문서 :root의 색 토큰을 먼저 보여 준다. 직접 고른 색(hex)은 다크 모드를 따라 바뀌지 않으므로 다크 모드가 있는 문서에서는 안내한다.
+ * 색은 색 고르기 창(react-colorful)에서 고르고, 문서 :root의 색 토큰은 창 안 목록으로 고른다. 직접 고른 색(hex)은 다크 모드를 따라 바뀌지 않으므로 다크 모드가 있는 문서에서는 안내한다.
  */
 
 export const GENERIC = ["sans-serif", "serif", "monospace", "system-ui"];
@@ -104,33 +105,54 @@ function Field({ label, prop, value, hint, busy, onCommit, list }: {
   );
 }
 
-/** 색 칸: 문서 토큰 견본 → var(--이름), 직접 고르기(hex), 지우기 */
+/**
+ * 색 칸: 견본 하나를 누르면 색 고르기 창(react-colorful)이 열린다. 창에서 고른 색(hex)은 「적용」으로 한 번만 저장하고,
+ * 문서 색(:root 토큰)은 목록에서 고르면 바로 var(--이름)으로 저장한다. 지우기는 그 속성을 없앤다.
+ */
 function ColorField({ label, prop, value, theme, busy, onCommit }: {
   label: string; prop: string; value: string | undefined; theme: DocTheme; busy: boolean; onCommit: (prop: string, v: string) => void;
 }) {
   const hex = value && !value.startsWith("var(");
-  // 색 고르기 창을 끄는 동안 값이 계속 바뀌므로 칸을 떠날 때 한 번만 저장한다
-  const [pick, setPick] = useState("");
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState("#000000");
+  const box = useRef<HTMLDivElement>(null);
+  const token = value?.startsWith("var(") ? theme.tokens.find((t) => `var(${t.name})` === value) : undefined;
+  const shownColor = token?.value ?? value;
+  useEffect(() => {
+    if (!open) return;
+    setPick(hex && /^#[0-9a-f]{6}$/i.test(value!) ? value! : "#000000");
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    window.addEventListener("pointerdown", away);
+    return () => window.removeEventListener("pointerdown", away);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const done = (v: string) => { setOpen(false); onCommit(prop, v); };
   return (
     <div className="space-y-1 text-xs">
-      <div className="flex items-center gap-2">
+      <div ref={box} className="relative flex items-center gap-2" onKeyDown={(e) => { if (e.key === "Escape" && open) { e.stopPropagation(); setOpen(false); } }}>
         <span className="w-14 shrink-0 text-muted">{label}</span>
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5" role="group" aria-label={`서식 ${label} 토큰`}>
-          {theme.tokens.map((t) => {
-            const v = `var(${t.name})`;
-            return (
-              <button key={t.name} type="button" disabled={busy} aria-label={`서식 ${label} ${t.name}`} data-tip={`${t.name} ${t.value}`} onClick={() => onCommit(prop, v)}
-                className={`size-5 rounded border ${value === v ? "border-accent ring-2 ring-accent" : "border-line"}`} style={{ background: t.value }} />
-            );
-          })}
-          <input type="color" aria-label={`서식 ${label} 직접 고르기`} disabled={busy} value={pick || (hex && /^#[0-9a-f]{6}$/i.test(value) ? value : "#000000")}
-            className="h-5 w-7 cursor-pointer rounded border border-line bg-surface"
-            onChange={(e) => setPick(e.target.value)} onBlur={() => { if (pick) { onCommit(prop, pick); setPick(""); } }} />
-          {value && <button type="button" disabled={busy} className="px-1 text-[11px] text-muted underline" onClick={() => onCommit(prop, "")}>지우기</button>}
-        </span>
+        <button type="button" disabled={busy} aria-label={`서식 ${label} 고르기`} aria-expanded={open} data-tip={`${label} 고르기`} onClick={() => setOpen((o) => !o)}
+          className="size-5 shrink-0 rounded border border-line" style={{ background: shownColor || "transparent" }} />
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted">{value || "기본"}</span>
+        {value && <button type="button" disabled={busy} className="px-1 text-[11px] text-muted underline" onClick={() => onCommit(prop, "")}>지우기</button>}
+        {open && (
+          <div role="dialog" aria-label={`${label} 고르기`} className="absolute top-7 left-16 z-20 w-52 space-y-2 rounded-md border border-line bg-surface p-2 shadow-sm">
+            <HexColorPicker color={pick} onChange={setPick} style={{ width: "100%", height: 140 }} />
+            <div className="flex items-center gap-1">
+              <span className="text-muted">#</span>
+              <HexColorInput color={pick} onChange={setPick} aria-label={`서식 ${label} hex`} className="min-w-0 flex-1 rounded border border-line bg-surface px-1 py-0.5 font-mono" />
+              <button type="button" disabled={busy} className="rounded bg-accent px-2 py-0.5 font-medium text-surface" onClick={() => done(pick)}>적용</button>
+            </div>
+            {theme.tokens.length > 0 && (
+              <select aria-label={`서식 ${label} 문서 색`} disabled={busy} value={token ? value : ""} className="w-full rounded border border-line bg-surface px-1 py-0.5"
+                onChange={(e) => { if (e.target.value) done(e.target.value); }}>
+                <option value="">문서 색 (다크 모드를 따라감)</option>
+                {theme.tokens.map((t) => <option key={t.name} value={`var(${t.name})`}>{`${t.name} ${t.value}`}</option>)}
+              </select>
+            )}
+          </div>
+        )}
       </div>
-      {value && <p className="pl-16 font-mono text-[11px] text-muted">{value}</p>}
-      {hex && theme.dark && <p className="pl-16 text-[11px] text-med">직접 고른 색은 다크 모드에서 바뀌지 않습니다. 토큰 색을 쓰면 다크 모드를 따라갑니다.</p>}
+      {hex && theme.dark && <p className="pl-16 text-[11px] text-med">직접 고른 색은 다크 모드에서 바뀌지 않습니다. 문서 색을 쓰면 다크 모드를 따라갑니다.</p>}
     </div>
   );
 }

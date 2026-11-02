@@ -66,6 +66,7 @@
     "pathseg": "^1.2.1",
     "pdfjs-dist": "6.4.299",
     "react": "^19.3.0",
+    "react-colorful": "^5.8.1",
     "react-dom": "^19.3.0",
     "react-moveable": "0.56.0",
     "react-router": "^8.4.0",
