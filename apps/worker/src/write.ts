@@ -6,6 +6,7 @@ import { isSearchable, searchText } from "@workflow/core/search-text";
 import { kindOf, normalizeFiles, nowStamp, pickEntry, prepareDeck, SLUG_RE, type IncomingFile } from "@workflow/core/upload";
 import { nextMajor, nextVersion, VERSION_RE } from "@workflow/core/versions";
 import { slugify } from "@workflow/core/slug";
+import { LOCKED } from "@workflow/core/work";
 import { getBlob, putBlob, sha256Hex } from "./blobs.ts";
 import { HttpError, type Bindings, type Workspace } from "./env.ts";
 import { findDoc } from "./repo.ts";
@@ -42,6 +43,12 @@ export async function versionFiles(db: D1Database, docId: number, version: strin
 const isUnique = (e: unknown) => /UNIQUE constraint failed/i.test(String((e as Error)?.message ?? e));
 
 /** 버전 하나를 쓴다. data가 있는 파일만 R2에 올린다(나머지는 이전 버전 blob을 그대로 가리킨다) */
+/** 오피스 편집 세션(6.0 VO, office.ts)이 살아 있으면 true */
+export const officeLocked = async (db: D1Database, docId: number) =>
+  !!(await db.prepare("SELECT 1 FROM office_session WHERE document_id = ? AND expires_at > ?").bind(docId, Date.now()).first());
+/** 세션 동안은 새 버전을 만들지 않는다. 그 사이 바뀐 대표 파일을 오피스 저장이 덮어쓰지 않게 */
+const needUnlocked = async (db: D1Database, docId: number) => { if (await officeLocked(db, docId)) throw new HttpError(409, LOCKED); };
+
 export async function writeVersion(env: Bindings, ws: Workspace, doc: { id: number; current: string | null }, input: {
   version?: string; entry: string; note?: string | null; source: string; files: VersionFileIn[]; origin?: string; status?: string; title?: string;
   /** 수정본을 버전으로 올릴 때(5.0) 그 수정본 id */
@@ -119,6 +126,7 @@ export async function upload(env: Bindings, ws: Workspace, input: UploadInput) {
 
   if (input.doc) {
     const d = await findDoc(db, ws.id, input.menu, input.doc);
+    await needUnlocked(db, d.id);
     const version = await writeVersion(env, ws, { id: d.id, current: d.current_version }, {
       version: input.version, entry, note: input.note, source: "upload", files: vfiles, origin: input.origin,
     });
@@ -163,6 +171,7 @@ async function versionEntry(db: D1Database, wsId: number, menu: string, doc: str
 export async function saveEdit(env: Bindings, ws: Workspace, menu: string, doc: string,
   input: { baseVersion: string; content: string; note?: string; version?: string }) {
   const v = await versionEntry(env.DB, ws.id, menu, doc, input.baseVersion);
+  await needUnlocked(env.DB, v.doc.id);
   if (v.doc.current_version !== input.baseVersion) {
     throw new HttpError(409, `편집하는 동안 새 버전(${v.doc.current_version})이 생겼습니다. 새로고침해서 최신 내용을 확인하세요`);
   }
@@ -182,6 +191,7 @@ const categoryOf = async (db: D1Database, menuId: number) =>
 /** 정식 확정: 현재 버전 파일 목록을 다음 major로 복사(R2 복사 없음, 같은 blob을 가리킨다)하고 status approved */
 export async function release(env: Bindings, ws: Workspace, menu: string, doc: string, note?: string) {
   const v = await versionEntry(env.DB, ws.id, menu, doc);
+  await needUnlocked(env.DB, v.doc.id);
   if (v.doc.status === "approved") throw new HttpError(409, "이미 정식 버전입니다");
   const { results } = await env.DB.prepare("SELECT version FROM document_version WHERE document_id = ?").bind(v.doc.id).all<{ version: string }>();
   const version = nextMajor(results.map((r) => r.version));
@@ -236,6 +246,7 @@ export async function previewTextEdit(env: Bindings, ws: Workspace, menu: string
 export async function saveTextEdit(env: Bindings, ws: Workspace, menu: string, doc: string,
   input: { baseVersion: string; changes: Change[]; note?: string }) {
   const v = await versionEntry(env.DB, ws.id, menu, doc, input.baseVersion);
+  await needUnlocked(env.DB, v.doc.id);
   if (v.doc.current_version !== input.baseVersion) {
     throw new HttpError(409, `편집하는 동안 새 버전(${v.doc.current_version})이 생겼습니다. 새로고침해서 최신 내용을 확인하세요`);
   }

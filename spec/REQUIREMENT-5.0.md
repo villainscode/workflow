@@ -20,7 +20,7 @@
 
 ## 2. 슬라이드 편집기 명세 분석
 
-`docs/slide-editor-spec.html`은 에이전트가 만든 16:9 덱(제한된 HTML)을 사람이 클릭해 고치는 편집기 명세다. 범위는 슬라이드 하나지만, 그 안의 결정 상당수는 다른 형식에도 쓸 수 있다.
+`docs/editor-spec/slide-editor-spec`은 에이전트가 만든 16:9 덱(제한된 HTML)을 사람이 클릭해 고치는 편집기 명세다. 범위는 슬라이드 하나지만, 그 안의 결정 상당수는 다른 형식에도 쓸 수 있다.
 
 ### 그대로 가져올 것
 
@@ -86,7 +86,7 @@
 
 ### 4.3 슬라이드 편집기
 
-명세 `docs/slide-editor-spec.html`의 01~16절을 그대로 따른다. 바꾸는 곳은 2절 "어긋나는 곳"의 저장 위치(R2 정본)와 문서 모델(덱 = `kind: deck` 문서)뿐이다.
+명세 `docs/editor-spec/slide-editor-spec`의 01~16절을 그대로 따른다. 바꾸는 곳은 2절 "어긋나는 곳"의 저장 위치(R2 정본)와 문서 모델(덱 = `kind: deck` 문서)뿐이다.
 
 ### 4.4 DOCX·PPTX·XLSX — 세 가지 길 (D-47)
 
@@ -308,7 +308,7 @@ gantt
 - MCP: `deck_create`, `deck_get`, `slide_put`, `slide_patch`, `asset_put`(쓰기 진단을 그대로 돌려줌, 출처 agent). 로컬 MCP에서 덱 쓰기는 "보기만" 안내.
 - 명세와 다르게 한 것: 저장 위치(D1 행 → R2 수정본, 2절), 상태 관리(zustand·immer → core 역연산), 색 고르기(react-colorful → 팔레트 + 브라우저 색 입력), 그림 자르기 배율(`data-crop`)은 넣지 않음(맞춤·위치만), 표 칸 오른쪽 클릭 메뉴 대신 속성 패널 버튼, 요소 복사·붙여 넣기(⌘C·V)는 ⌘D 복제만, 덱 단위 변경(순서·추가·지우기)은 되돌리기 기록에 넣지 않음(수정본 이력으로 되돌림).
 - 남은 것(M7·M8): 다른 접속자 저장 실시간 반영·접속자 표시, 덱 PDF 내보내기(Browser Rendering)와 `deck_render`, 확대 비율 0.5·0.75·1별 좌표 오차 자동 측정(지금은 한 배율에서 이동량 ÷ 배율 확인).
-- 테스트: core TC-ED-28~32, Worker TC-ED-33~37·TC-CF-44, 로컬 TC-API-DECK-01·TC-MCP-21, 화면 TC-CFUI-13~15.
+- 테스트: core TC-ED-28~32, Worker TC-ED-33~37·TC-CF-44, 로컬 TC-API-DECK-01·TC-MCP-25, 화면 TC-CFUI-13~15.
 
 **M6 PDF 편집 (2026-10-30)**
 - 어디서 적용하나: 브라우저(4.5절 "브라우저 또는 Worker" 중). PDF는 에이전트 편집 대상이 아니라(6절 표) 서버 연산이 필요 없고, 글꼴(2MB)·wasm을 Worker에 싣지 않는다. 결과 PDF를 수정본(`POST …/revisions {put}`)으로 올린다.
@@ -355,13 +355,13 @@ gantt
 | D-48 | HTML 문서 편집 방식 | **원본 패치 편집**(구조 연산, 바뀐 구간만 다시 씀) | 범용 WYSIWYG(디자인 깨짐) |
 | D-49 | 슬라이드 정본 저장 | **R2 blob(슬라이드 한 장 = blob 하나) + D1 수정본 행** | 명세 원안(D1 행에 HTML) |
 | D-50 | 수정본 보존 | **버전으로 올린 수정본은 영구, 그 밖은 최근 200개 + 30일** | 전부 보존(비용↑), 버전마다 압축 |
-| D-51 | 로컬 사이트 편집 | **Cloudflare 앱만 편집, 로컬은 보기** | 로컬에도 같은 편집기(파일 원본 동기화 문제) |
+| D-51 | 로컬 사이트 편집 | **Cloudflare 앱만 편집, 로컬은 보기** (6.0 D-58로 바뀜: 로컬도 편집, 2026-11-02 VL 구현) | 로컬에도 같은 편집기(파일 원본 동기화 문제) |
 | D-52 | 동시 편집 수준 | **오피스는 편집 서버 실시간, HTML·슬라이드는 수정본 409 재적용** | Yjs 실시간(복잡도↑, 명세도 1차 제외) |
 | D-53 | "d2" 해석 | **R2**(지금 정본 저장소) | 다른 저장소를 뜻했다면 알려 주세요 |
 
 ## 10. 참고
 
-- 슬라이드 편집기 명세: `docs/slide-editor-spec.html`
+- 슬라이드 편집기 명세: `docs/editor-spec/slide-editor-spec`
 - 지금 구조: `spec/ARCHITECTURE.md`, 4.0 결정: `spec/REQUIREMENT-4.0.md`, 2.0 텍스트 편집: `spec/REQUIREMENT-2.0.md`
 - 조사(2026-10-29):
   - [Univer import/export 문서](https://docs.univer.ai/guides/docs/features/import-export) — DOCX 가져오기·내보내기는 서버(Univer Pro) 필요

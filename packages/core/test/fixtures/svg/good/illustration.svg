@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="320" height="200" viewBox="0 0 320 200">
+  <title>예시 일러스트</title>
+  <style>.st0{fill:#2f5d8a}.st1{fill:none;stroke:#222;stroke-width:2}.lbl{font:14px sans-serif;fill:#111}</style>
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#eee"/><stop offset="1" stop-color="#999"/></linearGradient>
+    <clipPath id="cp"><circle cx="60" cy="60" r="40"/></clipPath>
+    <mask id="m1"><rect width="320" height="200" fill="#fff"/><circle cx="260" cy="60" r="15" fill="#000"/></mask>
+    <pattern id="pt" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M0 10L10 0" stroke="#bbb"/></pattern>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#222"/></marker>
+    <symbol id="dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5"/></symbol>
+    <filter id="f1"><feGaussianBlur stdDeviation="1"/></filter>
+  </defs>
+  <rect width="320" height="200" fill="url(#pt)"/>
+  <rect x="20" y="20" width="80" height="80" fill="url(#g1)" clip-path="url(#cp)"/>
+  <rect x="220" y="20" width="80" height="80" class="st0" mask="url(#m1)"/>
+  <line x1="110" y1="60" x2="210" y2="60" class="st1" marker-end="url(#arr)"/>
+  <use href="#dot" x="150" y="120" width="20" height="20" fill="#c33"/>
+  <use xlink:href="#dot" x="180" y="120" width="20" height="20" fill="#3c3"/>
+  <text x="20" y="160" class="lbl">한글 <tspan font-weight="bold">굵게</tspan> &amp; 기호</text>
+  <ellipse cx="260" cy="160" rx="30" ry="15" fill="#888" filter="url(#f1)"/>
+  <image x="120" y="150" width="20" height="20" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="/>
+</svg>

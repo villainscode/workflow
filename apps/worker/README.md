@@ -59,6 +59,52 @@ npm run dev                       # 화면 빌드 → 로컬 D1 마이그레이�
 
 이후에는 GitHub Actions(`.github/workflows/workflow-app.yml`)가 develop 푸시 → staging, main 푸시 → production으로 마이그레이션·배포한다. 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID`를 넣고, 저장소 Variables에 `DEPLOY_ENABLED=true`를 넣어야 배포 작업이 돈다(그 전에는 테스트만).
 
+## draw.io 편집기 (`apps/drawio`, 6.0 V4)
+
+HTML·슬라이드의 「다이어그램 그리기」·draw.io SVG 고치기는 앱과 다른 출처에 올린 draw.io 정적 웹앱(Apache-2.0)을 iframe으로 연다(D-57 자체 호스팅). 문서 내용은 postMessage로만 오가고 draw.io 서버로 나가지 않는다(draw.io 응답 CSP `connect-src 'self'`). `DRAWIO_ORIGIN`이 비어 있으면 화면은 draw.io 버튼을 숨긴다(svgedit로 고치는 일반 SVG는 그대로 된다).
+
+**배포 전 사용자 확인 필요**: 아래는 실제 Cloudflare 계정에 새 Worker와 도메인을 만든다.
+
+| 환경 | 만드는 것 | 앱에 넣을 값 |
+|---|---|---|
+| staging | Worker `workflow-drawio-staging`(workers.dev 주소, 정적 자산만, 약 3,065개 파일·114MB) | `apps/worker/wrangler.jsonc` env.staging `vars.DRAWIO_ORIGIN = "https://workflow-drawio-staging.<계정>.workers.dev"` |
+| production | Worker `workflow-drawio` + 사용자 지정 도메인 `draw.simplite.net`(배포할 때 자동 연결) | env.production `vars.DRAWIO_ORIGIN = "https://draw.simplite.net"` |
+
+```bash
+cd apps/drawio
+npm run deploy:staging            # draw.war v32.6.1 받기(sha256 확인) → 한도 검사 → _headers(frame-ancestors: staging 앱) → wrangler deploy
+npm run deploy:production         # frame-ancestors: https://workflow.simplite.net
+```
+
+또는 GitHub Actions의 `deploy-drawio`(workflow_dispatch, 대상 선택)를 쓴다. 저장소 Variables에 `DRAWIO_DEPLOY_ENABLED=true`를 넣어야 돈다. 그다음 앱 `DRAWIO_ORIGIN`을 넣고 앱을 다시 배포한다.
+
+- 로컬: `cd apps/drawio && npm run fetch && npm run serve`(http://127.0.0.1:8010) → 사이트를 `DRAWIO_ORIGIN=http://127.0.0.1:8010 npm run dev`로 켠다. Cloudflare 로컬(`wrangler dev`)은 `--var DRAWIO_ORIGIN:http://127.0.0.1:8010`.
+- draw.io 버전을 올릴 때: `scripts/fetch.mjs`의 `VERSION`·`SHA256`을 바꾸고 `npm run fetch && npm run check`(실제 draw.io embed 왕복·바깥 요청 0건)를 돌린다. 가장 큰 파일이 25MiB(Workers 정적 자산 파일당 한도)를 넘으면 `fetch`가 멈춘다.
+
+## 오피스 편집기 (`apps/office`, 6.0 VO)
+
+DOCX·PPTX·XLSX의 「오피스 편집기로 열기」는 ONLYOFFICE Docs 커뮤니티판(공식 이미지 그대로, AGPL-3.0, 한글 글꼴 포함)을 Cloudflare Containers로 띄워 iframe으로 연다(D-59). 이 Worker가 편집기 출처(`OFFICE_ORIGIN`, 앱과 다른 도메인)로 온 요청을 컨테이너로 넘기고(쿠키는 지운다), 편집 설정은 JWT로 서명한다. 닫으면 오피스 서버가 저장 콜백(`/api/office/callback`, 서명 토큰 + JWT)으로 파일을 보내 수정본 하나가 된다. 편집하는 동안 그 문서의 다른 쓰기는 409(작업본 잠금). `OFFICE_ORIGIN`·`ONLYOFFICE_JWT_SECRET`이 없으면 버튼을 숨긴다.
+
+**배포 전 사용자 확인 필요**: 아래는 실제 계정에 컨테이너 이미지(약 3.2GB)를 올리고 Containers·도메인·비밀값을 만든다. 지금 `wrangler.jsonc`에는 넣지 않았다(넣으면 다음 CI 배포가 바로 만든다).
+
+| 환경 | 만드는 것 | `wrangler.jsonc`에 넣을 것 |
+|---|---|---|
+| staging | 컨테이너 `Office`(standard-3, 1대, 30분 유휴 종료) + 사용자 지정 도메인 `office-staging.simplite.net` + 비밀값 `ONLYOFFICE_JWT_SECRET` | env.staging: `durable_objects.bindings`에 `{ "name": "OFFICE", "class_name": "Office" }`, `migrations`에 `{ "tag": "v3", "new_sqlite_classes": ["Office"] }`(맨 위에도), `containers`에 `{ "class_name": "Office", "scheduling_policy": "durable_object", "instance_type": "standard-3", "max_instances": 1, "images": { "base": { "dockerfile": "../office/Dockerfile" } } }`, `routes`에 `{ "pattern": "office-staging.simplite.net", "custom_domain": true }`, `vars.OFFICE_ORIGIN = "https://office-staging.simplite.net"` |
+| production | 같은 컨테이너 + 도메인 `office.simplite.net` + 비밀값 | env.production에 같은 항목, `vars.OFFICE_ORIGIN = "https://office.simplite.net"` |
+
+```bash
+openssl rand -base64 32 | npx wrangler secret put ONLYOFFICE_JWT_SECRET --env staging   # production도 같은 식(값은 따로)
+```
+
+- 비용(예상): standard-3(8GiB 메모리·디스크)이 켜져 있는 동안 시간당 약 $0.09, CPU는 쓴 만큼 더한다. 마지막 요청 뒤 30분이면 멈추므로 하루 2시간 쓰면 월 약 $5~6. Workers Paid 포함 사용량(메모리 월 25GiB-시간 등)을 먼저 쓴다. 사용량 창의 `officeSessions`가 편집 세션 수다.
+- 콜드 스타트: 컨테이너가 멈춰 있었으면 화면이 「편집 서버를 깨우는 중」 진행 막대로 기다린다(로컬 docker에서는 12초, Containers는 이미지를 받는 처음에 더 걸린다).
+- 컨테이너는 인터넷을 쓴다(`enableInternet`): 오피스 서버가 `APP_ORIGIN`에서 파일을 받고 콜백을 보낸다. 콜백이 가리키는 저장 파일은 `OFFICE_ORIGIN` 주소만 받고 컨테이너에서 직접 읽는다(SSRF 막기, 읽으며 세어 64MB 상한).
+- 편집기 출처 프록시는 편집기가 쓰는 경로만 넘긴다(`packages/core/src/office.ts` `officeProxyPath`: `web-apps`·`sdkjs`·`plugins`·`fonts`·`doc`·`cache/files`… 버전 접두어 포함, `/healthcheck`). 관리·명령·변환 API(`/coauthoring/CommandService.ashx`, `/ConvertService.ashx`, `/info`, `/admin`)는 404. 이미지를 올린 뒤 `test:office-real`이 편집기 경로가 모두 허용 목록 안인지 확인한다.
+- 남는 위험(문서화, V6 보안 점검): 화면은 `OFFICE_ORIGIN`의 `api.js`를 앱 출처 스크립트로 넣는다. 사용자 문서를 읽는 컨테이너가 장악되면 그 스크립트가 앱 세션 권한으로 돈다. 대응: 이미지는 digest로 고정하고 고치지 않으며 보안 업데이트를 따라 올린다. 앱 화면에는 지금 CSP가 없어 `script-src`로 좁히지 못한다(CSP를 두게 되면 `script-src`에 `OFFICE_ORIGIN`만 더한다).
+- 잠금: 편집 세션은 최대 8시간까지만 연장되고, owner가 「오피스 잠금 풀기」(`POST …/office/unlock`)로 풀 수 있다. 세션이 끝난 뒤 온 저장 콜백은 반영하지 않고 활동 `office-reject`로 남긴다.
+- 로컬: `ONLYOFFICE_JWT_SECRET=… docker compose -f apps/office/compose.yaml up -d`(http://localhost:8090). 사이트는 `ONLYOFFICE_URL=http://localhost:8090 ONLYOFFICE_JWT_SECRET=… npm run dev`, `wrangler dev`는 `.dev.vars`에 `OFFICE_ORIGIN=http://localhost:8090`·`OFFICE_BACKEND_ORIGIN=http://host.docker.internal:8787`·`ONLYOFFICE_JWT_SECRET`(컨테이너 바인딩 없이 docker로 바로 간다). 실제 왕복 확인: `site/`의 `npm run test:office-real`.
+- 이미지를 올릴 때: `apps/office/Dockerfile`의 digest를 바꾸고 `npm run test:office-real`을 돌린다. 이미지를 고치지 않는다(AGPL 소스 공개 의무가 생기지 않게. 고지는 화면 편집기 안 ONLYOFFICE 정보에 남는다).
+
 ## 백업과 복구
 
 - **D1**: Time Travel로 지난 30일 중 아무 시점으로 되돌린다. `npx wrangler d1 time-travel info DB --env production`으로 시점을 확인하고 `npx wrangler d1 time-travel restore DB --timestamp <ISO 시각> --env production`.

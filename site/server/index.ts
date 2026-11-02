@@ -1,4 +1,5 @@
-import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, sep, extname } from "node:path";
 import Fastify, { type FastifyError } from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -11,8 +12,14 @@ import type { ServerResponse } from "node:http";
 import { parse as parseYaml } from "yaml";
 import { DDL, topMenus, menus, documents, documentVersions, versionFiles } from "./schema.ts";
 import { scanDocs } from "./scan.ts";
-import { StoreError, htmlEditView, previewTextEdit, readDeck, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
+import { StoreError, htmlEditView, previewTextEdit, readSegments, release, saveEdit, saveTextEdit, upload, type IncomingFile } from "./store.ts";
+import { LocalWork } from "./work.ts";
+import * as work from "@workflow/core/work";
+import * as office from "@workflow/core/office";
+import { WorkError, type StructOp } from "@workflow/core/work";
+import { StructEditError } from "@workflow/core/structedit/html";
 import { mimeOf } from "@workflow/core/mime";
+import { SVG_ASSET_CSP } from "@workflow/core/svg";
 import { findDocDir } from "./docpath.ts";
 import type { Change } from "@workflow/core/textedit";
 import {
@@ -65,12 +72,32 @@ function docEvent(req: { headers: Record<string, unknown> }, r: { menu: string; 
 
 const app = Fastify({ logger: { level: "info" }, bodyLimit: MAX_UPLOAD });
 
+/**
+ * 로컬 서버 출입 검사(V6 보안 점검). 127.0.0.1에만 열려 있어도 브라우저의 다른 사이트가 이 주소로 요청을 보낼 수 있다.
+ * - Host: 루프백 이름(localhost·127.0.0.1·[::1])과 오피스 서버(docker)가 부르는 이름만. DNS 리바인딩 막기
+ * - 상태를 바꾸는 요청(GET·HEAD·OPTIONS 밖): Origin이 없거나(MCP·CLI·오피스 서버) 루프백 출처만. 다른 사이트·sandbox 문서("null")는 403
+ */
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const extraHosts = new Set(["host.docker.internal", ...[process.env.ONLYOFFICE_BACKEND].filter(Boolean).map((u) => new URL(u!).hostname),
+  ...(process.env.WORKFLOW_ALLOWED_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean)]);
+const hostName = (h: string) => h.replace(/:\d+$/, "").toLowerCase();
+app.addHook("onRequest", async (req, reply) => {
+  const host = hostName(String(req.headers.host ?? ""));
+  if (!LOOPBACK.has(host) && !extraHosts.has(host)) return reply.code(403).send({ error: "허용하지 않는 Host입니다" });
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
+  const origin = req.headers.origin;
+  if (origin === undefined) return;
+  let ok = false;
+  try { ok = LOOPBACK.has(new URL(origin).hostname.toLowerCase()); } catch { ok = false; }
+  if (!ok) return reply.code(403).send({ error: "다른 사이트에서 보낸 요청은 받지 않습니다" });
+});
+
 await app.register(fastifyMultipart, { limits: { fileSize: MAX_UPLOAD, files: 2000 } });
 // docs/ 원본 파일. HTML 문서의 상대 경로 리소스와 링크도 이 경로 아래에서 풀린다.
 await app.register(fastifyStatic, { root: DOCS_ROOT, prefix: "/files/", dotfiles: "ignore", index: false, cacheControl: false });
 
 app.setErrorHandler((err: FastifyError | StoreError, _req, reply) => {
-  if (err instanceof StoreError) return reply.code(err.status).send({ error: err.message });
+  if (err instanceof StoreError || err instanceof WorkError || err instanceof StructEditError) return reply.code(err.status).send({ error: err.message });
   app.log.error(err);
   return reply.code((err as FastifyError).statusCode ?? 500).send({ error: err.message });
 });
@@ -119,6 +146,11 @@ app.get<{ Params: { menu: string; doc: string } }>("/api/docs/:menu/:doc", async
   };
 });
 
+/** 오피스 편집 세션(6.0 VO) 동안은 새 버전을 만들지 않는다. 그 사이 바뀐 대표 파일을 오피스 저장이 덮어쓰지 않게(Worker write.ts와 같다) */
+const needUnlocked = async (menu: string, doc: string) => {
+  if (await office.sessionLocked(local.officeSessions(menu, doc))) throw new WorkError(409, work.LOCKED);
+};
+
 /**
  * 업로드. multipart 필드: menu, doc?, parent?(새 하위 문서의 상위 문서), title?, slug?, version?, note?, entry?, paths(JSON 배열, 파일 순서와 같은 상대 경로)
  * 그리고 files(여러 개). 폴더째 올릴 때는 paths로 하위 경로를 넘긴다.
@@ -133,6 +165,7 @@ app.post("/api/upload", async (req) => {
   const paths: string[] = fields.paths ? JSON.parse(fields.paths) : [];
   const files: IncomingFile[] = raw.map((f, i) => ({ path: paths[i] || f.name, data: f.data }));
 
+  if (fields.doc) await needUnlocked(fields.menu, fields.doc);
   const result = upload(DOCS_ROOT, {
     menu: fields.menu, doc: fields.doc || undefined, parent: fields.parent || undefined, title: fields.title, slug: fields.slug,
     version: fields.version, note: fields.note, entry: fields.entry || undefined, origin: fields.origin || undefined, files,
@@ -144,6 +177,7 @@ app.post("/api/upload", async (req) => {
 app.post<{ Params: { menu: string; doc: string }; Body: { baseVersion: string; content: string; note?: string; version?: string } }>(
   "/api/docs/:menu/:doc/edit",
   async (req) => {
+    await needUnlocked(req.params.menu, req.params.doc);
     const result = saveEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
     reindex("edit", docEvent(req, result));
     return result;
@@ -175,8 +209,6 @@ app.patch<DocParams & { Body: { title?: string; status?: string; origin?: string
 // 다른 메뉴로, 다른 문서 아래(parent)로, 같은 자리 안 순서(index) 바꾸기
 app.post<DocParams & { Body: { menu: string; parent?: string | null; index?: number } }>("/api/docs/:menu/:doc/move", async (req) =>
   done("doc", moveDoc(DOCS_ROOT, req.params.menu, req.params.doc, req.body)));
-// 슬라이드 덱 읽기(5.0 M4, 로컬은 보기만)
-app.get<DocParams>("/api/docs/:menu/:doc/deck", async (req) => readDeck(DOCS_ROOT, req.params.menu, req.params.doc));
 // 텍스트 편집(2.0): 조각 목록과 저장
 app.get<DocParams & { Querystring: { v?: string } }>("/api/docs/:menu/:doc/segments", async (req) =>
   readSegments(DOCS_ROOT, req.params.menu, req.params.doc, req.query.v));
@@ -197,12 +229,14 @@ app.post<DocParams & { Querystring: { to?: string }; Body: { baseVersion: string
   return reply.type(mimeOf(r.entry)).send(Buffer.from(r.data));
 });
 app.post<DocParams & { Body: { baseVersion: string; changes: Change[]; note?: string } }>("/api/docs/:menu/:doc/text-edit", async (req) => {
+  await needUnlocked(req.params.menu, req.params.doc);
   const result = saveTextEdit(DOCS_ROOT, req.params.menu, req.params.doc, req.body);
   reindex("text-edit", docEvent(req, result, (req.body.changes ?? []).map((c) => c.id)));
   return result;
 });
 
 app.post<DocParams & { Body: { note?: string } | undefined }>("/api/docs/:menu/:doc/release", async (req) => {
+  await needUnlocked(req.params.menu, req.params.doc);
   const result = release(DOCS_ROOT, req.params.menu, req.params.doc, req.body?.note);
   reindex("release", docEvent(req, result));
   return result;
@@ -257,6 +291,190 @@ app.get<{ Params: { to: string; "*": string } }>("/api/convert/:to/*", async (re
   const out = await convert(DOCS_ROOT, CACHE_DIR, decodeURIComponent(req.params["*"]), to);
   reply.header("Cache-Control", "private, max-age=31536000, immutable");
   return reply.type(to === "pdf" ? "application/pdf" : "image/svg+xml").send(createReadStream(out));
+});
+
+// ---------- 수정본·구조 편집·덱 편집·자산(6.0 VL, D-58): Worker와 같은 경로·응답. 규칙은 packages/core/src/work ----------
+const local = new LocalWork(DOCS_ROOT, DATA_DIR, (sha) => {
+  const row = sqlite.prepare("SELECT path FROM version_file WHERE sha256 = ? LIMIT 1").get(sha) as { path: string } | undefined;
+  return row ? join(REPO_ROOT, row.path) : null;
+});
+const sourceOf = (req: { headers: Record<string, unknown> }) => (agentOf(req) ? "agent" : "human") as "agent" | "human";
+const D = (p: DocParams["Params"]) => `/api/docs/${encodeURIComponent(p.menu)}/${encodeURIComponent(p.doc)}`;
+const encPath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+/** 작업본 파일 주소: 수정본이면 r<번호>, 아니면 버전 폴더 */
+const workUrl = (p: DocParams["Params"], folder: string) => (path: string) => `${D(p)}/work/files/${folder}/${encPath(path)}`;
+/** 수정본을 쌓으면 화면에 알린다(편집 화면의 실시간 반영). 색인은 바뀌지 않는다 */
+function saved<T extends { rev?: number; changed?: boolean }>(req: { params: { menu: string; doc: string }; headers: Record<string, unknown> }, reason: string, r: T): T {
+  if (r.changed !== false) broadcast({ type: "changed", reason, ...docEvent(req, { menu: req.params.menu, doc: req.params.doc }), rev: r.rev });
+  return r;
+}
+
+app.get<DocParams>("/api/docs/:menu/:doc/work", async (req) => {
+  const st = await work.workState(local.store(req.params.menu, req.params.doc));
+  const url = workUrl(req.params, st.fromRevision ? `r${st.rev}` : st.baseVersion);
+  return { baseVersion: st.baseVersion, rev: st.rev, fromRevision: st.fromRevision, entry: st.manifest.entry, files: st.manifest.files.map((f) => ({ ...f, url: url(f.path) })) };
+});
+app.get<DocParams & { Params: { folder: string; "*": string } }>("/api/docs/:menu/:doc/work/files/:folder/*", async (req, reply) => {
+  const f = await local.folderFile(req.params.menu, req.params.doc, req.params.folder, decodeURIComponent(req.params["*"]));
+  return reply.type(f.mime).header("Cache-Control", "no-store").send(Buffer.from(f.data));
+});
+/** 저장: { baseRev, put: [{ path, text | base64 }], remove?, entry?, summary? } 또는 구조 편집 { baseRev, ops, summary? } → 새 수정본 */
+app.post<DocParams & { Body: { baseRev: number; put?: { path: string; text?: string; base64?: string }[]; remove?: string[]; entry?: string; summary?: string; ops?: StructOp[] } }>(
+  "/api/docs/:menu/:doc/revisions", async (req) => {
+    const b = req.body ?? ({} as typeof req.body);
+    if (typeof b.baseRev !== "number") throw new WorkError(400, "baseRev가 필요합니다");
+    const store = local.store(req.params.menu, req.params.doc);
+    if (b.ops !== undefined) {
+      if (b.put || b.remove || b.entry) throw new WorkError(400, "ops와 파일 교체(put·remove·entry)는 함께 보낼 수 없습니다");
+      const r = await work.applyStructOps(store, async (sha) => local.asset(sha), { baseRev: b.baseRev, ops: b.ops, summary: b.summary, source: sourceOf(req) });
+      return saved(req, "revision", { ...r, ...req.params });
+    }
+    const put = (b.put ?? []).map((f) => ({ path: f.path, data: f.base64 !== undefined ? new Uint8Array(Buffer.from(f.base64, "base64")) : new TextEncoder().encode(f.text ?? "") }));
+    if (put.length > 200 || put.reduce((n, f) => n + f.data.byteLength, 0) > 25 * 1024 * 1024) throw new WorkError(413, "한 번에 파일 200개·25MB까지 저장할 수 있습니다");
+    await work.checkDeckPut(store, put);
+    const r = await work.saveRevision(store, { baseRev: b.baseRev, put, remove: b.remove, entry: b.entry, summary: b.summary, source: sourceOf(req) });
+    return saved(req, "revision", { ...r, ...req.params });
+  });
+app.get<DocParams>("/api/docs/:menu/:doc/work/structure", async (req) => work.readStructure(local.store(req.params.menu, req.params.doc)));
+app.get<DocParams>("/api/docs/:menu/:doc/work/edit-view", async (req, reply) => {
+  const view = await work.structEditView(local.store(req.params.menu, req.params.doc), (folder, dir) => `${D(req.params)}/work/files/${folder}/${encPath(dir)}`);
+  return reply.type("text/html; charset=utf-8").header("Cache-Control", "no-store").header("x-workflow-rev", String(view.rev))
+    .header("Content-Security-Policy", "sandbox allow-same-origin").send(view.body);
+});
+// 작업본 미리보기 PDF(PPTX 구조 편집 화면). LibreOffice 변환, 내용 해시로 캐시
+app.get<DocParams>("/api/docs/:menu/:doc/work/pdf", async (req, reply) => {
+  const store = local.store(req.params.menu, req.params.doc);
+  const st = await work.workState(store);
+  const f = st.manifest.files.find((x) => x.path === st.manifest.entry)!;
+  const pdf = await convertData(CACHE_DIR, await store.getBlob(f.sha256), extname(f.path).toLowerCase(), "pdf");
+  return reply.type("application/pdf").header("Cache-Control", "no-store").send(createReadStream(pdf));
+});
+// 슬라이드 덱(5.0 M4): 작업본 읽기, 슬라이드 연산·통째 쓰기, 색인 고치기. 모두 수정본
+app.get<DocParams>("/api/docs/:menu/:doc/deck", async (req) => work.readDeck(local.store(req.params.menu, req.params.doc)));
+type SlideParams = { Params: { menu: string; doc: string; sid: string } };
+app.post<SlideParams & { Body: Parameters<typeof work.patchSlide>[2] }>("/api/docs/:menu/:doc/deck/slides/:sid", async (req) =>
+  saved(req, "revision", { ...(await work.patchSlide(local.store(req.params.menu, req.params.doc), req.params.sid, req.body, sourceOf(req))), menu: req.params.menu, doc: req.params.doc }));
+app.put<SlideParams & { Body: Parameters<typeof work.putSlide>[2] }>("/api/docs/:menu/:doc/deck/slides/:sid", async (req) =>
+  saved(req, "revision", { ...(await work.putSlide(local.store(req.params.menu, req.params.doc), req.params.sid, req.body, sourceOf(req))), menu: req.params.menu, doc: req.params.doc }));
+app.patch<DocParams & { Body: Parameters<typeof work.patchDeck>[1] }>("/api/docs/:menu/:doc/deck", async (req) =>
+  saved(req, "revision", { ...(await work.patchDeck(local.store(req.params.menu, req.params.doc), req.body, sourceOf(req))), ...req.params }));
+// 이력·되돌리기·버전으로 저장
+app.get<DocParams & { Querystring: { before?: string } }>("/api/docs/:menu/:doc/revisions", async (req) =>
+  local.listRevisions(req.params.menu, req.params.doc, req.query.before ? Number(req.query.before) : undefined));
+app.get<DocParams & { Params: { rev: string } }>("/api/docs/:menu/:doc/revisions/:rev", async (req) => {
+  const r = await local.getRevision(req.params.menu, req.params.doc, Number(req.params.rev));
+  const url = workUrl(req.params, `r${r.rev}`);
+  return { rev: r.rev, baseVersion: r.baseVersion, source: r.source, summary: r.summary, createdAt: r.createdAt, entry: r.manifest.entry,
+    files: r.manifest.files.map((f) => ({ ...f, url: url(f.path) })) };
+});
+app.post<DocParams & { Params: { rev: string }; Body: { baseRev: number } }>("/api/docs/:menu/:doc/revisions/:rev/restore", async (req) =>
+  saved(req, "revision", { ...(await work.restoreRevision(local.store(req.params.menu, req.params.doc), Number(req.params.rev), req.body?.baseRev)), menu: req.params.menu, doc: req.params.doc }));
+app.post<DocParams & { Body: { baseRev: number; note?: string; version?: string } }>("/api/docs/:menu/:doc/publish", async (req) => {
+  const r = await local.publish(req.params.menu, req.params.doc, req.body ?? { baseRev: -1 });
+  reindex("publish", docEvent(req, r));
+  return r;
+});
+// 편집기 그림 자산: 본문은 data/work/blobs, 문서에는 asset:<sha>만 쓴다
+app.post("/api/assets", async (req) => {
+  const part = await req.file();
+  if (!part) throw new WorkError(400, "file 필드가 없습니다");
+  return local.putAsset({ mime: part.mimetype, data: new Uint8Array(await part.toBuffer()) });
+});
+app.get<{ Params: { sha: string } }>("/api/assets/:sha/url", async (req) => {
+  const a = local.asset(req.params.sha);
+  if (!a) throw new WorkError(404, "없는 이미지입니다");
+  return { url: `/api/assets/${a.sha256}/raw`, width: a.width, height: a.height, mime: a.mime };
+});
+app.get<{ Params: { sha: string } }>("/api/assets/:sha/raw", async (req, reply) => {
+  const a = local.asset(req.params.sha);
+  if (!a) throw new WorkError(404, "없는 이미지입니다");
+  // SVG 자산(소독함)도 앱 출처에서 직접 열리면 스크립트가 돌지 않게 sandbox
+  if (a.mime === "image/svg+xml") reply.header("Content-Security-Policy", SVG_ASSET_CSP).header("X-Content-Type-Options", "nosniff");
+  return reply.type(a.mime).header("Cache-Control", "private, max-age=31536000, immutable").send(Buffer.from(local.getBlob(a.sha256)));
+});
+
+// 편집기 설정(6.0 V4·VO): draw.io 출처(apps/drawio의 `npm run serve`), 오피스 편집기(docker, ONLYOFFICE_URL). 없으면 버튼을 숨긴다
+const OFFICE_URL = (process.env.ONLYOFFICE_URL ?? "").replace(/\/$/, "");
+const OFFICE_SECRET = process.env.ONLYOFFICE_JWT_SECRET ?? "";
+// 파일·콜백 주소 토큰의 서명 키는 오피스 서버와 나눈 JWT 비밀값과 따로 둔다(Worker의 SIGNING_KEY와 같은 구분, V6 보안 점검).
+// 서버를 다시 켜도 7일짜리 콜백 주소가 살아 있게 data/에 한 번 만들어 둔다
+const TICKET_KEY = (() => {
+  const f = join(DATA_DIR, "office-ticket.key");
+  if (!existsSync(f)) writeFileSync(f, randomBytes(32).toString("hex"), { mode: 0o600 });
+  return readFileSync(f, "utf8").trim();
+})();
+// 오피스 서버(docker 안)가 이 서버에 닿는 주소
+const OFFICE_BACKEND = (process.env.ONLYOFFICE_BACKEND ?? `http://host.docker.internal:${PORT}`).replace(/\/$/, "");
+const officeOn = () => !!OFFICE_URL && !!OFFICE_SECRET;
+app.get("/api/editor-config", async () => ({ drawio: process.env.DRAWIO_ORIGIN || null, office: officeOn() }));
+
+// ---------- 오피스 편집기(6.0 VO, D-59): Worker(apps/worker/src/office.ts)와 같은 경로·응답. 규칙은 packages/core/src/office ----------
+async function officeConfig(p: DocParams["Params"], mode: office.OfficeMode) {
+  if (!officeOn()) throw new WorkError(501, "오피스 편집기를 쓸 수 없는 환경입니다(ONLYOFFICE_URL·ONLYOFFICE_JWT_SECRET)");
+  const s = await office.openSession(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), { scope: officeScope(p), mode, userId: null });
+  const ticket = (use: "file" | "callback", ttl: number) => office.signTicket({ ws: "local", doc: `${p.menu}/${p.doc}`, key: s.key, use }, TICKET_KEY, ttl);
+  const config = await office.editorConfig({
+    key: s.key, title: `${local.title(p.menu, p.doc)}${s.entry.slice(s.entry.lastIndexOf("."))}`, entry: s.entry, mode,
+    fileUrl: `${OFFICE_BACKEND}/api/office/file?t=${await ticket("file", 3600)}`,
+    callbackUrl: mode === "edit" ? `${OFFICE_BACKEND}/api/office/callback?t=${await ticket("callback", 7 * 86400)}` : undefined,
+    user: { id: "local", name: "로컬 사용자" },
+  }, OFFICE_SECRET);
+  return { apiUrl: `${OFFICE_URL}/web-apps/apps/api/documents/api.js`, key: s.key, rev: s.rev, config, keepAliveMs: office.KEEPALIVE };
+}
+// 문서 키 앞부분: 오피스 서버 하나를 여러 문서가 같이 쓰므로 문서마다 다르게(메뉴·문서 slug의 sha256 앞 12자)
+const officeScope = (p: { menu: string; doc: string }) => `l${createHash("sha256").update(`${p.menu}/${p.doc}`).digest("hex").slice(0, 12)}`;
+
+app.post<DocParams>("/api/docs/:menu/:doc/office/session", async (req) => officeConfig(req.params, "edit"));
+app.get<DocParams>("/api/docs/:menu/:doc/office/config", async (req) => officeConfig(req.params, "view"));
+app.post<DocParams & { Body: { key: string } }>("/api/docs/:menu/:doc/office/keepalive", async (req) =>
+  ({ alive: await office.keepAlive(local.officeSessions(req.params.menu, req.params.doc), String(req.body?.key)) }));
+// 잠금 풀기(로컬은 사용자가 하나라 누구나). 오피스 서버에 남은 편집은 그 뒤 콜백이 와도 반영하지 않는다
+app.post<DocParams>("/api/docs/:menu/:doc/office/unlock", async (req) => ({ released: await office.releaseSession(local.officeSessions(req.params.menu, req.params.doc)) }));
+app.get<DocParams>("/api/docs/:menu/:doc/office", async (req) => {
+  const s = await local.officeSessions(req.params.menu, req.params.doc).get();
+  const st = await work.workState(local.store(req.params.menu, req.params.doc));
+  return { active: !!s && s.expiresAt > Date.now(), key: s?.key ?? null, rev: st.rev };
+});
+app.get("/api/office/status", async () => {
+  if (!officeOn()) return { enabled: false, ready: false };
+  try {
+    const res = await fetch(`${OFFICE_URL}/healthcheck`, { signal: AbortSignal.timeout(5000) });
+    return { enabled: true, ready: res.ok && (await res.text()).trim() === "true" };
+  } catch {
+    return { enabled: true, ready: false };
+  }
+});
+/** 오피스 서버가 부르는 API: 서명 토큰(t)으로만 */
+const ticketParams = (t: office.OfficeTicket) => {
+  const [menu, doc] = String(t.doc).split("/");
+  return { menu, doc };
+};
+app.get<{ Querystring: { t?: string } }>("/api/office/file", async (req, reply) => {
+  const t = await office.readTicket(req.query.t ?? "", TICKET_KEY, "file");
+  if (!t) throw new WorkError(403, "주소가 맞지 않거나 만료됐습니다");
+  const p = ticketParams(t);
+  const s = await office.openSession(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), { scope: officeScope(p), mode: "view", userId: null });
+  if (s.key !== t.key) throw new WorkError(409, "문서 내용이 바뀌었습니다. 편집기를 다시 여세요");
+  return reply.type("application/octet-stream").header("Cache-Control", "no-store").send(Buffer.from(local.getBlob(s.sha256)));
+});
+app.post<{ Querystring: { t?: string }; Body: office.CallbackBody }>("/api/office/callback", async (req) => {
+  const t = await office.readTicket(req.query.t ?? "", TICKET_KEY, "callback");
+  if (!t) throw new WorkError(403, "주소가 맞지 않거나 만료됐습니다");
+  const cb = await office.verifyCallback(req.body ?? {}, req.headers.authorization, OFFICE_SECRET);
+  if (!cb) throw new WorkError(403, "콜백 서명이 맞지 않습니다");
+  const p = ticketParams(t);
+  const r = await office.handleCallback(local.store(p.menu, p.doc), local.officeSessions(p.menu, p.doc), cb, {
+    expectedKey: t.key, officeOrigin: OFFICE_URL,
+    download: async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new WorkError(502, `저장 파일을 받지 못했습니다(${res.status})`);
+      return office.readCapped(res);
+    },
+  });
+  // 늦게 온 저장(세션 끝남·그 사이 다른 수정본)은 반영하지 않고 남긴다
+  if (r.rejected) app.log.warn({ doc: `${p.menu}/${p.doc}` }, `오피스 저장 거부: ${r.rejected}`);
+  if (r.saved?.changed) broadcast({ type: "changed", reason: "revision", ...docEvent(req, p), rev: r.saved.rev });
+  return { error: 0 };
 });
 
 app.post("/api/reindex", async () => { reindex("manual"); return { ok: true, warnings }; });

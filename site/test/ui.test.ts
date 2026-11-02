@@ -10,6 +10,9 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { call, freePort, makeWorkspace, readText, SITE, startServer, upload, waitFor, type TestServer } from "./helpers.ts";
+import { applyOp, markEids, outline } from "@workflow/core/structedit/html";
+import { signJwt } from "@workflow/core/office";
+import { baseMinHeight, containingBlock, pinBoxOf, previewPin } from "../web/src/viewers/structedit/pinBox.ts";
 
 const PUPPETEER = (() => {
   try { return join(execSync("npm root -g", { encoding: "utf8" }).trim(), "@mermaid-js/mermaid-cli/node_modules/puppeteer"); } catch { return ""; }
@@ -22,6 +25,14 @@ let vite: ChildProcess;
 let WEB = "";
 let browser: any;
 let page: any;
+// draw.io 대역(6.0 V4): 앱과 다른 출처(빈 포트)에서 embed 프로토콜만 흉내 내는 페이지
+let drawio: ReturnType<typeof createServer>;
+let DRAWIO = "";
+// 오피스 편집 서버 대역(6.0 VO): healthcheck(처음 두 번은 준비 안 됨), api.js, 닫으면 서명한 저장 콜백을 보낸다
+const OFFICE_SECRET = "ui-office-secret";
+let office: ReturnType<typeof createServer>;
+let OFFICE = "";
+let officeHealth = 0;
 const meta = (menu: string, doc: string) => parse(readText(join(ws.docs, menu, doc, "meta.yaml")));
 
 /** 페이지 이동. SSE가 계속 열려 있어 networkidle 대신 domcontentloaded까지만 기다린다 */
@@ -35,6 +46,11 @@ async function open(path: string, title?: string) {
   if (title) await page.waitForFunction((t: string) => document.querySelector("main h1, h1")?.textContent?.includes(t), { timeout: 15_000 }, title);
 }
 const text = () => page.evaluate(() => document.body.innerText) as Promise<string>;
+/** 글자가 보이는 버튼(아이콘 + 글자)을 글자로 누른다 */
+async function clickButton(label: string) {
+  for (const b of await page.$$("button")) if ((await b.evaluate((e: Element) => e.textContent))?.trim() === label) return b.click();
+  throw new Error(`${label} 버튼이 없습니다`);
+}
 async function clickConfirm(label?: string) {
   await page.waitForSelector("dialog[open]", { timeout: 5000 });
   await new Promise((r) => setTimeout(r, 120)); // 포커스 지연(60ms) 뒤
@@ -48,7 +64,33 @@ async function clickConfirm(label?: string) {
 
 describe("화면", { skip }, () => {
   before(async () => {
-    srv = await startServer(ws);
+    const drawPort = await freePort();
+    drawio = createServer((_req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(readFileSync(join(SITE, "test/fixtures/fake-drawio.html"))); }).listen(drawPort, "127.0.0.1");
+    DRAWIO = `http://127.0.0.1:${drawPort}`;
+    const officePort = await freePort();
+    OFFICE = `http://127.0.0.1:${officePort}`;
+    const docx = readFileSync(join(SITE, "../packages/core/test/fixtures/struct.docx"));
+    office = createServer((req, res) => {
+      const u = new URL(req.url ?? "/", OFFICE);
+      if (u.pathname === "/healthcheck") return res.end(officeHealth++ < 2 ? "false" : "true");
+      if (u.pathname === "/web-apps/apps/api/documents/api.js") {
+        res.writeHead(200, { "content-type": "text/javascript" });
+        return res.end(readFileSync(join(SITE, "test/fixtures/fake-office-api.js")));
+      }
+      if (u.pathname === "/cache/out.docx") return res.end(Buffer.concat([docx, Buffer.from("화면 저장")]));
+      if (u.pathname === "/close") {
+        res.end();
+        // 실제 서버처럼 닫힌 뒤 조금 있다가 콜백(서버 주소는 대역 쪽에서 127.0.0.1로)
+        const body = { key: u.searchParams.get("key"), status: 2, url: `${OFFICE}/cache/out.docx`, users: ["local"] };
+        const cb = new URL(u.searchParams.get("cb")!);
+        setTimeout(() => void signJwt({ payload: body, exp: Math.floor(Date.now() / 1000) + 300 }, OFFICE_SECRET).then((t) => fetch(`${srv.url}${cb.pathname}${cb.search}`, {
+          method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${t}` }, body: JSON.stringify(body),
+        })), 300);
+        return;
+      }
+      res.statusCode = 404; res.end();
+    }).listen(officePort, "127.0.0.1");
+    srv = await startServer(ws, { DRAWIO_ORIGIN: DRAWIO, ONLYOFFICE_URL: OFFICE, ONLYOFFICE_JWT_SECRET: OFFICE_SECRET });
     const webPort = await freePort();
     vite = spawn(process.execPath, [join(SITE, "../node_modules/vite/bin/vite.js")], {
       cwd: SITE, env: { ...process.env, PORT: String(srv.port), WEB_PORT: String(webPort) }, stdio: "ignore",
@@ -68,6 +110,8 @@ describe("화면", { skip }, () => {
     await browser?.close();
     vite?.kill("SIGTERM");
     await srv?.stop();
+    drawio?.close();
+    office?.close();
     ws.cleanup();
   });
 
@@ -696,10 +740,325 @@ describe("화면", { skip }, () => {
     assert.match(readText(join(ws.docs, "_site/categories.yaml")), /key: ops[\s\S]*name: 운영|name: 운영[\s\S]*key: ops/);
   });
 
+  test("TC-UI-35 로컬 HTML 구조 편집(6.0 VL): 속성 패널로 글자 크기 → 수정본 자동 저장 → 버전으로 저장하면 새 버전 폴더", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 구조 편집", slug: "local-struct" }, [["page.html", "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 구조 편집</h1><p>크기 바꿀 문단</p></main></body></html>"]]);
+    const FRAME = 'iframe[title="구조 편집"]';
+    await open("/sdlc/notes/local-struct", "로컬 구조 편집");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector("main > p[data-eid]") && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME);
+    await page.evaluate((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("main > p")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })), FRAME);
+    await page.waitForSelector('input[aria-label="서식 크기"]');
+    await page.click('input[aria-label="서식 크기"]');
+    await page.keyboard.type("22px");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    // docs/는 아직 그대로
+    assert.equal(meta("notes", "local-struct").current, "v0.0");
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    assert.equal(meta("notes", "local-struct").current, "v0.1");
+    assert.match(readText(join(ws.docs, "notes/local-struct/v0.1/page.html")), /<p style="font-size:22px">크기 바꿀 문단<\/p>/);
+  });
+
+  test("TC-UI-37 로컬 HTML 자유 배치(6.0 V3): 그림 파일을 섹션의 한 점에 놓으면 그 자리 고정 그림(가운데 1px 이내), 640px 미리보기는 가로 스크롤 없음, 버전으로 저장하면 그림이 버전 폴더 assets/로", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 자유 배치", slug: "local-pin" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title><style>body{margin:0;padding:24px}section{padding:16px;border:1px solid #ccc}</style></head><body><main><h1>로컬 자유 배치</h1><section class=\"s\"><h2>섹션</h2><p>그림을 놓을 자리</p></section></main></body></html>"]]);
+    const FRAME = 'iframe[title="구조 편집"]';
+    await open("/sdlc/notes/local-pin", "로컬 자유 배치");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    await ready("section.s > p[data-eid]");
+    const drop = await page.evaluate((f: string) => {
+      const c = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("section.s")!.getBoundingClientRect();
+      // 이벤트 좌표는 정수로 잘린다
+      return { x: Math.round(c.left + c.width * 0.5), y: Math.round(c.top + 60) };
+    }, FRAME);
+    await page.evaluate(async (f: string, x: number, y: number) => {
+      const c = document.createElement("canvas"); c.width = 120; c.height = 60;
+      c.getContext("2d")!.fillStyle = "#246"; c.getContext("2d")!.fillRect(0, 0, 120, 60);
+      const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/png"));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "남색.png", { type: "image/png" }));
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("section.s > p")!
+        .dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+    }, FRAME, drop.x, drop.y);
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    await ready("section.s > img[data-pin]");
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector<HTMLImageElement>("section.s > img")!.complete, { timeout: 10_000 }, FRAME);
+    const img = await page.evaluate((f: string) => {
+      const r = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("section.s > img")!.getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    }, FRAME);
+    assert.ok(Math.abs(img.cx - drop.x) <= 1 && Math.abs(img.cy - drop.y) <= 1, `${JSON.stringify(img)} ≈ ${JSON.stringify(drop)}`);
+    await page.click('button[aria-label="좁은 화면 미리보기 (640px)"]');
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.getBoundingClientRect().width <= 640, { timeout: 5000 }, FRAME);
+    assert.deepEqual(await page.evaluate((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
+      return { pos: d.defaultView!.getComputedStyle(d.querySelector("section.s > img")!).position, over: d.documentElement.scrollWidth > d.documentElement.clientWidth };
+    }, FRAME), { pos: "static", over: false });
+    await page.click('button[aria-label="넓은 화면으로 돌아가기"]');
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    const saved = readText(join(ws.docs, "notes/local-pin/v0.1/page.html"));
+    const src = /<img src="(assets\/[0-9a-f]{16}\.png)" alt="남색" data-pin="" style="position:absolute;/.exec(saved)?.[1];
+    assert.ok(src, saved);
+    assert.ok(existsSync(join(ws.docs, "notes/local-pin/v0.1", src!)), "그림이 버전 폴더에 복사된다");
+  });
+
+  /** 구조 편집을 열고 사본이 준비될 때까지(편집 CSS가 들어간 뒤) 기다린다 */
+  const FRAME = 'iframe[title="구조 편집"]';
+  async function openStruct(path: string, title: string, sel: string) {
+    await open(path, title);
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+  }
+  const clickIn = (sel: string) => page.evaluate((f: string, s: string) => {
+    document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector<HTMLElement>(s)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, FRAME, sel);
+  const revText = async (menu: string, doc: string) => {
+    const w = await call(srv.url, "GET", `/api/docs/${menu}/${doc}/work`);
+    const entry = w.body.files.find((f: { path: string }) => f.path === w.body.entry);
+    return { html: await (await fetch(srv.url + entry.url)).text(), files: w.body.files as { path: string; url: string }[], rev: w.body.rev as number };
+  };
+
+  test("TC-VE-29 로컬 SVG(6.0 V4): SVG 파일을 그림처럼 넣으면 소독된 파일 참조(assets/….svg), 「SVG 고치기」는 svgedit 캔버스로 열어 도형 색·위치를 바꿔 새 SVG로 저장", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 SVG", slug: "local-svg" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 SVG</h1><p>도식 자리</p></main></body></html>"]]);
+    const file = join(ws.root, "box.svg");
+    writeFileSync(file, '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect id="r1" x="20" y="20" width="100" height="50" fill="#cccccc" onclick="alert(1)"/><script>alert(2)</script></svg>');
+    await openStruct("/sdlc/notes/local-svg", "로컬 SVG", "main > p[data-eid]");
+    await clickIn("main > p");
+    await (await page.waitForSelector('input[aria-label="그림 넣기"]')).uploadFile(file);
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    const r1 = await revText("notes", "local-svg");
+    const src = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="box">/.exec(r1.html)?.[1];
+    assert.ok(src, r1.html);
+    const stored = await (await fetch(srv.url + r1.files.find((f) => f.path === src)!.url)).text();
+    assert.doesNotMatch(stored, /script|onclick/);
+    // svgedit로 고치기
+    await page.waitForFunction((f: string) => !!document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelector("main img[data-eid]"), { timeout: 15_000 }, FRAME);
+    await clickIn("main img");
+    await clickButton("SVG 고치기");
+    await page.waitForFunction(() => !!(window as any).svgCanvas && !!document.querySelector("#svgedit-host #svgcontent #r1"), { timeout: 20_000 });
+    await page.evaluate(() => {
+      const c = (window as any).svgCanvas;
+      c.clearSelection();
+      c.addToSelection([document.querySelector("#svgcontent #r1")]);
+      c.setColor("fill", "#ff0000");
+      c.moveSelectedElements(30, 10);
+    });
+    await clickButton("저장");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    const r2 = await revText("notes", "local-svg");
+    const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="box">/.exec(r2.html)?.[1];
+    assert.ok(src2 && src2 !== src, r2.html);
+    const edited = await (await fetch(srv.url + r2.files.find((f) => f.path === src2)!.url)).text();
+    assert.match(edited, /viewBox="0 0 200 100"/);
+    assert.match(edited, /<rect[^>]*fill="#ff0000"/);
+    assert.match(edited, /<rect[^>]*x="50"/);
+    assert.doesNotMatch(edited, /Layer 1|class="layer"/);
+    assert.equal(await page.$("dialog[open]"), null);
+  });
+
+  test("TC-VE-30 로컬 draw.io(6.0 V4, 대역 페이지): 「다이어그램」으로 새로 그려 저장하면 draw.io SVG(content 보존)가 그림으로 들어가고, 「SVG 고치기」는 draw.io로 다시 열어 이어서 고친다. 다른 출처 메시지는 무시", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 다이어그램", slug: "local-drawio" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 다이어그램</h1><p>여기 뒤에</p></main></body></html>"]]);
+    await openStruct("/sdlc/notes/local-drawio", "로컬 다이어그램", "main > p[data-eid]");
+    await clickIn("main > p");
+    await clickButton("다이어그램");
+    const frameOf = async () => {
+      await page.waitForSelector('iframe[title="draw.io 편집기"]', { timeout: 10_000 });
+      for (let i = 0; i < 100; i++) {
+        const f = page.frames().find((x: any) => x.url().startsWith(DRAWIO));
+        if (f && await f.evaluate(() => typeof (window as any).addBox === "function" && !!(window as any).lastOrigin).catch(() => false)) return f;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error("draw.io 대역이 열리지 않았습니다");
+    };
+    let f = await frameOf();
+    // 같은 페이지에서 보낸 위조 save는 걸러진다(출처·보낸 창 확인)
+    await page.evaluate(() => window.postMessage(JSON.stringify({ event: "save", exit: true }), "*"));
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(await page.$('iframe[title="draw.io 편집기"]'), "위조 메시지로 닫히면 안 된다");
+    await f.evaluate(() => (window as any).addBox("첫 상자"));
+    await f.click("#save");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    await page.waitForFunction(() => !document.querySelector('iframe[title="draw.io 편집기"]'), { timeout: 5000 });
+    const r1 = await revText("notes", "local-drawio");
+    const src = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="다이어그램">/.exec(r1.html)?.[1];
+    assert.ok(src, r1.html);
+    assert.match(await (await fetch(srv.url + r1.files.find((x) => x.path === src)!.url)).text(), /^<svg[^>]* content="\[&quot;첫 상자&quot;\]"/);
+    // 다시 열어 이어서 고치기
+    await page.waitForFunction((fr: string) => !!document.querySelector<HTMLIFrameElement>(fr)?.contentDocument?.querySelector("main img[data-eid]"), { timeout: 15_000 }, FRAME);
+    await clickIn("main img");
+    await clickButton("SVG 고치기");
+    f = await frameOf();
+    await f.waitForFunction(() => document.getElementById("state")!.textContent === "첫 상자", { timeout: 5000 });
+    await f.evaluate(() => (window as any).addBox("둘째 상자"));
+    await f.click("#save");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    const r2 = await revText("notes", "local-drawio");
+    const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="다이어그램">/.exec(r2.html)?.[1];
+    assert.ok(src2 && src2 !== src);
+    assert.match(await (await fetch(srv.url + r2.files.find((x) => x.path === src2)!.url)).text(), /둘째 상자/);
+  });
+
+  test("TC-VE-31 로컬 인라인 SVG(6.0 V4): 문서의 SVG 도형을 누르면 속성 패널에서 채움 색·글자를 바꾼다(svgAttr, 수정본 하나씩)", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 인라인", slug: "local-inline-svg" }, [["page.html",
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><main><h1>로컬 인라인</h1><p>앞</p></main></body></html>"]]);
+    const s = await call(srv.url, "GET", "/api/docs/notes/local-inline-svg/work/structure");
+    const p = s.body.blocks.find((b: { tag: string }) => b.tag === "p");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80" viewBox="0 0 200 80"><rect width="200" height="40" fill="#cccccc"/><text x="8" y="70">원래 글자</text></svg>';
+    assert.equal((await call(srv.url, "POST", "/api/docs/notes/local-inline-svg/revisions", { baseRev: 0, ops: [{ t: "insert", ref: p.eid, where: "after", node: { kind: "svg", svg } }] })).status, 200);
+    await openStruct("/sdlc/notes/local-inline-svg", "로컬 인라인", "svg[data-eid] text[data-shape]");
+    await clickIn("svg text");
+    await page.waitForSelector('input[aria-label="도형 글자"]', { timeout: 5000 });
+    await page.click('input[aria-label="도형 글자"]', { count: 3 });
+    await page.keyboard.type("새 글자");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelector("svg rect[data-shape]"), { timeout: 15_000 }, FRAME);
+    await clickIn("svg rect");
+    await page.waitForSelector('input[aria-label="도형 채움 색"]', { timeout: 5000 });
+    await page.evaluate(() => {
+      const i = document.querySelector<HTMLInputElement>('input[aria-label="도형 채움 색"]')!;
+      i.value = "#3366cc";
+      i.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 3"), { timeout: 15_000 });
+    const { html } = await revText("notes", "local-inline-svg");
+    assert.match(html, /<rect width="200" height="40" fill="#3366cc"\/>/);
+    assert.match(html, />새 글자<\/text>/);
+    const revs = await call(srv.url, "GET", "/api/docs/notes/local-inline-svg/revisions");
+    assert.deepEqual(revs.body.revisions.slice(0, 2).map((r: { summary: string }) => r.summary), ["SVG 도형", "SVG 도형"]);
+  });
+
+  test("TC-VO-11 로컬 오피스 편집기(6.0 VO, 대역 서버): 확인 창 → 깨우는 동안 진행 막대 → 편집기 열림(다른 쓰기 409) → 닫고 저장 → 수정본(office) → 구조 편집 화면에서 버전으로 저장", async () => {
+    const docx = readFileSync(join(SITE, "../packages/core/test/fixtures/struct.docx"));
+    await upload(srv.url, { menu: "notes", title: "로컬 오피스", slug: "local-office" }, [["report.docx", docx]]);
+    officeHealth = 0;
+    await open("/sdlc/notes/local-office", "로컬 오피스");
+    await page.waitForSelector('button[data-tip="오피스 편집기로 열기 (서식)"]', { timeout: 10_000 });
+    await page.click('button[data-tip="오피스 편집기로 열기 (서식)"]');
+    await clickConfirm("열기");
+    await page.waitForSelector('[role="progressbar"][aria-label="오피스 편집기 진행"]', { timeout: 5000 });
+    await page.waitForSelector("[data-fake-office]", { timeout: 20_000 });
+    assert.match(await text(), /가짜 오피스 편집기: 로컬 오피스\.docx \(edit\)/);
+    assert.equal((await call(srv.url, "POST", "/api/docs/notes/local-office/revisions", { baseRev: 0, put: [{ path: "x.txt", text: "x" }] })).status, 409);
+    await clickButton("닫고 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("오피스 편집기에서 수정본 1"), { timeout: 30_000 });
+    const revs = await call(srv.url, "GET", "/api/docs/notes/local-office/revisions");
+    assert.equal(revs.body.revisions[0].source, "office");
+    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "버전으로 저장" && !b.disabled), { timeout: 15_000 });
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await waitFor(async () => meta("notes", "local-office").current === "v0.1", 15_000, "새 버전");
+    assert.equal(readFileSync(join(ws.docs, "notes", "local-office", "v0.1", "report.docx")).toString().endsWith("화면 저장"), true);
+  });
+
+  test("TC-UI-36 로컬 슬라이드 덱: 보기 화면이 덱으로 그려지고, 편집(6.0 VL)에서 글자를 두 번 눌러 고치고 Esc → 수정본 → 버전으로 저장", async () => {
+    await upload(srv.url, { menu: "notes", title: "로컬 덱 편집", slug: "local-deck-ui" }, [
+      ["deck.json", JSON.stringify({ v: 1, title: "로컬 덱 편집", order: ["cover"] })],
+      ["slides/cover.html", '<section id="cover"><h1>표지</h1></section>'],
+    ]);
+    await open("/sdlc/notes/local-deck-ui", "로컬 덱 편집");
+    // 보기 화면도 덱으로 그린다(로컬 파일 경로는 docs/…/vN.N/deck.json이라 전에는 JSON 글로 보였다)
+    await page.waitForSelector("main .slide-root", { timeout: 15_000 });
+    await (await page.waitForSelector('button[aria-label="슬라이드 편집"]', { timeout: 10_000 })).click();
+    await page.waitForSelector('.deck-edit-layer [data-eid="e1"]', { timeout: 20_000 });
+    await page.click('.deck-edit-layer [data-eid="e1"]', { count: 2 });
+    await page.waitForSelector(".slide-text-editor.ProseMirror-focused");
+    await page.evaluate(() => {
+      const el = document.querySelector(".slide-text-editor")!;
+      const r = document.createRange(); r.selectNodeContents(el);
+      const sel = getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+    });
+    await page.keyboard.type("새 표지");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    await clickButton("버전으로 저장");
+    await clickConfirm("버전으로 저장");
+    await page.waitForFunction(() => document.body.innerText.includes("버전으로 저장했습니다"), { timeout: 15_000 });
+    assert.equal(meta("notes", "local-deck-ui").current, "v0.1");
+    assert.match(readText(join(ws.docs, "notes/local-deck-ui/v0.1/slides/cover.html")), /<h1 data-eid="e1">새 표지<\/h1>/);
+  });
+
   test("TC-UI-12 없는 문서·없는 대분류는 안내 화면", async () => {
     await nav(WEB + "/sdlc/notes/nope");
     await page.waitForFunction(() => document.body.innerText.includes("문서를 열 수 없습니다"), { timeout: 10_000 });
     await nav(WEB + "/ghost");
     await page.waitForFunction(() => document.body.innerText.includes("없는 대분류입니다"), { timeout: 10_000 });
+  });
+
+  test("TC-VE-20 리포 HTML 문서 자유 배치 배치 검사(6.0 V3): 지금 버전 대표 HTML마다 블록 3개를 화면처럼 재서 고정하면 375·640·641·718(A4 인쇄)·800·1024·1280px에서 가로 스크롤 없고 고정 요소가 섹션 밖으로 넘치지 않는다", async () => {
+    const root = join(SITE, "../docs");
+    const files: string[] = [];
+    for (const m of execSync(`find "${root}" -name meta.yaml -not -path "*/_*"`, { encoding: "utf8" }).trim().split("\n")) {
+      const cur = /^current:\s*(\S+)/m.exec(readFileSync(m, "utf8"))?.[1];
+      const dir = join(m, "..", cur ?? "");
+      const entry = existsSync(dir) ? execSync(`ls "${dir}"`, { encoding: "utf8" }).split("\n").find((f) => /\.html?$/.test(f)) : undefined;
+      if (entry) files.push(join(dir, entry));
+    }
+    assert.ok(files.length >= 5, `대표 HTML ${files.length}개`);
+    // 화면과 같은 재기 함수를 브라우저에 넣는다
+    const fns = `const containingBlock=${containingBlock};const pinBoxOf=${pinBoxOf};const baseMinHeight=${baseMinHeight};const previewPin=${previewPin};`;
+    const p = await browser.newPage();
+    await p.setRequestInterception(true);
+    p.on("request", (r: any) => (r.url().startsWith("data:") || r.url() === "about:blank" ? r.continue() : r.abort()));
+    const problems: string[] = [];
+    let pins = 0;
+    try {
+      for (const f of files) {
+        let html = readFileSync(f, "utf8");
+        const cands = outline(html).filter((b) => b.pinBase && ["p", "h2", "h3", "img", "figure", "div", "ul", "blockquote"].includes(b.tag));
+        const order = outline(html).map((b) => b.eid);
+        for (const pick of [...new Set([0, Math.floor(cands.length / 2), cands.length - 1])].map((i) => cands[i]).filter(Boolean)) {
+          const b = outline(html)[order.indexOf(pick.eid)];
+          await p.setViewport({ width: 1280, height: 900 });
+          await p.setContent(markEids(html), { waitUntil: "load" });
+          const m = await p.evaluate(`(() => { ${fns}
+            const el = document.querySelector('[data-eid="${b.eid}"]'), base = document.querySelector('[data-base="${b.pinBase}"]');
+            const cb = containingBlock(el, base), r = el.getBoundingClientRect();
+            const box = pinBoxOf({ left: r.left + 20, top: r.top + 10, width: Math.min(r.width, cb.clientWidth * 0.6) }, cb);
+            previewPin(el, base, box);
+            return { box, minHeight: baseMinHeight(base), doc: document.documentElement.outerHTML }; })()`) as { box: { left: number; top: number; width: number }; minHeight: number; doc: string };
+          // 화면(minHeightFor)처럼 641px에서 고정 요소 바닥도 잰다
+          await p.setViewport({ width: 641, height: 900 });
+          await p.setContent(`<!doctype html>${m.doc}`, { waitUntil: "load" });
+          const narrow = await p.evaluate(`(() => { ${fns} return baseMinHeight(document.querySelector('[data-base="${b.pinBase}"]'), false); })()`) as number;
+          html = applyOp(html, { t: "toPinned", eid: b.eid, box: m.box, minHeight: Math.max(m.minHeight, narrow) });
+          pins++;
+        }
+        for (const w of [1280, 1024, 800, 718, 641, 640, 375]) {
+          await p.setViewport({ width: w, height: 900 });
+          await p.setContent(html, { waitUntil: "load" });
+          const r = await p.evaluate(() => {
+            const d = document.documentElement, out: string[] = [];
+            if (d.scrollWidth > d.clientWidth + 1) out.push(`가로 스크롤 ${d.scrollWidth}>${d.clientWidth}`);
+            for (const el of document.querySelectorAll<HTMLElement>("[data-pin]")) {
+              if (getComputedStyle(el).position !== "absolute") continue;
+              const box = el.closest("[data-pin-box]")!.getBoundingClientRect(), e = el.getBoundingClientRect();
+              if (e.bottom > box.bottom + 1 || e.right > box.right + 1 || e.left < box.left - 1) out.push(`${el.tagName} 섹션 밖`);
+            }
+            return out.join(", ");
+          });
+          if (r) problems.push(`${f.slice(root.length + 1)} ${w}px: ${r}`);
+        }
+      }
+    } finally { await p.close(); }
+    assert.ok(pins >= 15, `고정한 블록 ${pins}개`);
+    assert.deepEqual(problems, []);
   });
 });

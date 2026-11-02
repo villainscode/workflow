@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter, AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowDown, ArrowUp, ChevronRight, Columns3, Heading2, ImagePlus, ImageUp, Pin, Rows3, Table2, Trash2, Type } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter, AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowDown, ArrowUp, ChevronRight, Columns3, Heading2, ImagePlus, ImageUp, Network, PenTool, Pin, Rows3, Table2, Trash2, Type } from "lucide-react";
 import { findEl, type Slide, type SlideEl, type SlideOp } from "@workflow/core/slide";
 import { uploadAsset } from "../../../lib/structedit.ts";
 import { useConfirm } from "../../../components/confirm/ConfirmProvider.tsx";
@@ -9,12 +10,26 @@ import { measureBox, TEXT_TAGS } from "./EditCanvas.tsx";
 import { alignBoxes, distributeBoxes, type AlignHow, type Box } from "../../../editor/align.ts";
 import { LayerPanel, type LayerItem } from "../../../editor/LayerPanel.tsx";
 import type { FontOption } from "../../../editor/TextToolbar.tsx";
+import { DrawioEditor } from "../../../editor/DrawioEditor.tsx";
+import { SvgEditor } from "../../../editor/SvgEditor.tsx";
+import { fetchSvg, IMAGE_ACCEPT, isDrawioSvg, uploadSvg } from "../../../editor/svgFile.ts";
+import { useEditorConfig } from "../../../lib/editorConfig.ts";
+import { API } from "../../../lib/base.ts";
 
 /**
  * 속성 패널(명세 06절). 입력 칸은 허용 CSS 목록에서 요소 종류별 묶음만 보여 준다. 칸은 Enter·바깥 누름에서 setStyle 하나로 확정한다.
  * 위쪽 「넣기」 막대는 고른 상자(없으면 슬라이드) 끝에 글상자·제목·표·그림을 넣는다.
  * 고정 위치 요소를 여럿 고르면 정렬·분배(editor/align), 아래쪽 레이어 패널(editor/LayerPanel)에서 고르기·문서 순서 옮기기(move).
+ * SVG(6.0 V4): 그림처럼 asset:으로 넣는다(서버가 소독). 「다이어그램 그리기」(draw.io), SVG 그림은 「SVG 고치기」(draw.io SVG는 draw.io, 아니면 svgedit)로 고쳐 새 자산으로 바꾼다.
  */
+
+type SvgEdit = { kind: "drawio" | "svgedit"; svg?: string; title: string; save: (svg: string) => Promise<void> };
+/** 그림 크기를 슬라이드 안(긴 변 896×640)으로 줄인 가운데 고정 위치 img */
+const centeredImg = (asset: string, alt: string, width: number, height: number) => {
+  const k = Math.min(1, 896 / width, 640 / height);
+  const w = Math.round(width * k), h = Math.round(height * k);
+  return `<img src="${asset}" alt="${alt.replace(/"/g, "")}" style="position:absolute;left:${Math.round(960 - w / 2)}px;top:${Math.round(540 - h / 2)}px;width:${w}px;height:${h}px;object-fit:contain">`;
+};
 
 /** 글자 크기 목록(속성 패널·글자 도구 막대) */
 export const FONT_SIZES = ["24px", "28px", "32px", "40px", "44px", "56px", "64px", "80px", "96px", "120px"];
@@ -49,6 +64,26 @@ export function Inspector({ slide, selection, setSelection, apply, palette, font
     apply([value.trim() ? { t: "setStyle", eid, set: { [prop]: value.trim() } } : { t: "setStyle", eid, unset: [prop] }]);
 
   const insert = (html: string) => apply([{ t: "insert", parent: target.eid, index: target.children.length, html }]);
+  const { drawio } = useEditorConfig();
+  const [svgEdit, setSvgEdit] = useState<SvgEdit | null>(null);
+  const drawNew = () => setSvgEdit({ kind: "drawio", title: "새 다이어그램", save: async (svg) => {
+    const a = await uploadSvg(svg, "diagram.svg");
+    if (!insert(centeredImg(a.asset, "다이어그램", a.width, a.height))) throw new Error("넣지 못했습니다");
+  } });
+  const editSvg = async (eid: string, url: string) => {
+    try {
+      const svg = await fetchSvg(url);
+      const save = async (out: string) => {
+        const a = await uploadSvg(out);
+        if (!apply([{ t: "setAttr", eid, name: "src", value: a.asset }])) throw new Error("저장하지 못했습니다");
+        if (a.removed?.length) setMessage(`SVG에서 허용하지 않는 것을 지웠습니다: ${a.removed.join(", ")}`);
+      };
+      if (isDrawioSvg(svg)) {
+        if (!drawio) { setMessage("draw.io로 만든 SVG는 draw.io 편집기로 고칩니다. 이 사이트에는 draw.io 편집기가 설정되지 않았습니다(DRAWIO_ORIGIN)"); return; }
+        setSvgEdit({ kind: "drawio", svg, title: "다이어그램 고치기", save });
+      } else setSvgEdit({ kind: "svgedit", svg, title: "SVG 고치기", save });
+    } catch (e) { setMessage(String((e as Error).message)); }
+  };
 
   return (
     <aside className="min-h-0 space-y-4 overflow-y-auto border-l border-line bg-surface p-3 text-sm" aria-label="속성">
@@ -60,12 +95,11 @@ export function Inspector({ slide, selection, setSelection, apply, palette, font
           <IconButton icon={Heading2} label="제목 넣기" variant="outline" onClick={() => insert("<h2>새 제목</h2>")} />
           <IconButton icon={Table2} label="표 넣기 (3행 3열)" variant="outline"
             onClick={() => insert(`<table style="font-size:28px"><tr>${'<th style="width:33.3%">머리</th>'.repeat(2)}<th style="width:33.4%">머리</th></tr>${`<tr>${"<td></td>".repeat(3)}</tr>`.repeat(2)}</table>`)} />
-          <ImageInput label="그림 넣기" icon={ImagePlus} onFile={async (f) => {
+          <ImageInput label="그림 넣기 (SVG 포함)" icon={ImagePlus} onFile={async (f) => {
             const a = await uploadAsset(f);
-            const k = Math.min(1, 896 / a.width, 640 / a.height);
-            const w = Math.round(a.width * k), h = Math.round(a.height * k);
-            insert(`<img src="${a.asset}" alt="${f.name.replace(/\.[^.]+$/, "").replace(/"/g, "")}" style="position:absolute;left:${Math.round(960 - w / 2)}px;top:${Math.round(540 - h / 2)}px;width:${w}px;height:${h}px;object-fit:contain">`);
+            insert(centeredImg(a.asset, f.name.replace(/\.[^.]+$/, ""), a.width, a.height));
           }} setMessage={setMessage} />
+          {drawio && <IconButton icon={Network} label="다이어그램 그리기 (draw.io)" variant="outline" onClick={drawNew} />}
         </div>
       </section>
 
@@ -90,7 +124,7 @@ export function Inspector({ slide, selection, setSelection, apply, palette, font
           {el.tag === "section" && <SlideGroup slide={slide} apply={apply} set={set} palette={palette} fonts={fonts} />}
           {TEXT_TAGS.has(el.tag) && el.tag !== "div" && <TextGroup el={el} set={set} palette={palette} fonts={fonts} apply={apply} />}
           {(el.tag === "div" || el.tag === "ul" || el.tag === "ol") && <BoxGroup el={el} set={set} palette={palette} />}
-          {el.tag === "img" && <ImageGroup el={el} set={set} apply={apply} setMessage={setMessage} />}
+          {el.tag === "img" && <ImageGroup el={el} set={set} apply={apply} setMessage={setMessage} onEditSvg={(url) => void editSvg(el.eid, url)} />}
           {table && <TableGroup table={table} cell={cell} path={path} apply={apply} set={set} confirm={confirm} />}
           {el.style.position === "absolute" && <ArrangeGroup slide={slide} selection={selection} apply={apply} />}
 
@@ -135,6 +169,8 @@ export function Inspector({ slide, selection, setSelection, apply, palette, font
           const r = findEl(slide.root, id);
           if (r?.parent) apply([{ t: "move", eid: id, parent: r.parent.eid, index: r.index + dir }]);
         }} />
+      {svgEdit?.kind === "drawio" && drawio && <DrawioEditor origin={drawio} svg={svgEdit.svg} title={svgEdit.title} onSave={svgEdit.save} onClose={() => setSvgEdit(null)} />}
+      {svgEdit?.kind === "svgedit" && svgEdit.svg && <SvgEditor svg={svgEdit.svg} title={svgEdit.title} onSave={svgEdit.save} onClose={() => setSvgEdit(null)} />}
     </aside>
   );
 }
@@ -336,14 +372,18 @@ function ImageInput({ label, icon, onFile, setMessage }: { label: string; icon: 
   return (
     <label className="inline-flex cursor-pointer items-center rounded-md border border-line p-1.5 text-muted hover:bg-sunken hover:text-fg" data-tip={label}>
       <Icon size={20} aria-hidden />
-      <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" aria-label={label}
+      <input type="file" accept={IMAGE_ACCEPT} className="sr-only" aria-label={label}
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onFile(f).catch((err) => setMessage(String((err as Error).message))); }} />
     </label>
   );
 }
 
-function ImageGroup({ el, set, apply, setMessage }: { el: SlideEl; set: SetFn; apply: (ops: SlideOp[]) => boolean; setMessage: (m: string) => void }) {
+function ImageGroup({ el, set, apply, setMessage, onEditSvg }: { el: SlideEl; set: SetFn; apply: (ops: SlideOp[]) => boolean; setMessage: (m: string) => void; onEditSvg: (url: string) => void }) {
   const [alt, setAlt] = useState(el.attrs.alt ?? "");
+  // 자산 형식(SVG면 「SVG 고치기」)
+  const sha = el.attrs.src?.startsWith("asset:") ? el.attrs.src.slice(6) : null;
+  const meta = useQuery({ queryKey: ["asset-meta", sha], enabled: !!sha, staleTime: 10 * 60_000,
+    queryFn: async () => { const r = await fetch(`${API}/assets/${sha}/url`); return r.ok ? (await r.json()) as { url: string; mime: string } : null; } }).data;
   useEffect(() => setAlt(el.attrs.alt ?? ""), [el.attrs.alt]);
   return (
     <section className="space-y-2">
@@ -366,6 +406,7 @@ function ImageGroup({ el, set, apply, setMessage }: { el: SlideEl; set: SetFn; a
           apply([{ t: "setAttr", eid: el.eid, name: "src", value: a.asset }]);
         }} />
         <span className="text-muted">그림 바꾸기</span>
+        {meta?.mime === "image/svg+xml" && <IconButton icon={PenTool} label="SVG 고치기 (draw.io SVG는 draw.io로)" text="SVG 고치기" variant="outline" onClick={() => onEditSvg(meta.url)} />}
       </div>
     </section>
   );

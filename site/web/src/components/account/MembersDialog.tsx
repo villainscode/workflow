@@ -9,8 +9,8 @@ import { Modal, ui } from "../Modal.tsx";
 import { useConfirm } from "../confirm/ConfirmProvider.tsx";
 
 interface Usage {
-  days: number; revisions: { total: number; human: number; agent: number; restore: number }; versions: number;
-  storage: { versionFiles: number; versionBytes: number; assets: number; assetBytes: number }; conversions: number; renders: number;
+  days: number; revisions: { total: number; human: number; agent: number; restore: number; office: number }; versions: number;
+  storage: { versionFiles: number; versionBytes: number; assets: number; assetBytes: number }; conversions: number; renders: number; officeSessions: number;
 }
 const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
 
@@ -117,11 +117,12 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
         <section className="grid gap-2 border-t border-line pt-4" aria-label="사용량">
           <h3 className="text-sm font-bold">사용량 · 최근 {usage.data.days}일</h3>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
-            <div><dt className="text-xs text-muted">수정본</dt><dd>{usage.data.revisions.total}개 <span className="text-xs text-muted">(사람 {usage.data.revisions.human} · 에이전트 {usage.data.revisions.agent} · 되돌림 {usage.data.revisions.restore})</span></dd></div>
+            <div><dt className="text-xs text-muted">수정본</dt><dd>{usage.data.revisions.total}개 <span className="text-xs text-muted">(사람 {usage.data.revisions.human} · 에이전트 {usage.data.revisions.agent} · 되돌림 {usage.data.revisions.restore} · 오피스 {usage.data.revisions.office})</span></dd></div>
             <div><dt className="text-xs text-muted">새 버전</dt><dd>{usage.data.versions}개</dd></div>
             <div><dt className="text-xs text-muted">저장 용량(중복 제외)</dt><dd>{mb(usage.data.storage.versionBytes + usage.data.storage.assetBytes)} <span className="text-xs text-muted">(파일 {usage.data.storage.versionFiles} · 그림 {usage.data.storage.assets})</span></dd></div>
             <div><dt className="text-xs text-muted">PDF 변환(컨테이너)</dt><dd>{usage.data.conversions}회</dd></div>
-            <div><dt className="text-xs text-muted">덱 PDF·미리보기(Browser Rendering)</dt><dd>{usage.data.renders}회</dd></div>
+            <div><dt className="text-xs text-muted">HTML PDF·슬라이드 미리보기(Browser Rendering)</dt><dd>{usage.data.renders}회</dd></div>
+            <div><dt className="text-xs text-muted">오피스 편집 세션(컨테이너)</dt><dd>{usage.data.officeSessions}회</dd></div>
           </dl>
           <p className="text-[11px] text-muted">변환·렌더링은 캐시에 없어 실제로 만든 횟수입니다(같은 내용을 다시 받으면 세지 않습니다).</p>
         </section>

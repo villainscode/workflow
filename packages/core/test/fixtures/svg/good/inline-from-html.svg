@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" width="760" height="250" role="img" aria-labelledby="gTitle">
+            <title id="gTitle">브랜치 흐름: feature/login-lock 작업을 feature/code-review에 머지해 push하면 리뷰 실패, 수정 후 재push하면 통과, PR로 develop에 머지된 뒤 사후 리뷰가 실행된다</title>
+            <text class="g-label" x="8" y="54">feature/login-lock</text>
+            <text class="g-sub" x="8" y="70">개인 작업 브랜치</text>
+            <text class="g-label" x="8" y="129">feature/code-review</text>
+            <text class="g-sub" x="8" y="145">리뷰 게이트 브랜치</text>
+            <text class="g-label" x="8" y="204">develop</text>
+            <text class="g-sub" x="8" y="220">릴리즈 통합 브랜치</text>
+
+            <line class="g-dev" x1="160" y1="200" x2="750" y2="200"/>
+            <path class="g-feat" d="M180 200 C 200 200, 205 50, 230 50 L 540 50"/>
+            <path class="g-rev" d="M180 200 C 210 200, 230 125, 260 125 L 600 125"/>
+            <path class="g-feat" d="M310 50 C 330 50, 340 125, 370 125"/>
+            <path class="g-feat" d="M530 50 C 550 50, 560 125, 590 125"/>
+            <path class="g-rev" d="M590 125 C 630 125, 650 200, 690 200"/>
+
+            <circle class="g-dot" cx="180" cy="200" r="7" style="stroke: var(--accent)"/>
+            <circle class="g-dot" cx="250" cy="50" r="6" style="stroke: var(--muted)"/>
+            <circle class="g-dot" cx="310" cy="50" r="6" style="stroke: var(--muted)"/>
+            <circle class="g-dot" cx="530" cy="50" r="6" style="stroke: var(--muted)"/>
+            <circle class="g-dot" cx="370" cy="125" r="8" style="stroke: var(--crit)"/>
+            <circle class="g-dot" cx="590" cy="125" r="8" style="stroke: var(--ok)"/>
+            <circle class="g-dot" cx="690" cy="200" r="8" style="stroke: var(--accent)"/>
+
+            <text class="g-sub" x="232" y="34">feat 커밋 2개</text>
+            <text class="g-sub" x="500" y="34">fix 커밋</text>
+            <text class="g-bad" x="352" y="160">push #1 → ✗ blocked</text>
+            <text class="g-sub" x="352" y="176">Slack 알림, PR 머지 잠김</text>
+            <text class="g-good" x="572" y="160">push #2 → ✓ pass</text>
+            <text class="g-info" x="640" y="236">PR 머지 → 사후 리뷰</text>
+          </svg>

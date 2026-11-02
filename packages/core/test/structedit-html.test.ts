@@ -2,7 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { applyOp, applyOps, markEids, outline, sanitizeInline, StructEditError, type HtmlOp } from "../src/structedit/html.ts";
+import { applyOp, applyOps, docTheme, markEids, outline, sanitizeInline, StructEditError, type HtmlOp } from "../src/structedit/html.ts";
 
 /** 5.0 M3: HTML 구조 편집(spec/REQUIREMENT-5.0.md 4.1). 케이스 목록은 spec/TESTING.md 2.8 */
 
@@ -29,16 +29,18 @@ const eid = (html: string, tag: string, n = 0) => outline(html).filter((b) => b.
 
 
 describe("HTML 구조 편집", () => {
-  test("TC-ED-11 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 data-eid(와 <base>)만 더한다", () => {
+  test("TC-ED-11 요소 목록: 표 행·열 수, 그림 src·alt, 글자 편집 가능 여부. 편집 사본은 data-eid·자유 배치 표시(data-base·data-root)와 <base>만 더한다", () => {
     const o = outline(DOC);
     const t = o.find((b) => b.tag === "table")!;
     assert.deepEqual(t.table, { rows: 3, cols: 2, widths: null, merged: false });
     assert.deepEqual(o.find((b) => b.tag === "img")!.image, { src: "img/a.png", alt: "그림", width: null });
     assert.equal(o.find((b) => b.tag === "p")!.editable, true);
     const marked = markEids(DOC);
-    assert.equal(marked.replace(/ data-eid="e\d+"/g, ""), DOC);
+    const unmark = (h: string) => h.replace(/ data-(?:eid|base)="e\d+"| data-root/g, "");
+    assert.equal(unmark(marked), DOC);
+    assert.match(marked, /<main data-base="e\d+" data-root>/);
     // 편집 화면용 <base>: head가 있으면 그 안 처음, 없으면 맨 앞
-    assert.equal(markEids(DOC, "https://f/x/").replace(/ data-eid="e\d+"/g, ""), `<base href="https://f/x/">${DOC}`);
+    assert.equal(unmark(markEids(DOC, "https://f/x/")), `<base href="https://f/x/">${DOC}`);
     assert.match(markEids("<html><head><title>t</title></head><body><p>a</p></body></html>", "https://f/\"x"), /^<html><head><base href="https:\/\/f\/&quot;x"><title>/);
     assert.equal(applyOps(DOC, []), DOC);
   });
@@ -63,9 +65,12 @@ describe("HTML 구조 편집", () => {
     const w = applyOp(DOC, { t: "tableCols", eid: t, widths: [30, 70] });
     // 새로 생긴 것은 colgroup 한 줄뿐: 그것을 빼면 원본과 같다
     assert.match(w, /<colgroup><col style="width:30%"><col style="width:70%"><\/colgroup>/);
-    assert.equal(w.replace(/\n[ \t]*<colgroup>.*?<\/colgroup>/, ""), DOC);
+    // 열 너비가 지켜지게 표에 table-layout:fixed를 함께 넣는다(6.0 4.2). 다시 바꿔도 한 번만
+    assert.match(w, /<table style="table-layout:fixed" class="grid">/);
+    assert.equal(w.replace(/\n[ \t]*<colgroup>.*?<\/colgroup>/, "").replace(' style="table-layout:fixed"', ""), DOC);
     const w2 = applyOp(w, { t: "tableCols", eid: eid(w, "table"), widths: [1, 3] });
     assert.match(w2, /<col style="width:25%"><col style="width:75%">/);
+    assert.equal(w2.match(/table-layout/g)!.length, 1);
     // colgroup이 있으면 열을 넣을 때 너비를 비율대로 줄여 새 열에 나눠 준다
     const w3 = applyOp(w2, { t: "tableCol", eid: eid(w2, "table"), at: 2, op: "add" });
     assert.match(w3, /<col style="width:16\.67%"><col style="width:50%"><col style="width:33\.33%">/);
@@ -143,7 +148,10 @@ describe("HTML 구조 편집", () => {
         const w = applyOp(html, { t: "tableCols", eid: b.eid, widths: Array(b.table!.cols).fill(1) });
         const start = Number(b.eid.slice(1));
         assert.equal(w.slice(0, start), html.slice(0, start), `${f} ${b.eid} 표 앞은 그대로`);
-        if (!b.table!.widths) assert.equal(w.replace(/\n?[ \t]*<colgroup>(<col style="width:[\d.]+%">)+<\/colgroup>/, ""), html, `${f} ${b.eid} colgroup 말고는 그대로`);
+        // 표 시작 태그(table-layout)와 colgroup 말고는 그대로
+        const tagEnd = html.indexOf(">", start) + 1;
+        const wEnd = w.indexOf(">", start) + 1;
+        if (!b.table!.widths) assert.equal(w.slice(wEnd).replace(/^\n?[ \t]*<colgroup>(<col style="width:[\d.]+%">)+<\/colgroup>/, ""), html.slice(tagEnd), `${f} ${b.eid} colgroup 말고는 그대로`);
       }
     }
     assert.ok(tables > 0, "리포 문서에 표가 있어야 한다");
@@ -157,5 +165,121 @@ describe("HTML 구조 편집", () => {
     assert.match(out, /href="mailto:a@b\.c"/);
     const t = eid(DOC, "img");
     assert.throws(() => applyOp(DOC, { t: "setAttr", eid: t, name: "src", value: "\\\\evil.com/x.png" }), StructEditError);
+  });
+
+  // ---------- 6.0 V2 속성 편집(spec/TESTING.md 2.9) ----------
+
+  const THEMED = `<!doctype html>
+<html><head>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;700&amp;family=IBM+Plex+Mono&amp;display=swap" rel="stylesheet">
+<style>
+:root{--accent:#1f5fbf;--ink:rgb(20, 20, 20);--gap:12px;--font-sans:"IBM Plex Sans KR", sans-serif}
+@font-face{font-family:"Local Serif";src:url(a.woff2)}
+@media (prefers-color-scheme: dark){:root{--accent:#80a8f0}}
+body{font-family:var(--font-sans)}
+</style>
+</head><body>
+  <main>
+    <h2 class="t" style="margin: 0 0 8px; color: #333">제목</h2>
+    <p id="first">첫 문단</p>
+    <table><tr style="height:20px"><td>a</td><td>b</td></tr></table>
+  </main>
+</body></html>
+`;
+
+  test("TC-VE-03 HTML setStyle: style 속성만 다시 쓴다(기존 순서 유지·같은 속성은 제자리·새 속성은 끝·빈 값이면 속성 지움), 허용 밖은 400(fix 포함), 토큰 색·em·rem·margin 허용", () => {
+    const h2 = eid(THEMED, "h2"), p = eid(THEMED, "p");
+    const a = applyOp(THEMED, { t: "setStyle", eid: h2, set: { color: "var(--accent)", "font-size": "1.5rem" } });
+    assert.match(a, /<h2 class="t" style="margin:0 0 8px;color:var\(--accent\);font-size:1\.5rem">제목<\/h2>/);
+    // 바뀐 곳은 그 시작 태그뿐
+    const at = Number(h2.slice(1));
+    assert.equal(a.slice(0, at), THEMED.slice(0, at));
+    assert.equal(a.slice(a.indexOf(">제목")), THEMED.slice(THEMED.indexOf(">제목")));
+    const b = applyOp(THEMED, { t: "setStyle", eid: p, set: { "font-family": '"IBM Plex Mono", monospace', margin: "0 auto", "line-height": "1.7" } });
+    assert.match(b, /<p style="font-family:'IBM Plex Mono', monospace;margin:0 auto;line-height:1\.7" id="first">/);
+    // 넣고 지우면 원본 그대로, 같은 값이면 바뀌지 않는다
+    const back = applyOp(b, { t: "setStyle", eid: eid(b, "p"), unset: ["font-family", "margin", "line-height"] });
+    assert.equal(back, THEMED);
+    assert.equal(applyOp(a, { t: "setStyle", eid: eid(a, "h2"), set: { color: "var(--accent)" } }), a);
+    for (const [k, v] of [["position", "absolute"], ["left", "10px"], ["box-shadow", "0 0 4px #000"], ["font-size", "2vw"], ["background", "url(x.png)"],
+      ["color", "red !important"], ["margin", "1in"], ["font-family", "'Comic Sans MS'"], ["z-index", "3"]]) {
+      assert.throws(() => applyOp(THEMED, { t: "setStyle", eid: p, set: { [k]: v } }), StructEditError, `${k}: ${v}`);
+    }
+    assert.throws(() => applyOp(THEMED, { t: "setStyle", eid: p, set: { "font-family": "'Comic Sans MS'" } }), /쓸 수 있는 글꼴: IBM Plex Sans KR/);
+    assert.throws(() => applyOp(THEMED, { t: "setStyle", eid: p, set: { left: "1px" } }), /자유 배치/);
+    assert.throws(() => applyOp(THEMED, { t: "setStyle", eid: h2, unset: ["position"] }), StructEditError);
+    assert.throws(() => applyOp(THEMED, { t: "setStyle", eid: p }), StructEditError);
+  });
+
+  test("TC-VE-04 글자 일부 서식: span style은 글자색·글꼴·크기·굵기만 정해진 순서로 남기고(큰따옴표는 작은따옴표), 그 밖 선언·불러오지 않은 글꼴은 버린다", () => {
+    assert.equal(sanitizeInline('<span style="font-size: 20px; color: rgb(31, 95, 191); background: red; position:absolute">a</span>'),
+      '<span style="color:rgb(31, 95, 191);font-size:20px">a</span>');
+    assert.equal(sanitizeInline('<span style="font-family: &quot;IBM Plex Mono&quot;; font-weight: 700">b</span>', ["IBM Plex Mono"]),
+      '<span style="font-family:\'IBM Plex Mono\';font-weight:700">b</span>');
+    assert.equal(sanitizeInline('<span style="font-family: Papyrus">c</span>', ["IBM Plex Mono"]), "<span>c</span>");
+    assert.equal(sanitizeInline('<span style="color:var(--accent)" onclick="x()">d</span>'), '<span style="color:var(--accent)">d</span>');
+    const p = eid(THEMED, "p");
+    const out = applyOp(THEMED, { t: "setText", eid: p, html: '첫 <span style="font-family:\'IBM Plex Mono\';color:#c00">문단</span>' });
+    assert.match(out, /<p id="first">첫 <span style="color:#c00;font-family:'IBM Plex Mono'">문단<\/span><\/p>/);
+  });
+
+  test("TC-VE-05 표: 행 높이(tableRowHeight, tr height px·지우기), 표 너비는 setStyle width, 범위 밖 높이는 400", () => {
+    const tr = eid(THEMED, "tr");
+    const h = applyOp(THEMED, { t: "tableRowHeight", eid: tr, height: 48.4 });
+    assert.match(h, /<tr style="height:48px">/);
+    assert.match(applyOp(h, { t: "tableRowHeight", eid: eid(h, "tr"), height: null }), /<tr><td>a/);
+    assert.throws(() => applyOp(THEMED, { t: "tableRowHeight", eid: tr, height: 1 }), StructEditError);
+    assert.throws(() => applyOp(THEMED, { t: "tableRowHeight", eid: eid(THEMED, "table"), height: 40 }), StructEditError);
+    assert.match(applyOp(THEMED, { t: "setStyle", eid: eid(THEMED, "table"), set: { width: "80%" } }), /<table style="width:80%">/);
+  });
+
+  test("TC-VE-06 복제(duplicate): 바로 뒤에 같은 들여쓰기로 넣고 안의 id는 뺀다, 표 칸은 거부, 고를 수 있는 요소에 div가 들어간다", () => {
+    const p = eid(THEMED, "p");
+    const d = applyOp(THEMED, { t: "duplicate", eid: p });
+    assert.match(d, /<p id="first">첫 문단<\/p>\n {4}<p>첫 문단<\/p>\n {4}<table>/);
+    assert.equal(d.replace("\n    <p>첫 문단</p>", ""), THEMED);
+    assert.throws(() => applyOp(THEMED, { t: "duplicate", eid: eid(THEMED, "td") }), StructEditError);
+    const withDiv = THEMED.replace("<main>", '<main>\n    <div class="card"><p>카드</p></div>');
+    const o = outline(withDiv);
+    const div = o.find((x) => x.tag === "div")!;
+    assert.equal(div.editable, false);
+    assert.equal(o.find((x) => x.text === "카드" && x.tag === "p")!.parent, div.eid);
+    assert.equal(o.find((x) => x.tag === "h2")!.style.color, "#333");
+  });
+
+  test("TC-VE-07 문서 견본: 글꼴은 Google Fonts 링크·@font-face·글꼴 변수에서(일반 계열 빼고 처음 나온 순서), 색은 :root 색 변수(처음 값)와 다크 모드 여부", () => {
+    const t = docTheme(THEMED);
+    assert.deepEqual(t.fonts, ["IBM Plex Sans KR", "IBM Plex Mono", "Local Serif"]);
+    assert.deepEqual(t.tokens, [{ name: "--accent", value: "#1f5fbf" }, { name: "--ink", value: "rgb(20, 20, 20)" }]);
+    assert.equal(t.dark, true);
+    assert.deepEqual(docTheme("<p>x</p>"), { fonts: [], tokens: [], dark: false });
+  });
+
+  test("TC-VE-08 리포 실제 HTML 문서: 아무것도 안 바꾸면 바이트 동일, 모든 블록에 setStyle을 넣고 지우면 그 시작 태그 밖은 그대로(style이 없던 요소는 원본과 같다)", () => {
+    const root = resolve(import.meta.dirname, "../../../docs");
+    const files: string[] = [];
+    const walk = (d: string) => readdirSync(d).forEach((n) => {
+      if (n.startsWith(".") || n.startsWith("_")) return;
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p); else if (/\.html?$/.test(n)) files.push(p);
+    });
+    walk(root);
+    let blocks = 0;
+    for (const f of files) {
+      const html = readFileSync(f, "utf8");
+      assert.equal(applyOps(html, []), html, `${f} 빈 연산`);
+      const list = outline(html);
+      // 문서마다 앞쪽 40개 블록(큰 문서도 빠르게)
+      for (const b of list.slice(0, 40)) {
+        blocks++;
+        const set = applyOp(html, { t: "setStyle", eid: b.eid, set: { color: "var(--x-test)" } });
+        const start = Number(b.eid.slice(1));
+        assert.equal(set.slice(0, start), html.slice(0, start), `${f} ${b.eid} 앞`);
+        const back = applyOp(set, { t: "setStyle", eid: b.eid, unset: ["color"] });
+        if (!Object.keys(b.style).length) assert.equal(back, html, `${f} ${b.eid} 왕복`);
+        else assert.equal(back.slice(back.indexOf(">", start)), html.slice(html.indexOf(">", start)), `${f} ${b.eid} 시작 태그 뒤`);
+      }
+    }
+    assert.ok(blocks > 100, "리포 문서에 블록이 있어야 한다");
   });
 });

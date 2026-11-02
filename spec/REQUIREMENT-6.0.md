@@ -67,7 +67,7 @@ GrapesJS·Puck·Craft.js·Builder.io·Plasmic·Webstudio(AGPL)·Silex(AGPL)는 �
 - **글자 일부 서식**: 글자 편집이 `span style`을 허용 속성(색·굵기·글꼴·크기)만 남기도록 sanitize를 넓힌다.
 - **표**: 열 경계 끌기(이웃 두 열만 주고받기, 합 100%), 행 높이(`tr` height 끌기·숫자), 표 전체 너비 손잡이. `table-layout: fixed`가 없는 표는 열 너비를 바꿀 때 함께 넣는다(diff에 보인다).
 - **그림(흐름 속)**: 손잡이로 크기(비율 유지), 왼·가운데·오른 정렬, 캡션.
-- **자유 배치**: 어떤 요소든 끌면 "고정 위치로 전환"(`toPinned`, 덱과 같은 연산)된다. 기준 상자는 가장 가까운 섹션(`section`·`main` 바로 아래 블록)이고, 연산이 그 섹션에 `position: relative`와 최소 높이를 함께 넣어 고정 요소가 섹션 밖으로 넘치지 않게 한다. 새 그림·글상자·SVG는 끌어 놓은 자리에 고정 위치로 들어간다. 좌표는 섹션 기준으로 **가로(`left`·`width`)는 섹션 너비의 %, 세로(`top`)는 px**다. px로만 두면 641~1024px 폭에서 리포 문서 8개 중 7개에 가로 스크롤·섹션 밖 넘침(최대 312px)이 생겼다(11절). 덱은 고정 캔버스라 px 그대로다. `section`·`main`이 없는 문서는 본문 감싸개 바로 아래 블록을 기준으로 쓰고, 표 칸 안 요소는 따로 고정하지 않고 표 전체만 옮긴다.
+- **자유 배치**: 어떤 요소든 끌면 "고정 위치로 전환"(`toPinned`, 덱과 같은 연산)된다. 기준 상자는 가장 가까운 섹션(`section`·`main` 바로 아래 블록)이고, 연산이 그 섹션에 `position: relative`와 최소 높이를 함께 넣어 고정 요소가 섹션 밖으로 넘치지 않게 한다. 새 그림·글상자·SVG는 끌어 놓은 자리에 고정 위치로 들어간다. 좌표는 섹션 기준으로 **가로(`left`·`width`)는 섹션 너비의 %, 세로(`top`)는 px**다. px로만 두면 641~1024px 폭에서 리포 문서 8개 중 7개에 가로 스크롤·섹션 밖 넘침(최대 312px)이 생겼다(11절). 덱은 고정 캔버스라 px 그대로다. `section`이 없는 문서는 본문 뿌리(main·body, 감싸개 하나뿐이면 그 안) 바로 아래 블록을, 뿌리 바로 아래 요소는 뿌리를 기준으로 쓴다. 표 안 요소·목록 항목은 따로 고정하지 않고, 표·코드 블록(pre)도 고정하지 않는다(V3: 줄바꿈되지 않는 최소 너비 때문에 641px 근처에서 가로 스크롤, 12절). 실제 좌표 기준은 요소의 위치 기준 상자(가장 가까운 위치 지정 조상, 보통 그 섹션)다.
 - **좁은 화면**: 고정 위치 요소는 640px 이하에서 흐름으로 돌아가 원래 자리(문서 순서)에 쌓인다. 연산이 문서 `<head>`에 한 번 작은 규칙(`@media (max-width:640px){[data-pin]{position:static!important;…}}`)을 넣는다. 가로 스크롤 금지 규칙을 지키기 위한 장치다. 그 대신 좁은 화면에서는 배치가 PPT 화면과 달라진다(위험 8절).
 - **겹침 순서**: 섹션 안 문서 순서가 그리는 순서다(덱과 같은 규칙). 앞으로·뒤로는 문서 안에서 자리를 옮긴다(`move`).
 - 하지 않는 것: 스크립트, `<style>` 블록·class 규칙 편집(인라인 `style`과 좁은 화면 규칙 한 줄만), 회전·그림자 같은 장식.
@@ -117,7 +117,7 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 | SVG 올리기·넣기 | ○ | ○ | — | — |
 | SVG 그리기·고치기(draw.io·svgedit) | ○ | ○ | — | — |
 | 여러 요소 정렬·분배·복제·앞뒤 | ○ | ○ | — | — |
-| 레이어(요소 트리) 패널 | ○ | ○ | — | — |
+| 레이어(요소 트리) 패널 | — (2026-11-02 사용자 요청으로 뺌) | ○ | — | — |
 | 로컬 사이트에서 편집 | ○ | ○ | ○ | ○ |
 
 ## 6. 결정 사항
@@ -140,13 +140,13 @@ SVG 소독(V0 선정): `packages/core`에 이미 있는 htmlparser2(xmlMode)로 
 |---|---|---|---|
 | **V0 스파이크** (완료, 11절) | 0.5 | draw.io 자체 호스팅 embed 동작(postMessage 출처 확인, `xmlsvg` 왕복, CSP `frame-src`), svgedit 캔버스를 React에 띄우기·라이선스 확인, 리포 HTML 9개에 `setStyle`·고정 위치 전환·좁은 화면 규칙을 시험 적용해 diff·다크 모드·640px 확인, SVG 소독 라이브러리 선정 | 스파이크 보고서. draw.io 자체 호스팅이 안 되면 에스컬레이션 |
 | **V1 공통 요소 편집기** | 1 | 덱 편집기에서 캔버스·선택·손잡이·스냅·속성 패널·되돌리기를 공통 모듈로 분리. 글자 도구 막대(굵게·기울임·밑줄·색·링크·글꼴·크기). 덱 미완성 마감(글꼴 칸, 행 높이, 여러 요소 정렬·분배, 레이어 패널) | 기존 덱 화면 테스트 전부 통과 + 도구 막대·정렬 화면 테스트 |
-| **V2 HTML 속성 편집** | 1.5 | HTML `setStyle`(허용 목록·역연산), 토큰 색 견본, 글자 일부 서식(span style), 표 열 끌기·행 높이·표 너비, 흐름 속 그림 손잡이·정렬, 복제, HTML 구조 편집 화면을 요소 편집기로 교체 | core: 연산 뒤 바뀌지 않은 바이트 동일·역연산 왕복. 리포 HTML 전체에 "아무것도 안 바꾸고 저장 = 바이트 동일". 화면: 글꼴 크기·색 바꾸기 → 새로 고침 뒤 유지 |
-| **V3 HTML 자유 배치** | 1.5 | 어떤 요소든 끌어 고정 위치로 전환(섹션 기준), 그림·글상자·SVG를 끌어 놓은 자리에 넣기, 이동·크기·앞뒤·스냅·정렬, 섹션 최소 높이 자동 조정, 좁은 화면 규칙 | 화면: 그림을 지정 위치에 올리고 옮긴 좌표 저장(배율별 오차 1px 이내), 640px 이하에서 가로 스크롤 없음, 다른 섹션 바이트 동일 |
-| **V4 SVG** | 2.5 | SVG 자산(서버 소독), HTML·덱에 파일 참조·인라인으로 넣기, draw.io 임베드(자체 호스팅)로 새로 그리기·고치기(`xmlsvg`), svgedit로 업로드 SVG 고치기, 인라인 SVG 색·글자 속성 편집(`svgAttr`) | 소독 테스트(스크립트·이벤트 속성·외부 주소 제거), draw.io로 그려 넣고 다시 열어 고치기, svgedit로 도형 색·위치 바꿔 저장 화면 테스트 |
-| **VL 로컬 사이트 편집** | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
-| **VO 오피스 편집 서버** | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
-| **V5 에이전트·문서** | 0.5 | MCP `doc_ops` 연산 추가, `svg_put`, 스킬·가이드 갱신 | MCP 테스트: 에이전트가 글꼴·자유 배치·SVG 넣기를 연산으로 수행, 진단에 fix |
-| **V6 운영 마감** | 0.5 | 보안 점검(SVG 소독·draw.io 메시지·스타일 주입·오피스 콜백 JWT), staging 전체 회귀, 운영 배포 | 보안 점검 높음 이상 0, staging 회귀 통과 |
+| **V2 HTML 속성 편집** (완료) | 1.5 | HTML `setStyle`(허용 목록·역연산), 토큰 색 견본, 글자 일부 서식(span style), 표 열 끌기·행 높이·표 너비, 흐름 속 그림 손잡이·정렬, 복제, HTML 구조 편집 화면을 요소 편집기로 교체 | core: 연산 뒤 바뀌지 않은 바이트 동일·역연산 왕복. 리포 HTML 전체에 "아무것도 안 바꾸고 저장 = 바이트 동일". 화면: 글꼴 크기·색 바꾸기 → 새로 고침 뒤 유지 |
+| **V3 HTML 자유 배치** (완료, 12절) | 1.5 | 어떤 요소든 끌어 고정 위치로 전환(섹션 기준), 그림·글상자·SVG를 끌어 놓은 자리에 넣기, 이동·크기·앞뒤·스냅·정렬, 섹션 최소 높이 자동 조정, 좁은 화면 규칙 | 화면: 그림을 지정 위치에 올리고 옮긴 좌표 저장(배율별 오차 1px 이내), 640px 이하에서 가로 스크롤 없음, 다른 섹션 바이트 동일 |
+| **V4 SVG** (완료 — draw.io Worker 배포는 사용자 확인 대기, 12절) | 2.5 | SVG 자산(서버 소독), HTML·덱에 파일 참조·인라인으로 넣기, draw.io 임베드(자체 호스팅)로 새로 그리기·고치기(`xmlsvg`), svgedit로 업로드 SVG 고치기, 인라인 SVG 색·글자 속성 편집(`svgAttr`) | 소독 테스트(스크립트·이벤트 속성·외부 주소 제거), draw.io로 그려 넣고 다시 열어 고치기, svgedit로 도형 색·위치 바꿔 저장 화면 테스트 |
+| **VL 로컬 사이트 편집** (완료, 12절) | 2 | 로컬 서버에 수정본 층(작업본 폴더·SQLite 수정본 행·되돌리기·버전으로 저장 → `vN.N` 폴더와 `meta.yaml`), 자산(`docs/` 밖 캐시 + 버전에 넣을 때 복사), 구조·덱·PDF·SVG 연산 API를 Worker와 같은 모양으로. 화면의 `CLOUD` 조건 편집 버튼을 로컬에도 연다. 로컬 MCP도 같은 도구 | 로컬·Cloudflare 같은 연산 테스트(2.4·2.7 맞추기), 로컬에서 고친 뒤 `git diff`가 버전 폴더 추가와 `meta.yaml`뿐 |
+| **VO 오피스 편집 서버** (완료 — 컨테이너 배포는 사용자 확인 대기) | 2.5 | ① Containers(standard-3)에 ONLYOFFICE 이미지(약 3.1GB, 한글 글꼴 포함) 올리기·콜드 스타트·비용 측정(5.0 M0에서 로컬만 확인) ② 편집 설정 발급(JWT, 시크릿)·파일 내려주기·저장 콜백 → 수정본(파일 통째)·실시간 반영, 동시 편집은 ONLYOFFICE 공동 편집에 맡기고 작업본 잠금 ③ DOCX·PPTX·XLSX 화면에 「오피스 편집기로 열기」, 서버가 꺼져 있으면 깨우는 동안 진행 표시 ④ 로컬은 docker로 같은 이미지(없으면 버튼 숨김) ⑤ 유휴 종료·사용량 지표 | 화면: DOCX 글꼴·크기·색, PPTX 도형 이동, XLSX 서식을 바꿔 저장 → 새 수정본·버전 저장 뒤 원본 다른 부분 유지. 콜백 JWT 위조 거부 테스트. 콜드 스타트·시간당 비용 기록 |
+| **V5 에이전트·문서** (완료) | 0.5 | MCP `doc_ops` 연산 추가, `svg_put`, 스킬·가이드 갱신 | MCP 테스트: 에이전트가 글꼴·자유 배치·SVG 넣기를 연산으로 수행, 진단에 fix |
+| **V6 운영 마감** (로컬 완료 — staging 회귀·운영 배포 대기, 12절) | 0.5 | 보안 점검(SVG 소독·draw.io 메시지·스타일 주입·오피스 콜백 JWT), staging 전체 회귀, 운영 배포 | 보안 점검 높음 이상 0, staging 회귀 통과 |
 
 합계 약 12.5스프린트(25주, D-59로 VO 2.5 추가). V1이 끝나야 V2~V4가 시작되고, V3·V4는 서로 의존이 없다. VO는 요소 편집기와 의존이 없어 V1과 나란히 진행할 수 있다(한 사람이면 V4 뒤). VL은 V1 뒤 언제든 시작할 수 있지만, 연산이 늘어날 때마다 로컬에도 맞춰야 하므로 V2 직후에 두어 이후 마일스톤이 처음부터 양쪽에 같이 들어가게 한다.
 
@@ -186,7 +186,7 @@ gantt
 
 ## 10. 참고
 
-- 현황: `spec/REQUIREMENT-5.0.md` 4.1·6절·D-47·D-48·D-51, `docs/slide-editor-spec.html` 06·16절, `packages/core/src/structedit/html.ts`, `packages/core/src/slide/css.ts`, `site/web/src/viewers/deck/editor/Inspector.tsx`
+- 현황: `spec/REQUIREMENT-5.0.md` 4.1·6절·D-47·D-48·D-51, `docs/editor-spec/slide-editor-spec` 06·16절, `packages/core/src/structedit/html.ts`, `packages/core/src/slide/css.ts`, `site/web/src/viewers/deck/editor/Inspector.tsx`
 - 외부 조사(2026-10-30, npm 레지스트리 기준 버전):
   - [GrapesJS](https://github.com/GrapesJS/grapesjs)·[Component API](https://grapesjs.com/docs/api/component.html), [Puck](https://github.com/puckeditor/puck), [Craft.js](https://craft.js.org/docs/overview), [Webstudio](https://github.com/webstudio-is/webstudio), [Silex](https://github.com/SilexLabs/Silex)
   - [draw.io embed mode](https://www.drawio.com/doc/faq/embed-mode), [drawio-integration](https://github.com/jgraph/drawio-integration), [jgraph/drawio](https://github.com/jgraph/drawio)
@@ -206,3 +206,78 @@ gantt
 | HTML `setStyle`·`toPinned`(지금 버전 대표 HTML 8개) | 바뀐 줄 5~6줄(요소·섹션 시작 태그·`</head>` 앞 규칙 한 줄), 나머지 바이트 같음. 토큰 색은 다크 모드에서 따라 바뀜. 640·375px에서 흐름으로 돌아오고 가로 스크롤 없음. **px 좌표는 641~1024px에서 7개 문서가 넘침** → 가로 % 좌표로 바꾸니 7가지 폭 모두 넘침 0 | 가로 % 좌표, `<head>` 없는 문서는 규칙 넣을 자리를 차례로 찾기, 섹션 없는 문서는 감싸개 아래 블록, 표 칸 안 요소 고정 금지, 고르기 대상에 `div` 추가(V2), 색 견본은 문서 토큰 전체 |
 
 V2·V3에서 마저 볼 것: 섹션 아래쪽 고정 요소가 640px 근처에서 다시 줄바꿈될 때 넘치는지, 편집 화면에서 % 좌표로 끌기·스냅할 때 섹션 폭을 다시 재는 시점, A4 PDF(인쇄 폭 약 718px)에서 고정 배치.
+
+## 12. 진행 결과
+
+**V2 HTML 속성 편집 (2026-11-02)**
+
+- core(`structedit/html.ts`·`docstyle.ts`): `setStyle`(D-55 허용 목록, 기존 선언 순서 유지·같은 속성 제자리, position·left·top은 막음, 글꼴은 문서가 쓰는 글꼴 + 일반 계열), `tableRowHeight`, `duplicate`(안의 id 뺌), 글자 안 span style(color·font-family·font-size·font-weight), 열 너비를 바꾸면 `table-layout:fixed`를 함께, 고를 수 있는 요소에 `div`, 블록 목록에 인라인 style·감싸는 블록·깊이, 문서 견본 `docTheme`(글꼴·`:root` 색 토큰·다크 모드).
+- Worker·MCP: 구조 응답에 `theme`, 수정본 메모(서식·표 행 높이·복제), `doc_structure`가 글꼴·색 토큰과 블록 style을 보여 주고 `doc_ops` 설명에 새 연산.
+- 화면(`viewers/structedit/`): 속성 패널(`HtmlStylePanel`), 글자 편집 중 도구 막대(`editor/TextToolbar`를 상태·명령 어댑터로 나눠 HTML contenteditable에도 씀, `inlineText.ts`), 표 열 경계·행 높이·표 너비·그림 크기 손잡이(`HtmlHandles`, 감싸는 상자 대비 %), 그림 정렬, 복제(⌘D), ⌘Z·⇧⌘Z, Esc 부모 고르기, 레이어 패널(`editor/LayerPanel`).
+- 계획과 다른 점: 역연산을 따로 두지 않았다. HTML은 연산 하나가 수정본 하나라 되돌리기는 수정본 복원으로 한다(5.0 구조 편집과 같은 방식). 덱 캔버스(Moveable)와 HTML은 겹치는 부분이 없어 공통 캔버스 모듈은 만들지 않았다. HTML은 배율 없는 iframe 위 손잡이 층이고, 공통으로 쓴 것은 글자 도구 막대(상태·명령 어댑터)와 레이어 패널이다(HTML 레이어 패널은 2026-11-02 사용자 요청으로 뺐다. 덱에는 남아 있다). 공통 캔버스는 V3 자유 배치에서 다시 본다.
+- 테스트: TC-VE-03~09, TC-CFUI-20.
+
+**VL 로컬 사이트 편집 (2026-11-02, D-58)**
+
+- 수정본 층을 `packages/core/src/work`로 옮겼다: 작업 상태·수정본 쌓기·되돌리기·버전으로 올리기 전 확인, 구조 편집(HTML·OOXML)·슬라이드 덱 연산(rev 다시 적용 포함)·덱 파일 검사. 저장소는 `DocStore`(수정본 행·버전 파일·내용 주소 blob)로 받는다. Worker의 `revisions.ts`·`structedit.ts`·`deck.ts`는 D1·R2 저장소와 이력 조회만 남은 얇은 층이 됐고 Worker 테스트 73건이 그대로 통과한다. Worker의 `HttpError`는 core `WorkError`와 같은 클래스다.
+- 로컬 서버(`site/server/work.ts`, 경로는 `index.ts`): Worker와 같은 경로·응답(`work`·`work/structure`·`work/edit-view`·`work/pdf`·`work/files/<r번호|버전>/…`·`revisions`·`restore`·`publish`·`deck`·`deck/slides/:sid`·`assets`). 작업본 본문은 `data/work/blobs`, 수정본 행·머리·그림 자산은 `data/work.db`라 편집해도 `docs/`는 그대로이고, 「버전으로 저장」하면 업로드와 같은 `upload()`로 새 `vN.N` 폴더와 `meta.yaml`(`source: revision`)을 쓴다. 덱이 가리키는 그림은 그 버전 폴더 `assets/`로 복사하고, 다른 곳에서 clone한 리포에서는 색인 sha로 찾는다. 저장하면 SSE `changed`(reason `revision`)로 알린다.
+- 화면: 구조 편집·슬라이드 편집·PDF 편집 버튼의 `CLOUD` 조건을 뺐다. 로컬 덱 그림 주소(`useAssetUrl`)도 연다. PDF 내보내기는 Cloudflare만 둔다.
+- MCP: 로컬에서도 덱 쓰기·구조 연산·수정본 도구가 동작한다. `deck_render`만 "Browser Rendering이 없다"고 안내한다.
+- 함께 고친 버그: 로컬에서 슬라이드 덱이 덱으로 그려지지 않던 문제(화면이 `path === "deck.json"`으로 알아보는데 로컬 파일 경로는 `docs/…/vN.N/deck.json`). `relPath`·`isDeck`로 맞췄다(TESTING 5절).
+- 계획과 다른 점: 작업본을 "작업본 폴더"가 아니라 Worker와 같은 내용 주소 blob으로 두었다(같은 core 규칙을 그대로 쓰려고). 로컬에는 사용자가 없어 수정본 작성자는 비우고 출처(human·agent·restore)만 남긴다. 문서를 다른 메뉴로 옮기면 작업본은 이어지지 않는다(버전 파일에서 다시 시작). 접속자 표시(presence)는 Cloudflare만이다.
+- 테스트: TC-VE-10~13(`site/test/work.test.ts`), TC-UI-35·36, TC-MCP-25·22 갱신.
+
+**V3 HTML 자유 배치 (2026-11-02, D-54)**
+
+- core(`structedit/html.ts`): `toPinned{eid,box:{left %,top px,width %},minHeight?}`(처음이면 `data-pin`에 원래 style, 이미 고정이면 위치·너비만), `place{base,node:image|textbox,box,minHeight?}`(기준 섹션 끝에 고정 요소), `unpin{eid}`(손대지 않았으면 원래 style 그대로, 다른 서식을 바꿨으면 위치 속성만 원래 값으로). 기준 섹션에는 `position:relative`·`min-height`와 `data-pin-box`(원래 style), 문서 `<head>`에 좁은 화면 규칙 한 번(`PIN_RULE`, head·body 태그를 생략한 문서는 head의 마지막 요소 뒤). 고정 요소가 하나도 남지 않으면(unpin·remove) 섹션 style과 규칙도 지운다. 너비는 1~100%, left는 오른쪽 끝이 100%를 넘지 않게 보정, 고정 요소를 다른 섹션으로 move는 막는다. 블록 목록에 `pinned`·`pinBase`·`isBase`, 편집 사본에 `data-base`·`data-root`.
+- Worker·로컬·MCP: core `work`의 같은 연산 경로라 둘 다 바로 쓴다(place 그림의 `asset:`은 대표 파일 옆 `assets/` 상대 경로로). `doc_structure`에 `[고정]`·`pinBase`·`(base)`, `doc_ops` 설명에 자유 배치 연산.
+- 화면: 고른 요소 왼쪽 위 옮기기 손잡이를 끌면 고정 위치로 미리 그리고 놓을 때 저장(첫 전환 때 한 줄 안내), 고정 요소 오른쪽 너비 손잡이(그림은 비율대로), 맞춤선(기준 상자 경계·가운데, 같은 섹션 블록 경계·가운데, 6px), 방향키 1px·Shift 8px(0.5초 멈추면 저장), 그림 파일 끌어 놓기 → 놓은 점이 가운데인 고정 그림(붙여 넣기는 고른 요소 자리), 「글상자」 버튼, 고정 요소의 앞으로·뒤로·흐름으로 되돌리기, 좁은 화면 미리보기(640px, 손잡이 숨김). 좌표 재기는 `viewers/structedit/pinBox.ts`(화면과 배치 검사 테스트가 같이 씀).
+- V0 남은 확인 결과(리포 지금 버전 대표 HTML 8개, 문서마다 블록 3개를 고정해 375·640·641·718·800·1024·1280px):
+  - **섹션 아래쪽 고정 글자가 넘쳤다.** 편집 폭에서 잰 min-height만 쓰면 폭이 줄어 글자가 다시 줄바꿈될 때 4개 문서에서 고정 요소가 섹션 바닥을 넘었다(641px에서 최대 326px). 그래서 화면이 저장 전에 **641px 화면 밖 사본에서 고정 요소 바닥을 한 번 더 재** 큰 값을 min-height로 쓴다(`minHeightFor`). 그 폭의 흐름 높이까지 쓰면 넓은 화면에 최대 559px 빈칸이 생겨 고정 요소 바닥만 본다. 넓은 화면에 더 생기는 빈칸은 최대 49px였다.
+  - **표를 통째로 고정하면 641px에서 가로 스크롤**(review-gate, 표 최소 너비)이 생겨 표·pre는 고정 대상에서 뺐다.
+  - 끄는 동안 섹션 폭은 누를 때 한 번 잰다(끄는 동안 폭이 바뀌지 않는다). 저장하면 사본을 다시 읽어 다음 끌기는 새 폭으로 잰다.
+  - A4 인쇄 폭(718px)은 640px보다 넓어 고정 배치가 그대로 인쇄되고, 위 보정으로 넘침이 없다(TC-VE-20).
+- 계획과 다른 점: 공통 캔버스(Moveable)는 이번에도 만들지 않았다. HTML 자유 배치는 배율 없는 iframe 위 손잡이 층(손잡이 둘·맞춤선 계산)이라 덱 Moveable과 겹치는 코드가 맞춤선 계산 정도였다. 여러 요소 정렬·분배는 HTML에 넣지 않았다(덱만). 고정 요소 높이는 손잡이로 바꾸지 않는다(글자·그림이 정하는 높이, 너비만).
+- 테스트: TC-VE-14~20, TC-CFUI-21, TC-UI-37, TC-ED-11 갱신.
+
+**V4 SVG (2026-11-02, D-56·D-57·D-60)**
+
+- core `svg.ts`: 소독기(`sanitizeSvg`, V0 스파이크 2의 htmlparser2 허용 목록을 옮김, 지운 것·draw.io 여부를 돌려줌, `role`·`aria-*`는 허용), 크기(`svgSize`), 인라인 범위 좁히기(`scopeSvg`: id·참조 접두어, 루트 id, `<style>` 선택자 앞 `#접두어`, `@규칙` style 지움), svgedit 출력 정리(`tidySvgEdit`). foreignObject 안 빈 XHTML 요소는 `<div></div>`로 쓴다(HTML 안에 넣으면 `<div/>`가 열린 태그로 읽힌다).
+- 자산: `image/svg+xml`을 받는다. `work.prepareAsset`(Worker·로컬 공통)이 소독한 결과만 저장하고 크기·지운 것·draw.io 여부를 돌려준다. 콘텐츠 도메인 `_asset`과 로컬 raw는 `sandbox` CSP·nosniff. 오피스 그림 교체에 SVG 자산은 400.
+- HTML: 기본은 파일 참조(그림 넣기·끌어 놓기·place에 SVG 파일 → `assets/<sha16>.svg`). 인라인은 insert·place의 `{kind:"svg", src:"asset:…"}`(작업본 층이 자산을 글로 바꾸고 html.ts가 다시 소독·범위 좁힘, 루트 width·height를 지워 viewBox 비율로). 인라인 SVG는 블록으로 고르고 안의 도형(rect·circle·ellipse·path·polygon·polyline·line·text·tspan)은 `data-shape`로 눌러 `svgAttr`(fill·stroke·글자)로 고친다. 복제하면 새 접두어로 다시 범위를 좁힌다.
+- 덱: SVG를 그림(`asset:`)으로 넣고 「SVG 고치기」·「다이어그램 그리기」. 슬라이드 형식에는 인라인 SVG가 없어 `svgAttr`는 HTML만이다(계획 4.5 표의 덱 `svgAttr`는 하지 않음).
+- draw.io(`apps/drawio`, D-57 자체 호스팅): 코드 없는 정적 자산 Worker. `scripts/fetch.mjs`가 draw.war v32.6.1(sha256 고정)을 받아 풀고(WEB-INF·META-INF 제외 3,065개, 가장 큰 파일 19.3MB) Workers 한도(20,000개·25MiB)를 검사하고, 환경별 `_headers`(frame-ancestors 앱 출처만, connect-src 'self', unsafe-eval)를 쓴다. 로컬은 `npm run serve`(127.0.0.1:8010) + 사이트 `DRAWIO_ORIGIN`. `npm run check`가 실제 draw.io 왕복(init→load→export xmlsvg→다시 load→복원, 바깥 요청 0건)을 확인한다(2026-11-02 통과). 화면은 `editor/DrawioEditor.tsx`(iframe + postMessage, origin·source 확인, 보낼 때 대상 출처 지정, export는 요청 순서로 짝짓기), 설정은 `GET {API}/editor-config`(Worker `DRAWIO_ORIGIN` 환경값, 로컬 서버 환경값). 값이 없으면 draw.io 버튼을 숨긴다.
+- svgedit: `@svgedit/svgcanvas` 7.4.2(MIT, pathseg 1.2.1 BSD형)를 소스로 묶고 jspdf·svg2pdf는 빈 모듈 별칭(`site/vite.config.ts`). 편집기(`editor/SvgEditor.tsx`)를 열 때만 불러온다(빌드 청크 gzip 62kB). 고르기·사각형·타원·선·글자·채움·선 색·굵기·지우기·되돌리기. 저장하면 `tidySvgEdit` → 새 자산(서버가 다시 소독). draw.io SVG(루트 `content`)는 draw.io로만 연다.
+- MCP: `svg_put`(올리기 + 지운 것 진단), `doc_structure`에 인라인 SVG 도형 목록, `doc_ops` 설명에 SVG 넣기·`svgAttr`.
+- 배포(사용자 확인 대기): draw.io Worker는 아직 만들지 않았다. CI에는 손으로 돌리는 `deploy-drawio` job(Variables `DRAWIO_DEPLOY_ENABLED=true`일 때만)을 두었고 절차는 `apps/worker/README.md` "draw.io 편집기". 앱 화면에는 CSP가 없어(정적 자산) `frame-src`를 더할 곳이 없다. draw.io를 막는 쪽은 draw.io 응답의 `frame-ancestors`다.
+- 함께 고친 버그: 콘텐츠 도메인 304 응답에 CORS가 없어, `<img>`로 먼저 받은 SVG를 편집기가 fetch로 다시 읽을 때 실패했다(TESTING 5절).
+- 계획과 다른 점: 덱 `svgAttr`는 하지 않았다(위). draw.io 화면 테스트는 대역 페이지로 프로토콜을 확인하고, 실제 draw.io는 `apps/drawio`의 확인 스크립트로 본다(CI에는 draw.war를 받지 않는다). 라이선스 고지 파일은 아직 없다(V6 보안·운영 마감에서 제3자 고지 목록과 함께).
+- 테스트: TC-VE-21~31, TC-CF-50, TC-CFUI-22, TC-MCP-01·23, TC-ED-08·TC-VE-13 갱신.
+
+**VO 오피스 편집 서버 (2026-11-02, 컨테이너 배포 전)**
+- 규칙은 `packages/core/src/office.ts`(로컬·Worker 공통): 편집 설정 JWT(HS256), 파일·콜백 주소 서명 토큰, 문서 키 = 작업 상태(기준 버전·rev)에서 만듦(같은 내용이면 공동 편집, 저장하면 새 키), 편집 세션 = 작업본 잠금(`DocStore.locked`, 그동안 다른 수정본·버전으로 저장 409, 15분 만료·화면이 5분마다 연장), 콜백 status 2·6이면 받은 파일로 대표 파일을 바꾼 수정본(source office), 2·4면 잠금 풀림. 저장 파일 주소는 오피스 서버 출처만(SSRF), 64MB 상한.
+- Cloudflare(`apps/worker/src/office.ts`): 컨테이너 클래스 `Office`(ONLYOFFICE Docs 10.0 공식 이미지 그대로, `apps/office/Dockerfile` digest 고정, standard-3·30분 유휴 종료·인터넷 사용), 편집기 출처 `OFFICE_ORIGIN`(앱과 다른 도메인)을 컨테이너로 넘기는 프록시(쿠키 지움), 세션 D1 `office_session`(마이그레이션 0005), 콜백 경로는 CSRF 검사 대신 서명 토큰 + JWT, 사용량 `officeSessions`. **`wrangler.jsonc`에는 아직 넣지 않았다**(넣으면 다음 CI 배포가 이미지를 올리고 Containers를 만든다). 넣을 설정과 비용은 `apps/worker/README.md` 「오피스 편집기」.
+- 로컬(`site/server`): 같은 경로, docker(`apps/office/compose.yaml`), `ONLYOFFICE_URL`·`ONLYOFFICE_JWT_SECRET`이 없으면 버튼을 숨긴다.
+- 화면(`viewers/office/OfficeEditor.tsx`): 「오피스 편집기로 열기」(확인 창) → 편집 서버 깨우기 진행 막대 → 편집기(DocsAPI) → 「닫고 저장」 → 저장 콜백을 기다려 구조 편집 화면으로(「버전으로 저장」).
+- 확인: 실제 ONLYOFFICE(docker)로 DOCX를 열어 글자를 넣고 닫으면 저장 콜백(Authorization Bearer JWT) → 수정본에 입력한 글자(TC-VO-12, 컨테이너 준비 12초). Cloudflare Containers 위 구동·WebSocket 공동 편집 프록시는 자원을 만든 뒤 staging에서 확인한다.
+- 함께 고친 버그: V4에서 Cloudflare `editor-config` 라우트가 등록되지 않아 draw.io 버튼이 늘 숨었다(TESTING 5절).
+- 남은 것: 텍스트 편집(2.0)·새 버전 올리기는 수정본 층을 거치지 않아 오피스 세션 중에도 막히지 않는다(세션 중 새 버전이 생기면 오피스 저장이 그 버전 위 수정본으로 들어가 그 사이 바뀐 대표 파일을 덮는다). 에이전트 OOXML 연산은 잠금으로 409. → V5에서 고침(아래).
+
+**V5 에이전트·문서 (2026-11-02)**
+
+- 오피스 잠금 빈틈: 세션 중에는 텍스트 편집·Markdown 저장·새 버전 올리기·정식 확정도 409(Worker `write.ts`, 로컬 `server/index.ts`, 문구는 core `work.LOCKED`). TC-VO-13·14, TESTING 5절.
+- MCP: `doc_structure` 머리에 "오피스 편집 중" 표시, 그 409에는 "다시 읽기" 대신 "편집기가 닫힐 때까지 기다리기" 안내. 에이전트 시나리오(토큰 색·글꼴 크기 → SVG를 섹션 자리에 고정 → 해제, 허용 밖 스타일 진단) TC-MCP-24. 스킬 `workflow-docs`에 속성·자유 배치·오피스 잠금.
+- 사용량 창에 오피스 편집 세션 수와 오피스 수정본, 렌더링 칸 이름을 "HTML PDF·슬라이드 미리보기"로.
+- 제3자 고지: `site/web/public/third-party-notices.txt`(draw.io Apache-2.0, svgcanvas MIT, pathseg BSD-3, ONLYOFFICE AGPL·소스 위치, pdf.js, MIT 라이브러리, 나눔고딕 OFL). 계정 메뉴 「오픈소스 고지」. 고지는 로컬·Cloudflare 같은 경로(`/third-party-notices.txt`).
+- 문서: `spec/ARCHITECTURE.md`(요소 편집기 행), `.claude/guides/site-local.md`·`cloudflare-app.md`.
+- 슬라이드 형식 명세(2026-11-02, 사용자 결정): `docs/` 바로 아래 낱개 파일이라 MCP로 고칠 수 없어, 사이트 문서 「개발문서 › 편집기 명세 › 슬라이드 편집기 구현 명세」(`docs/editor-spec/slide-editor-spec/`)로 등록하고(v0.0 = 원본 그대로) MCP `upload_version`으로 v0.1을 올렸다. 반영: 03절 글자 span은 `color`·`font-family`·`font-size`만·직렬화 순서 `color;font-family;font-size`, 06절 글자 도구 막대·블록 글꼴 칸·여러 요소 정렬·분배·레이어 패널, 07절 행 높이, 08절 SVG는 소독 후 `asset:` 그림, 12절 덱 PDF 대신 `deck_render` PNG. 옛 낱개 파일 `docs/slide-editor-spec.html`은 5.0 당시 기록으로 그대로 두고, 참조는 새 문서로 바꿨다.
+
+**V6 운영 마감 — 보안 점검 (2026-11-02, 로컬 완료)**
+
+- 6.0 변경 전체(`origin/develop..HEAD`, V2~V5)를 보안 점검했다: 높음 0, 중간 3, 낮음 6. 모두 재현 테스트를 먼저 만들어 실패를 확인한 뒤 고쳤다(TESTING 2.11·5절, TC-SEC-01~05·07~09).
+- 중간: SVG CSS 주소 함수(`image-set`·`src` 등)로 바깥 요청 → CSS 함수 허용 목록·자산 CSP `default-src 'none'`. `font-family` 정규식 ReDoS(32자 54초) → 모호하지 않은 식·값 200자 상한. svgedit이 소독 전 SVG를 앱 문서에 붙임 → 편집 진입 때 소독·`<style>`을 `#svgcontent` 아래로.
+- 낮음: 인라인 SVG `<style>` 범위 우회 → 주석 제거·중괄호 직접 파싱. 오피스 프록시 전 경로 공개 → 편집기 경로 허용 목록(실제 ONLYOFFICE 10 경로로 확인)·헤더 정리·로컬 compose 루프백. 늦은 저장 콜백 덮어쓰기 → 세션·rev 확인 후 거부 기록, 다운로드 스트림 상한. 잠금 무기한 → 최대 8시간·owner 잠금 풀기. 로컬 서버 → 티켓 키 분리·JWT `exp` 필수·Host·Origin 검사. 앱 출처 `api.js` 실행은 문서화(`apps/worker/README.md`).
+- 결정: 버전 업로드(zip·폴더)로 들어온 SVG는 업로드 때 소독하지 않는다. 문서 원본 바이트를 지키는 원칙(파일이 원본) 때문이고, 그 파일은 콘텐츠 도메인 sandbox로만 열린다. 앱 화면에 올리는 경로(svgedit)에서만 소독한다.
+- 마이그레이션 `0005_office.sql`에 `started_at`을 더했다(아직 배포 전이라 같은 파일을 고쳤다). 로컬 `work.db`는 열 때 열을 더한다.
+- 남은 것: staging 전체 회귀와 운영 배포(develop 푸시 필요, 사용자 확인 대기). draw.io·오피스 자원은 만들지 않는다(사용자 결정, 2026-11-02).
+

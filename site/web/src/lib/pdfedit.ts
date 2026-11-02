@@ -4,7 +4,7 @@ import { API } from "./base.ts";
 import { SaveConflict } from "./structedit.ts";
 
 /**
- * PDF 편집(5.0 M6, Cloudflare). 연산은 브라우저에서 pdf-lib로 적용하고(한글은 쓴 글자만 자른 나눔고딕), 결과 PDF를 수정본으로 올린다.
+ * PDF 편집(5.0 M6, 로컬·Cloudflare). 연산은 브라우저에서 pdf-lib로 적용하고(한글은 쓴 글자만 자른 나눔고딕), 결과 PDF를 수정본으로 올린다.
  * 글꼴(2MB)과 harfbuzz wasm은 글자를 쓸 때 처음 한 번만 받는다.
  */
 

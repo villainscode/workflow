@@ -6,6 +6,8 @@
 - 사용자 파일은 서명 토큰 경로 `/c/<토큰>/<메뉴>/<상위…>/<문서>/<버전>/<파일>`로 콘텐츠 도메인에서만 준다.
 - 권한 검사는 `src/app.ts`의 워크스페이스 미들웨어(로그인·역할·Origin)에 모여 있다. 새 API는 그 아래(`ws.*`)에 붙인다. owner만 쓸 API는 `OWNER_ONLY` 목록에 더한다.
 - D1 스키마를 바꾸면 `migrations/`에 새 번호 파일을 더한다(기존 파일은 고치지 않는다). 배포 CI가 원격에 적용한다.
+- 편집 규칙(수정본 층·구조 편집·덱·SVG 소독·오피스 세션)은 `packages/core`의 `work/`·`structedit/`·`svg.ts`·`office.ts`에 있고 로컬 사이트와 같이 쓴다. Worker는 D1·R2 저장소(`DocStore`)와 라우트만 둔다. 문서에 새 버전을 쓰는 함수(`src/write.ts`)는 오피스 편집 세션 중이면 409를 낸다(`needUnlocked`).
+- draw.io(`apps/drawio`)와 오피스 편집기(`apps/office`, 컨테이너 `Office`)는 앱과 다른 출처에 둔다. 실제 계정에 Worker·도메인·컨테이너를 만드는 절차와 확인 항목은 `apps/worker/README.md`.
 
 ## 명령
 

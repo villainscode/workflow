@@ -12,6 +12,8 @@ export default defineConfig(async () => {
       miniflare: { bindings: {
         TEST_MIGRATIONS: migrations, SIGNING_KEY: "test-signing-key", ADMIN_TOKEN: "test-admin",
         DEV_LOGIN: "1", SUPERADMIN_EMAILS: "owner@test.com", GOOGLE_CLIENT_ID: "test-client", GOOGLE_CLIENT_SECRET: "test-secret",
+        // 오피스 편집기(6.0 VO): 컨테이너 없이 OFFICE_ORIGIN으로 바로 간다(테스트는 fetch를 가로챈다)
+        OFFICE_ORIGIN: "https://office.test", ONLYOFFICE_JWT_SECRET: "test-office-secret",
       } },
     })],
     // test-ui/는 node:test + puppeteer(npm run test:ui)라 넣지 않는다

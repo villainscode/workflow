@@ -126,7 +126,7 @@ describe("영구 삭제와 수정본", () => {
 });
 
 describe("편집기 이미지 자산", () => {
-  it("TC-ED-08 PNG를 올리면 asset:<sha>와 가로·세로, 같은 이미지는 한 번만, 서명 주소로 받는다. SVG·이미지가 아닌 것은 400", async () => {
+  it("TC-ED-08 PNG를 올리면 asset:<sha>와 가로·세로, 같은 이미지는 한 번만, 서명 주소로 받는다. SVG가 아닌 글·이미지가 아닌 것은 400(SVG는 6.0 V4부터 소독해 받는다, TC-VE-27)", async () => {
     const up = async (data: Uint8Array | string, name: string, type: string) => {
       const form = new FormData();
       form.append("file", new File([data], name, { type }));
@@ -136,7 +136,7 @@ describe("편집기 이미지 자산", () => {
     expect(a).toMatchObject({ mime: "image/png", width: 1, height: 1 });
     expect(a.asset).toBe(`asset:${a.sha256}`);
     expect((await (await up(PNG, "b.png", "image/png")).json<any>()).sha256).toBe(a.sha256);
-    expect((await up("<svg/>", "x.svg", "image/svg+xml")).status).toBe(400);
+    expect((await up("<html/>", "x.svg", "image/svg+xml")).status).toBe(400);
     expect((await up("not image", "x.png", "image/png")).status).toBe(400);
     const u = await getJson(`${W}/assets/${a.sha256}/url`);
     const img = await call(pathOf(u.url));
@@ -162,7 +162,7 @@ describe("편집기 이미지 자산", () => {
     expect(await env.BLOBS.head(`ws/${await wsId()}/blobs/${asset.sha256}`)).not.toBeNull();
   });
 
-  it("TC-CF-47 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·변환·렌더링 횟수, owner 아니면 403", async () => {
+  it("TC-CF-51 사용량(owner): 최근 기간 수정본(사람·에이전트·되돌림)·새 버전·저장 용량(중복 제외)·변환·렌더링·오피스 세션 횟수, owner 아니면 403", async () => {
     const { noteUsage } = await import("../src/usage.ts");
     await save(0, [{ path: "guide.html", text: "사람" }]);
     await save(1, [{ path: "guide.html", text: "에이전트" }], {}, { "x-workflow-agent": "claude-code" });
@@ -171,8 +171,9 @@ describe("편집기 이미지 자산", () => {
     await noteUsage(env, await wsId(), "convert", "pptx");
     await noteUsage(env, await wsId(), "render", "notes/deck");
     await noteUsage(env, await wsId(), "render", "notes/deck#cover");
+    await noteUsage(env, await wsId(), "office", "notes/report");
     const u = await getJson(`${W}/usage?days=30`);
-    expect(u).toMatchObject({ days: 30, revisions: { total: 3, human: 1, agent: 1, restore: 1 }, conversions: 1, renders: 2 });
+    expect(u).toMatchObject({ days: 30, revisions: { total: 3, human: 1, agent: 1, restore: 1, office: 0 }, conversions: 1, renders: 2, officeSessions: 1 });
     expect(u.versions).toBeGreaterThanOrEqual(1);
     expect(u.storage.versionBytes).toBeGreaterThan(0);
     await addMember("team", "e@test.com", "editor");

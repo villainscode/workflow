@@ -4,11 +4,13 @@
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, execSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { freePort, makeWorkspace, waitFor } from "../../../site/test/helpers.ts";
+import { signJwt } from "@workflow/core/office";
 
 const WORKER = resolve(import.meta.dirname, "..");
 const ROOT = resolve(WORKER, "../..");
@@ -23,6 +25,10 @@ let wrangler: ChildProcess;
 let BASE = "";
 let browser: any;
 let page: any;
+// 오피스 편집 서버 대역(6.0 VO): api.js·healthcheck, 닫으면 서명한 저장 콜백(로컬 화면 테스트와 같은 대역)
+const OFFICE_SECRET = "cf-ui-office-secret";
+let office: ReturnType<typeof createServer>;
+let OFFICE = "";
 
 /** 다른 곳(다른 사람·Claude Code)에서 바꾸는 것처럼 Worker API를 직접 부른다. 세션은 브라우저 쿠키, Origin은 앱 */
 const post = async (path: string, body: BodyInit, headers: Record<string, string> = {}) => {
@@ -74,7 +80,7 @@ describe("Cloudflare 화면", { skip }, () => {
     // 변환(PPTX)·draw.io 문서
     const { addFixtureDoc } = await import("../../../site/test/helpers.ts");
     addFixtureDoc(ws.docs, "notes", "slides", "sample-slides.pptx", "pptx");
-    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { mkdirSync } = await import("node:fs");
     mkdirSync(join(ws.docs, "notes/flow/v0.0"), { recursive: true });
     writeFileSync(join(ws.docs, "notes/flow/v0.0/flow.drawio"), '<mxfile><diagram name="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="시작" vertex="1" parent="1"><mxGeometry x="10" y="10" width="80" height="40" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>');
     writeFileSync(join(ws.docs, "notes/flow/meta.yaml"), "title: 흐름도\ncategory: sdlc\nmenu: notes\nkind: drawio\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: flow.drawio\n");
@@ -95,6 +101,62 @@ describe("Cloudflare 화면", { skip }, () => {
       + '<div data-eid="b2" style="position:absolute;left:500px;top:700px;width:100px;height:100px;background:#1c2026"></div>'
       + '<div data-eid="b3" style="position:absolute;left:1300px;top:650px;width:300px;height:100px;background:#0e6b57"></div></section>');
     writeFileSync(join(ws.docs, "notes/style-deck/meta.yaml"), "title: 서식 덱\ncategory: sdlc\nmenu: notes\nkind: deck\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: deck.json\n");
+    // HTML 속성 편집(6.0 V2): 색 토큰·다크 모드·Google Fonts 글꼴, 표, 그림(200×100 PNG)
+    {
+      const { deflateSync, crc32 } = await import("node:zlib");
+      const chunk = (type: string, data: Buffer) => {
+        const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+        const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([Buffer.from(type), data])));
+        return Buffer.concat([len, Buffer.from(type), data, crc]);
+      };
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(200, 0); ihdr.writeUInt32BE(100, 4); ihdr[8] = 8; ihdr[9] = 2;
+      const raw = Buffer.alloc((200 * 3 + 1) * 100, 0x80);
+      for (let y = 0; y < 100; y++) raw[y * 601] = 0;
+      const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+      mkdirSync(join(ws.docs, "notes/style-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/style-html/v0.0/pic.png"), png);
+      writeFileSync(join(ws.docs, "notes/style-html/v0.0/page.html"), `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>서식 문서</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR&amp;display=swap" rel="stylesheet">
+<style>:root{--accent:#1f5fbf;--ink:#1c2026}@media (prefers-color-scheme: dark){:root{--accent:#80a8f0}}
+body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px}</style>
+</head><body>
+<main>
+<h2>서식 제목</h2>
+<p>서식 바꿀 문단</p>
+<table><tr><th>가</th><th>나</th></tr><tr><td>다</td><td>라</td></tr></table>
+<figure><img src="pic.png" alt="점" style="width:40%"></figure>
+</main>
+</body></html>
+`);
+      writeFileSync(join(ws.docs, "notes/style-html/meta.yaml"), "title: 서식 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
+      // 자유 배치(6.0 V3): 섹션 두 개, 문단과 그림
+      mkdirSync(join(ws.docs, "notes/pin-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/pin-html/v0.0/pic.png"), png);
+      writeFileSync(join(ws.docs, "notes/pin-html/v0.0/page.html"), `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>배치 문서</title>
+<style>body{margin:0;padding:24px;font:16px/1.5 sans-serif}section{padding:16px;border:1px solid #ccc;margin:0 0 16px}</style>
+</head><body>
+<main>
+<section class="one">
+<h2>첫 섹션</h2>
+<p>옮길 문단입니다</p>
+<p>그대로 둘 문단</p>
+</section>
+<section class="two">
+<h2>둘째 섹션</h2>
+<p>그림을 놓을 섹션</p>
+</section>
+</main>
+</body></html>
+`);
+      writeFileSync(join(ws.docs, "notes/pin-html/meta.yaml"), "title: 배치 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
+      // SVG(6.0 V4): 버전 폴더의 SVG 그림 하나
+      mkdirSync(join(ws.docs, "notes/svg-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/svg-html/v0.0/shape.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120"><rect id="r1" x="10" y="10" width="120" height="60" fill="#cccccc"/></svg>');
+      writeFileSync(join(ws.docs, "notes/svg-html/v0.0/page.html"), '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>t</title></head><body><main><h1>SVG 문서</h1><p>도식</p><figure><img src="shape.svg" alt="도형"></figure></main></body></html>');
+      writeFileSync(join(ws.docs, "notes/svg-html/meta.yaml"), "title: SVG 문서\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
+    }
     // PDF(5.0 M6): 폭이 다른 3쪽 + 양식 글자 칸
     {
       const { PDFDocument } = await import("pdf-lib");
@@ -105,9 +167,38 @@ describe("Cloudflare 화면", { skip }, () => {
       writeFileSync(join(ws.docs, "notes/form-pdf/v0.0/form.pdf"), await pdf.save());
       writeFileSync(join(ws.docs, "notes/form-pdf/meta.yaml"), "title: 신청서 PDF\ncategory: sdlc\nmenu: notes\nkind: pdf\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: form.pdf\n");
     }
+    // 오피스 문서와 오피스 서버 대역
+    {
+      const docx = readFileSync(join(ROOT, "packages/core/test/fixtures/struct.docx"));
+      mkdirSync(join(ws.docs, "notes/office-doc/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/office-doc/v0.0/report.docx"), docx);
+      writeFileSync(join(ws.docs, "notes/office-doc/meta.yaml"), "title: 오피스 문서\ncategory: sdlc\nmenu: notes\nkind: docx\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: report.docx\n");
+      const officePort = await freePort();
+      OFFICE = `http://127.0.0.1:${officePort}`;
+      office = createServer((req, res) => {
+        const u = new URL(req.url ?? "/", OFFICE);
+        if (u.pathname === "/healthcheck") return res.end("true");
+        if (u.pathname === "/web-apps/apps/api/documents/api.js") {
+          res.writeHead(200, { "content-type": "text/javascript" });
+          return res.end(readFileSync(join(ROOT, "site/test/fixtures/fake-office-api.js")));
+        }
+        if (u.pathname === "/cache/out.docx") return res.end(Buffer.concat([docx, Buffer.from("클라우드 저장")]));
+        if (u.pathname === "/close") {
+          res.end();
+          const body = { key: u.searchParams.get("key"), status: 2, url: `${OFFICE}/cache/out.docx`, users: ["1"] };
+          const cb = new URL(u.searchParams.get("cb")!);
+          setTimeout(() => void signJwt({ payload: body, exp: Math.floor(Date.now() / 1000) + 300 }, OFFICE_SECRET).then((t) => fetch(`${BASE}${cb.pathname}${cb.search}`, {
+            method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${t}` }, body: JSON.stringify(body),
+          })), 300);
+          return;
+        }
+        res.statusCode = 404; res.end();
+      }).listen(officePort, "127.0.0.1");
+    }
     // 운영처럼 앱과 사용자 콘텐츠의 출처를 나눈다: 앱 127.0.0.1, 콘텐츠 localhost(같은 포트, 호스트로 나눔)
     wrangler = spawn("npx", ["wrangler", "dev", "--port", String(port), "--ip", "127.0.0.1", "--persist-to", persist,
-      "--var", `APP_ORIGIN:${BASE}`, "--var", `FILES_ORIGIN:http://localhost:${port}`], {
+      "--var", `APP_ORIGIN:${BASE}`, "--var", `FILES_ORIGIN:http://localhost:${port}`,
+      "--var", `OFFICE_ORIGIN:${OFFICE}`, "--var", `ONLYOFFICE_JWT_SECRET:${OFFICE_SECRET}`], {
       cwd: WORKER, stdio: "ignore", detached: true,
     });
     await waitFor(async () => (await fetch(BASE + "/api/health")).ok, 60_000, "wrangler dev 시작");
@@ -128,18 +219,23 @@ describe("Cloudflare 화면", { skip }, () => {
 
   after(async () => {
     await browser?.close();
+    office?.close();
     if (wrangler?.pid) try { process.kill(-wrangler.pid, "SIGTERM"); } catch { /* 이미 종료 */ }
     ws.cleanup();
     rmSync(persist, { recursive: true, force: true });
   });
 
-  test("TC-CFUI-06 로그인 화면(Google·개발용) → 로그인하면 내 워크스페이스로, 계정 메뉴에 멤버 관리·로그아웃", async () => {
+  test("TC-CFUI-06 로그인 화면(Google·개발용) → 로그인하면 내 워크스페이스로, 계정 메뉴에 멤버 관리·오픈소스 고지·로그아웃", async () => {
     await nav("/");
     await page.waitForFunction(() => location.pathname.startsWith("/team/"), { timeout: 15_000 });
     await (await page.waitForSelector('button[aria-label="계정 메뉴"]')).click();
     const items = await page.$$eval('[role="menuitem"]', (els: Element[]) => els.map((e) => e.textContent?.trim()));
-    assert.deepEqual(items, ["멤버·초대 관리", "로그아웃"]);
+    assert.deepEqual(items, ["멤버·초대 관리", "오픈소스 고지", "로그아웃"]);
     await page.keyboard.press("Escape");
+    // 오픈소스 고지(6.0 V5)는 정적 파일로 준다
+    const notices = await page.evaluate(async () => { const r = await fetch("/third-party-notices.txt"); return { status: r.status, text: await r.text() }; });
+    assert.equal(notices.status, 200);
+    assert.match(notices.text, /draw\.io[\s\S]*@svgedit\/svgcanvas[\s\S]*ONLYOFFICE/);
   });
 
   test("TC-CFUI-07 초대 링크를 만들어 다른 브라우저(로그인 전)에서 열면 로그인 후 그 워크스페이스로, viewer는 편집 버튼이 없다", async () => {
@@ -518,6 +614,276 @@ describe("Cloudflare 화면", { skip }, () => {
     await page.keyboard.down("Meta"); await page.keyboard.press("z"); await page.keyboard.up("Meta");
     await status("수정본 7");
     assert.equal(await order(), "b1,b2,b3");
+  });
+
+  test("TC-CFUI-20 HTML 속성 편집(6.0 V2): 속성 패널 크기·토큰 색 → 새로 고침 뒤 유지, 글자 도구 막대로 일부 글자 크기, 표 열 끌기·행 높이·그림 크기 손잡이, ⌘Z, ⌘D 복제", async () => {
+    const D = "/docs/notes/style-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text();
+    };
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    const fire = (sel: string, type: "click" | "dblclick") => page.evaluate((f: string, s: string, t: string) => {
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector(s)!.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
+    }, FRAME, sel, type);
+    const key = (k: string, shift = false) => page.evaluate((f: string, key: string, shiftKey: boolean) => {
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, shiftKey, bubbles: true, cancelable: true }));
+    }, FRAME, k, shift);
+    const dragBy = async (sel: string, dx: number, dy: number) => {
+      const h = await page.waitForSelector(sel, { timeout: 10_000 });
+      const b = (await h!.boundingBox())!;
+      const x = b.x + b.width / 2, y = b.y + b.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      for (let i = 1; i <= 5; i++) await page.mouse.move(x + (dx * i) / 5, y + (dy * i) / 5);
+      await page.mouse.up();
+    };
+    const openEditor = async () => {
+      await open("/team/sdlc/notes/style-html", "서식 HTML");
+      await page.click('button[aria-label="구조 편집 (표·그림)"]');
+      await ready("main > p[data-eid]");
+    };
+    await openEditor();
+
+    // 속성 패널: 문단 크기 22px → 토큰 색(--accent)
+    await fire("main > p", "click");
+    await page.waitForSelector('input[aria-label="서식 크기"]');
+    await page.click('input[aria-label="서식 크기"]');
+    await page.keyboard.type("22px");
+    await page.keyboard.press("Enter");
+    await status("수정본 1");
+    await ready("main > p[data-eid]");
+    // 색 고르기 창(react-colorful)을 열어 문서 색 --accent
+    await page.click('button[aria-label="서식 글자색 고르기"]');
+    await page.waitForSelector('[role="dialog"][aria-label="글자색 고르기"] .react-colorful');
+    await page.select('select[aria-label="서식 글자색 문서 색"]', "var(--accent)");
+    await status("수정본 2");
+    assert.match(await work(), /<p style="font-size:22px;color:var\(--accent\)">서식 바꿀 문단<\/p>/);
+    // 새로 고침 뒤에도 남고, 다시 고르면 패널에 보인다
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await openEditor();
+    await fire("main > p", "click");
+    await page.waitForFunction(() => document.querySelector<HTMLInputElement>('input[aria-label="서식 크기"]')?.value === "22px", { timeout: 10_000 });
+    assert.equal(await page.evaluate((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentWindow!.getComputedStyle(
+      document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector("main > p")!).fontSize, FRAME), "22px");
+
+    // 글자 도구 막대: 두 번 눌러 편집 → 앞 두 글자 골라 크기 28px → Enter
+    await fire("main > p", "dblclick");
+    await page.waitForSelector('[data-text-toolbar] select[aria-label="글자 크기"]');
+    await page.evaluate((f: string) => {
+      const w = document.querySelector<HTMLIFrameElement>(f)!.contentWindow!;
+      const t = w.document.querySelector('[contenteditable="true"]')!.firstChild!;
+      const r = w.document.createRange(); r.setStart(t, 0); r.setEnd(t, 2);
+      const sel = w.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+    }, FRAME);
+    await new Promise((r) => setTimeout(r, 100));
+    await page.select('[data-text-toolbar] select[aria-label="글자 크기"]', "28px");
+    await new Promise((r) => setTimeout(r, 100));
+    assert.ok(await page.$("[data-text-toolbar]"), "막대를 써도 글자 편집이 이어진다");
+    await page.keyboard.press("Enter");
+    await status("수정본 3");
+    assert.match(await work(), /<p style="font-size:22px;color:var\(--accent\)"><span style="font-size:28px">서식<\/span> 바꿀 문단<\/p>/);
+
+    // 표: 칸을 골라 열 경계 끌기 → 행 높이 → 그림 크기
+    await ready("td[data-eid]");
+    await fire("td", "click");
+    await dragBy('[data-handle="col"]', 120, 0);
+    await status("수정본 4");
+    const widths = (await api(`${D}/work/structure`)).blocks.find((b: any) => b.tag === "table").table.widths;
+    assert.ok(widths[0] > 55, `첫 열이 넓어진다: ${widths}`);
+    assert.match(await work(), /<table style="table-layout:fixed">/);
+    await ready("td[data-eid]");
+    await dragBy('[data-handle="row"]', 0, 30);
+    await status("수정본 5");
+    assert.match(await work(), /<tr style="height:\d+px"><td>다/);
+    await ready("img[data-eid]");
+    await fire("img", "click");
+    await dragBy('[data-handle="image"]', 100, 0);
+    await status("수정본 6");
+    const imgWidth = () => work().then((h) => /<img src="pic\.png" alt="점" style="width:([\d.]+)%">/.exec(h)?.[1]);
+    assert.ok(Number(await imgWidth()) > 45, `그림이 커진다: ${await imgWidth()}`);
+
+    // ⌘Z: 그림 크기 전으로(수정본 5 내용으로 새 수정본 7)
+    await ready("img[data-eid]");
+    await key("z");
+    await status("수정본 7");
+    assert.equal(await imgWidth(), "40");
+    // ⌘D: 제목 복제
+    await ready("h2[data-eid]");
+    await fire("h2", "click");
+    await key("d");
+    await status("수정본 8");
+    assert.equal((await work()).match(/<h2>서식 제목<\/h2>/g)!.length, 2);
+  });
+
+  test("TC-CFUI-22 SVG(6.0 V4): 버전 폴더 SVG 그림을 「SVG 고치기」(svgedit)로 색을 바꿔 저장하면 새 SVG 자산(assets/….svg)으로 바뀌고 콘텐츠 도메인에서 sandbox CSP로 준다. SVG 파일을 그림으로 넣으면 소독된다", async () => {
+    const D = "/docs/notes/svg-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return { html: await (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text(), files: w.files as { path: string; url: string }[] };
+    };
+    const inFrame = (body: string) => page.evaluate((f: string, b: string) => new Function("d", b)(document.querySelector<HTMLIFrameElement>(f)!.contentDocument!), FRAME, body);
+    await open("/team/sdlc/notes/svg-html", "SVG 문서");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector("img[data-eid]") && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME);
+    await inFrame('d.querySelector("img").dispatchEvent(new MouseEvent("click", { bubbles: true }))');
+    await clickText("SVG 고치기", "aside");
+    await page.waitForFunction(() => !!(window as any).svgCanvas && !!document.querySelector("#svgcontent #r1"), { timeout: 20_000 });
+    await page.evaluate(() => {
+      const c = (window as any).svgCanvas;
+      c.clearSelection(); c.addToSelection([document.querySelector("#svgcontent #r1")]); c.setColor("fill", "#00aa55");
+    });
+    await clickText("저장", "dialog[open]");
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 1"), { timeout: 15_000 });
+    const w1 = await work();
+    const src = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="도형">/.exec(w1.html)?.[1];
+    assert.ok(src, w1.html);
+    const res = await fetch(w1.files.find((f) => f.path === src)!.url);
+    assert.equal(res.headers.get("content-type"), "image/svg+xml; charset=utf-8");
+    assert.match(res.headers.get("content-security-policy") ?? "", /^sandbox/);
+    const body = await res.text();
+    assert.match(body, /fill="#00aa55"/);
+    assert.match(body, /viewBox="0 0 240 120"/);
+    // SVG 파일을 그림으로 넣기: 소독된 자산
+    const file = join(ws.root, "evil.svg");
+    writeFileSync(file, '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle r="9" cx="10" cy="10" onmouseover="alert(1)"/><script>alert(2)</script></svg>');
+    await page.waitForFunction((f: string) => !!document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelector("p[data-eid]"), { timeout: 15_000 }, FRAME);
+    await inFrame('d.querySelector("p").dispatchEvent(new MouseEvent("click", { bubbles: true }))');
+    await (await page.waitForSelector('input[aria-label="그림 넣기"]')).uploadFile(file);
+    await page.waitForFunction(() => document.body.innerText.includes("수정본 2"), { timeout: 15_000 });
+    const w2 = await work();
+    const src2 = /<img src="(assets\/[0-9a-f]{16}\.svg)" alt="evil">/.exec(w2.html)?.[1];
+    assert.ok(src2, w2.html);
+    assert.doesNotMatch(await (await fetch(w2.files.find((f) => f.path === src2)!.url)).text(), /script|onmouseover/);
+  });
+
+  test("TC-CFUI-23 오피스 편집기(6.0 VO, 대역 서버): 확인 창 → 편집기(편집 모드) → 닫고 저장 → 저장 콜백(JWT) → 수정본(office) → 구조 편집 화면", async () => {
+    assert.deepEqual(await api("/editor-config"), { drawio: null, office: true });
+    await open("/team/sdlc/notes/office-doc", "오피스 문서");
+    await page.waitForSelector('button[data-tip="오피스 편집기로 열기 (서식)"]', { timeout: 10_000 });
+    await page.click('button[data-tip="오피스 편집기로 열기 (서식)"]');
+    await clickConfirm("열기");
+    await page.waitForSelector("[data-fake-office]", { timeout: 20_000 });
+    assert.match(await page.evaluate(() => document.body.innerText), /가짜 오피스 편집기: 오피스 문서\.docx \(edit\)/);
+    assert.equal((await api("/docs/notes/office-doc/office")).active, true);
+    for (const b of await page.$$("button")) if ((await b.evaluate((e: Element) => e.textContent))?.trim() === "닫고 저장") { await b.click(); break; }
+    await page.waitForFunction(() => document.body.innerText.includes("오피스 편집기에서 수정본 1"), { timeout: 30_000 });
+    const revs = await api("/docs/notes/office-doc/revisions");
+    assert.deepEqual([revs.revisions[0].source, revs.revisions[0].author], ["office", "owner@example.com"]);
+    assert.equal((await api("/docs/notes/office-doc/office")).active, false);
+  });
+
+  test("TC-CFUI-21 HTML 자유 배치(6.0 V3): 옮기기 손잡이로 끌면 고정 위치(놓은 자리와 1px 이내), 그림 파일을 놓은 자리에 고정 그림, 방향키 이동, 속성 패널 위치 칸(X·Y), 흐름으로 되돌리기, 640px 미리보기는 가로 스크롤 없음", async () => {
+    const D = "/docs/notes/pin-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text();
+    };
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+    }, { timeout: 20_000 }, FRAME, sel);
+    const inFrame = <T,>(fn: string) => page.evaluate((f: string, body: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
+      return new Function("d", body)(d);
+    }, FRAME, fn) as Promise<T>;
+    /** 섹션 안 요소 상자(섹션 안쪽 기준 px) */
+    const boxIn = (sel: string) => inFrame<{ x: number; y: number; w: number }>(`const el = d.querySelector(${JSON.stringify(sel)}); const s = el.closest("section");
+      const r = el.getBoundingClientRect(), c = s.getBoundingClientRect(); return { x: r.left - c.left - s.clientLeft, y: r.top - c.top - s.clientTop, w: r.width };`);
+    await open("/team/sdlc/notes/pin-html", "배치 HTML");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await ready("section.one > p[data-eid]");
+
+    // 1) 첫 섹션 문단을 손잡이로 끌기 → 놓기 직전 미리 보기 자리와 저장 뒤 자리가 1px 이내
+    await inFrame(`d.querySelector("section.one > p").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    const h = await page.waitForSelector('[data-handle="pin-move"]', { timeout: 10_000 });
+    const hb = (await h!.boundingBox())!;
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(hb.x + hb.width / 2 + 23 * i, hb.y + hb.height / 2 + 9 * i);
+    const before = await boxIn("section.one > p");
+    await page.mouse.up();
+    await status("수정본 1");
+    assert.match(await work(), /<p data-pin="" style="position:absolute;left:[\d.]+%;top:\d+px;width:[\d.]+%;margin:0">옮길 문단입니다<\/p>/);
+    assert.match(await work(), /<section data-pin-box="" style="position:relative;min-height:\d+px" class="one">/);
+    assert.match(await work(), /<style data-pin-rule>/);
+    await ready("section.one > p[data-pin]");
+    const after = await boxIn("section.one > p[data-pin]");
+    assert.ok(Math.abs(after.x - before.x) <= 1 && Math.abs(after.y - before.y) <= 1 && Math.abs(after.w - before.w) <= 1, `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+    await page.waitForFunction(() => document.body.innerText.includes("옮긴 요소는 고정 위치가 됩니다"), { timeout: 5000 });
+
+    // 2) 그림 파일을 둘째 섹션의 한 점에 놓기 → 그 점이 그림 가운데(가장자리 안에서)
+    const drop = await inFrame<{ x: number; y: number }>(`const s = d.querySelector("section.two"); const c = s.getBoundingClientRect(); return { x: Math.round(c.left + c.width * 0.6), y: Math.round(c.top + 30) };`);
+    await page.evaluate(async (f: string, x: number, y: number) => {
+      const c = document.createElement("canvas"); c.width = 160; c.height = 80;
+      c.getContext("2d")!.fillStyle = "#c33"; c.getContext("2d")!.fillRect(0, 0, 160, 80);
+      const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/png"));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "빨강.png", { type: "image/png" }));
+      const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
+      d.querySelector("section.two > p")!.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+    }, FRAME, drop.x, drop.y);
+    await status("수정본 2");
+    assert.match(await work(), /<p>그림을 놓을 섹션<\/p>\n<img src="assets\/[0-9a-f]{16}\.png" alt="빨강" data-pin="" style="position:absolute;left:[\d.]+%;top:\d+px;width:[\d.]+%;margin:0">\n<\/section>/);
+    await ready('section.two > img[data-pin]');
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector<HTMLImageElement>("section.two > img")!.complete, { timeout: 10_000 }, FRAME);
+    const img = await inFrame<{ cx: number; top: number; w: number }>(`const r = d.querySelector("section.two > img").getBoundingClientRect(); return { cx: r.left + r.width / 2, top: r.top, w: r.width };`);
+    assert.ok(Math.abs(img.cx - drop.x) <= 1 && Math.abs(img.w - 160) <= 1, `그림 가운데 ${img.cx} ≈ ${drop.x}, 너비 ${img.w}`);
+
+    // 3) 고정 문단을 고르고 Shift+← 한 번(8px) → 잠깐 뒤 저장(문단은 섹션 너비를 거의 다 써 오른쪽으로는 더 못 간다)
+    await inFrame(`d.querySelector("section.one > p[data-pin]").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    const x0 = (await boxIn("section.one > p[data-pin]")).x;
+    await inFrame(`d.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", shiftKey: true, bubbles: true, cancelable: true }))`);
+    await status("수정본 3");
+    await ready("section.one > p[data-pin]");
+    assert.ok(Math.abs((await boxIn("section.one > p[data-pin]")).x - (x0 - 8)) <= 1, "방향키 8px");
+
+    // 3-2) 속성 패널 위치 칸: 고정 문단 Y=40px, 흐름 문단(둘째 섹션)에 X=3% → 그 자리에 고정(섹션 밖으로 넘치는 값은 막는다)
+    const typeIn = async (label: string, v: string) => {
+      const sel = `input[aria-label="${label}"]`;
+      await page.waitForSelector(sel, { timeout: 10_000 });
+      await page.focus(sel);
+      await page.$eval(sel, (el) => (el as HTMLInputElement).select());
+      await page.keyboard.type(v);
+      await page.keyboard.press("Enter");
+    };
+    await typeIn("위치 Y (px)", "40");
+    await status("수정본 4");
+    assert.match(await work(), /<p data-pin="" style="position:absolute;left:[\d.]+%;top:40px;width:[\d.]+%;margin:0">옮길 문단입니다<\/p>/);
+    await ready("section.one > p[data-pin]");
+    assert.ok(Math.abs((await boxIn("section.one > p[data-pin]")).y - 40) <= 1, "Y 40px");
+    await inFrame(`d.querySelector("section.two > p").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    await typeIn("위치 X (%)", "3");
+    await status("수정본 5");
+    assert.match(await work(), /<p data-pin="" style="position:absolute;left:3%;top:\d+px;width:[\d.]+%;margin:0">그림을 놓을 섹션<\/p>/);
+    await ready("section.two > p[data-pin]");
+
+    // 4) 640px 미리보기: 고정 요소가 흐름으로, 가로 스크롤 없음
+    await page.click('button[aria-label="좁은 화면 미리보기 (640px)"]');
+    await page.waitForFunction((f: string) => document.querySelector<HTMLIFrameElement>(f)!.getBoundingClientRect().width <= 640, { timeout: 5000 }, FRAME);
+    const narrow = await inFrame<{ pos: string; over: boolean }>(`const p = d.querySelector("section.one > p[data-pin]"); const e = d.documentElement;
+      return { pos: d.defaultView.getComputedStyle(p).position, over: e.scrollWidth > e.clientWidth };`);
+    assert.deepEqual(narrow, { pos: "static", over: false });
+    assert.equal(await page.$('[data-handle="pin-move"]'), null, "좁은 화면에서는 옮기기 손잡이를 숨긴다");
+    await page.click('button[aria-label="넓은 화면으로 돌아가기"]');
+
+    // 5) 흐름으로 되돌리기
+    await inFrame(`d.querySelector("section.one > p[data-pin]").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))`);
+    await page.click('button[data-tip="흐름으로 되돌리기"]');
+    await status("수정본 6");
+    assert.match(await work(), /<section data-pin-box="" style="position:relative;min-height:\d+px" class="two">/);
+    assert.match(await work(), /<section class="one">\n<h2>첫 섹션<\/h2>\n<p>옮길 문단입니다<\/p>/);
   });
 
   test("TC-CFUI-15 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 고정 위치 그림이 되고, 서명 주소로 그린다", async () => {

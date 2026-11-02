@@ -10,9 +10,10 @@
     "build": "tsc && vite build",
     "typecheck": "tsc",
     "check:textedit": "tsx scripts/textedit-check.ts",
-    "test": "node --import tsx --test test/unit.test.ts test/markdown.test.ts test/textedit.test.ts test/api.test.ts test/mcp.test.ts",
+    "test": "node --import tsx --test test/unit.test.ts test/markdown.test.ts test/textedit.test.ts test/api.test.ts test/mcp.test.ts test/work.test.ts test/office.test.ts test/security.test.ts",
     "test:ui": "node --import tsx --test test/ui.test.ts",
-    "test:all": "npm test && npm run test:ui"
+    "test:all": "npm test && npm run test:ui",
+    "test:office-real": "node --import tsx --test test/office-real.test.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -30,6 +31,7 @@
     "@fastify/static": "^10.1.5",
     "@lezer/highlight": "^1.2.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@svgedit/svgcanvas": "^7.4.2",
     "@tanstack/react-query": "^5.104.1",
     "@tiptap/core": "3.32.0",
     "@tiptap/extension-bold": "3.32.0",
@@ -61,8 +63,10 @@
     "lucide-react": "^1.52.0",
     "mermaid": "^12.1.0",
     "parse5": "^8.0.1",
+    "pathseg": "^1.2.1",
     "pdfjs-dist": "6.4.299",
     "react": "^19.3.0",
+    "react-colorful": "^5.8.1",
     "react-dom": "^19.3.0",
     "react-moveable": "0.56.0",
     "react-router": "^8.4.0",

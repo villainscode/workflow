@@ -4,3 +4,7 @@ ADMIN_TOKEN=dev-admin-token
 GOOGLE_CLIENT_SECRET=
 DEV_LOGIN=1
 SUPERADMIN_EMAILS=dev@example.com
+# 오피스 편집기(6.0 VO): 로컬 docker(apps/office/compose.yaml)를 쓸 때만 채운다. 비우면 버튼이 숨는다
+OFFICE_ORIGIN=
+OFFICE_BACKEND_ORIGIN=http://host.docker.internal:8787
+ONLYOFFICE_JWT_SECRET=

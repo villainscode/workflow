@@ -1,5 +1,5 @@
 /**
- * 슬라이드 형식의 허용 CSS(명세 docs/slide-editor-spec.html 03절). 값 문법을 직접 검사한다(허용 범위가 좁아 css-tree 없이 충분하다).
+ * 슬라이드 형식의 허용 CSS(명세 docs/editor-spec/slide-editor-spec 03절). 값 문법을 직접 검사한다(허용 범위가 좁아 css-tree 없이 충분하다).
  * 단위는 px·%·fr만. 금지: margin(→ gap·padding), z-index(그리는 순서 = 문서 순서), url(), 그라데이션·그림자 같은 장식.
  */
 
@@ -12,6 +12,10 @@ const COLOR = String.raw`(?:#[0-9a-fA-F]{3,4}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|rg
 const re = (s: string) => new RegExp(`^${s}$`, "i");
 const list = (item: string, max: number) => re(`${item}(?:\\s+${item}){0,${max - 1}}`);
 const kw = (...words: string[]) => re(`(?:${words.join("|")})`);
+
+const FONT_NAME = String.raw`(?:"[^"<>;]+"|'[^'<>;]+'|[A-Za-z][\w-]*(?: +[\w-]+)*)`;
+/** 값 길이 상한: 검사 정규식이 긴 값에서 오래 걸리지 않게 먼저 자른다 */
+export const MAX_STYLE_VALUE = 200;
 
 const LENGTH = re(LEN);
 const SIZE = re(`(?:${LEN}|auto)`);
@@ -37,7 +41,8 @@ const RULES: Record<string, RegExp> = {
   "justify-items": kw("start", "end", "center", "stretch"),
   "justify-self": kw("auto", "start", "end", "center", "stretch"),
   padding: BOX4, "padding-top": LENGTH, "padding-right": LENGTH, "padding-bottom": LENGTH, "padding-left": LENGTH,
-  "font-family": re(String.raw`(?:(?:"[^"<>;]+"|'[^'<>;]+'|[A-Za-z][\w -]*)(?:\s*,\s*)?)+`),
+  // 이름을 쉼표로만 잇는다(이름 안 공백과 구분자가 겹치지 않게). 예전 식은 쉼표가 선택이라 맞지 않는 값에서 지수 시간이 걸렸다(V6 보안 점검)
+  "font-family": re(String.raw`${FONT_NAME}(?:\s*,\s*${FONT_NAME})*`),
   "font-size": LENGTH,
   "font-weight": re("(?:[1-9]00|normal|bold)"),
   "font-style": kw("normal", "italic"),
@@ -70,6 +75,7 @@ export function validateStyle(prop: string, value: string): Omit<Diagnostic, "li
     const fix = FIX.find(([r]) => r.test(p))?.[1];
     return { code: "css-prop", message: `허용하지 않는 CSS 속성: ${p}`, ...(fix ? { fix } : {}) };
   }
+  if (v.length > MAX_STYLE_VALUE) return { code: "css-value", message: `${p}: 값이 ${MAX_STYLE_VALUE}자를 넘습니다` };
   if (/url\s*\(|expression\s*\(|gradient\s*\(|!important/i.test(v)) {
     return { code: "css-value", message: `${p}: 외부 주소·그라데이션·!important는 쓸 수 없습니다`, fix: "단색 값을 쓰세요" };
   }

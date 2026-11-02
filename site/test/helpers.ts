@@ -80,10 +80,10 @@ export async function waitFor<T>(fn: () => Promise<T | undefined | false>, ms = 
 export interface TestServer { url: string; port: number; proc: ChildProcess; stop: () => Promise<void> }
 
 /** 사이트 API 서버를 임시 docs로 띄운다 */
-export async function startServer(ws: { docs: string; data: string }): Promise<TestServer> {
+export async function startServer(ws: { docs: string; data: string }, extraEnv: Record<string, string> = {}): Promise<TestServer> {
   const port = await freePort();
   const proc = spawn(process.execPath, [TSX, "server/index.ts"], {
-    cwd: SITE, env: { ...process.env, PORT: String(port), WORKFLOW_DOCS_ROOT: ws.docs, WORKFLOW_DATA_DIR: ws.data },
+    cwd: SITE, env: { ...process.env, PORT: String(port), WORKFLOW_DOCS_ROOT: ws.docs, WORKFLOW_DATA_DIR: ws.data, ...extraEnv },
     stdio: ["ignore", "ignore", "pipe"],
   });
   let err = "";

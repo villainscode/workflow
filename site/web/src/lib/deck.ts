@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { loadSlide, parseDeckIndex, slidePath, type DeckIndex, type Slide } from "@workflow/core/slide";
-import { fileSrc, useDoc } from "./api.ts";
-import { API, CLOUD } from "./base.ts";
+import { fileSrc, relPath, useDoc } from "./api.ts";
+import { API } from "./base.ts";
 
 /**
  * 슬라이드 덱(5.0 M4) 화면 공통: 버전 파일에서 덱 읽기, asset: 그림 주소 풀기, 덱 글꼴 넣기.
@@ -21,7 +21,7 @@ export function useDeckVersion(menu: string, doc: string, version: string) {
     staleTime: Infinity,
     queryFn: async (): Promise<Deck> => {
       const get = async (path: string) => {
-        const f = files!.find((x) => x.path === path);
+        const f = files!.find((x) => relPath(x) === path);
         if (!f) throw new Error(`${path} 파일이 없습니다`);
         return (await fetch(fileSrc(f))).text();
       };
@@ -35,13 +35,13 @@ export function useDeckVersion(menu: string, doc: string, version: string) {
 
 /**
  * asset:<sha> → 그릴 주소. Cloudflare는 서명 주소(12~24시간)를 받아 쓰고 10분마다 새로 받는다(주소를 문서에 넣지 않는다).
- * 로컬 사이트에는 자산 저장소가 없어 null(화면은 자리만 그린다)
+ * 로컬 사이트는 data/work 자산 저장소(없으면 버전 폴더 assets/에 복사된 그림)의 주소를 준다(6.0 VL)
  */
 export function useAssetUrl(src: string | undefined) {
   const sha = src?.startsWith("asset:") ? src.slice(6) : null;
   const q = useQuery({
     queryKey: ["asset-url", sha],
-    enabled: CLOUD && !!sha,
+    enabled: !!sha,
     staleTime: 10 * 60_000,
     queryFn: async () => {
       const res = await fetch(`${API}/assets/${sha}/url`);

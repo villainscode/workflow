@@ -3,14 +3,16 @@ import type { OoxmlImage, OoxmlSheet, OoxmlTable } from "@workflow/core/structed
 import { API } from "./base.ts";
 
 /**
- * 5.0 구조 편집·수정본 API(Cloudflare 전용, spec/REQUIREMENT-5.0.md 5.4).
+ * 5.0 구조 편집·수정본 API(spec/REQUIREMENT-5.0.md 5.4). 로컬 사이트도 같은 경로를 둔다(6.0 VL).
  * 연산(ops)은 서버가 작업본 대표 파일에 적용해 수정본 하나로 저장한다. 그림은 먼저 자산으로 올리고 `asset:<sha>`로 가리킨다.
  */
 
 export type { Block };
+/** HTML 속성 패널 견본: 문서가 쓰는 글꼴, :root 색 토큰, 다크 모드 여부(6.0 V2) */
+export interface DocTheme { fonts: string[]; tokens: { name: string; value: string }[]; dark: boolean }
 export interface Structure {
   baseVersion: string; rev: number; entry: string; kind: "html" | "docx" | "pptx" | "xlsx";
-  blocks?: Block[]; tables?: OoxmlTable[]; images?: OoxmlImage[]; sheets?: OoxmlSheet[];
+  blocks?: Block[]; theme?: DocTheme; tables?: OoxmlTable[]; images?: OoxmlImage[]; sheets?: OoxmlSheet[];
 }
 export interface WorkFile { path: string; sha256: string; size: number; mime: string; url: string }
 export interface Work { baseVersion: string; rev: number; fromRevision: boolean; entry: string; files: WorkFile[] }
@@ -64,7 +66,8 @@ async function shrink(file: File): Promise<File> {
   return new File([blob], file.name, { type: blob.type });
 }
 
-export async function uploadAsset(file: File): Promise<{ asset: string; width: number; height: number }> {
+/** SVG는 서버가 소독해 저장하고 지운 것(removed)·draw.io 여부를 돌려준다(6.0 V4) */
+export async function uploadAsset(file: File): Promise<{ asset: string; width: number; height: number; mime?: string; removed?: string[]; drawio?: boolean }> {
   const form = new FormData();
   form.append("file", await shrink(file));
   return send(await fetch(`${API}/assets`, { method: "POST", body: form }));
