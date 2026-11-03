@@ -150,6 +150,16 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
 </main>
 </body></html>
 `);
+      // 위치 칸 연속 입력(TC-CFUI-24): 스크롤해야 보이는 긴 문서
+      mkdirSync(join(ws.docs, "notes/long-html/v0.0"), { recursive: true });
+      writeFileSync(join(ws.docs, "notes/long-html/v0.0/page.html"), `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>긴 문서</title>
+<style>body{margin:0;padding:24px;font:16px/1.5 sans-serif}section{padding:16px;border:1px solid #ccc;margin:0 0 16px}</style>
+</head><body><main>
+${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h2>${Array.from({ length: 6 }, (_, j) => `<p>섹션 ${i} 문단 ${j}</p>`).join("")}</section>`).join("\n")}
+</main></body></html>
+`);
+      writeFileSync(join(ws.docs, "notes/long-html/meta.yaml"), "title: 긴 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
       writeFileSync(join(ws.docs, "notes/pin-html/meta.yaml"), "title: 배치 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
       // SVG(6.0 V4): 버전 폴더의 SVG 그림 하나
       mkdirSync(join(ws.docs, "notes/svg-html/v0.0"), { recursive: true });
@@ -236,6 +246,32 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     const notices = await page.evaluate(async () => { const r = await fetch("/third-party-notices.txt"); return { status: r.status, text: await r.text() }; });
     assert.equal(notices.status, 200);
     assert.match(notices.text, /draw\.io[\s\S]*@svgedit\/svgcanvas[\s\S]*ONLYOFFICE/);
+  });
+
+  test("TC-CFUI-25 헤더 오른쪽 위 로그아웃 버튼: 누르면 로그인 화면으로, 그 세션만 끝난다(다른 브라우저 세션은 그대로)", async () => {
+    const ctx = await browser.createBrowserContext();
+    const p2 = await ctx.newPage();
+    await p2.setViewport({ width: 1400, height: 900 });
+    await p2.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+    await p2.waitForSelector('input[aria-label="개발용 이메일"]', { timeout: 15_000 });
+    await p2.type('input[aria-label="개발용 이메일"]', "owner@example.com");
+    for (const b of await p2.$$("form button")) if ((await b.evaluate((e: Element) => e.textContent)).includes("개발용 로그인")) await b.click();
+    await p2.waitForFunction(() => location.pathname.startsWith("/team/"), { timeout: 15_000 });
+    const OUT = "header button::-p-text(로그아웃)";
+    const btn = await p2.waitForSelector(OUT, { timeout: 10_000 });
+    // 헤더 오른쪽 끝(계정 메뉴 오른쪽)에 아이콘·글자로 바로 보인다
+    const pos = await p2.evaluate(() => {
+      const r = [...document.querySelectorAll("header button")].find((b) => b.textContent?.trim() === "로그아웃")!.getBoundingClientRect();
+      const a = document.querySelector('header button[aria-label="계정 메뉴"]')!.getBoundingClientRect();
+      return { right: r.right, avatar: a.right, width: window.innerWidth, visible: r.width > 0 && r.height > 0 };
+    });
+    assert.ok(pos.visible && pos.right > pos.avatar && pos.width - pos.right < 40, JSON.stringify(pos));
+    await btn!.click();
+    await p2.waitForSelector('input[aria-label="개발용 이메일"]', { timeout: 15_000 });
+    assert.equal((await p2.evaluate(async () => (await fetch("/api/w/team/tree")).status)), 401, "세션이 끝났다");
+    await ctx.close();
+    // 이 브라우저의 세션은 그대로
+    assert.equal((await api("/tree", true)).status, 200);
   });
 
   test("TC-CFUI-07 초대 링크를 만들어 다른 브라우저(로그인 전)에서 열면 로그인 후 그 워크스페이스로, viewer는 편집 버튼이 없다", async () => {
@@ -884,6 +920,60 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
     await status("수정본 6");
     assert.match(await work(), /<section data-pin-box="" style="position:relative;min-height:\d+px" class="two">/);
     assert.match(await work(), /<section class="one">\n<h2>첫 섹션<\/h2>\n<p>옮길 문단입니다<\/p>/);
+  });
+
+  test("TC-CFUI-24 HTML 위치 칸 연속 입력: 마우스로 다음 칸을 눌러도 포커스가 남고, 저장 뒤 사본 스크롤·선택 강조가 그대로, 범위를 넘는 X는 너비를 줄인다", async () => {
+    const D = "/docs/notes/long-html";
+    const FRAME = 'iframe[title="구조 편집"]';
+    const X = 'input[aria-label="위치 X (%)"]', Y = 'input[aria-label="위치 Y (px)"]';
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    const work = async () => {
+      const w = await api(`${D}/work`);
+      return (await fetch(w.files.find((f: any) => f.path === "page.html").url)).text();
+    };
+    /** 새 사본이 다 열리고 선택 강조가 칠해질 때까지 */
+    const painted = () => page.waitForFunction((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return !!d && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel")) && !!d.querySelector("[data-sel]");
+    }, { timeout: 10_000 }, FRAME);
+    const state = () => page.evaluate((f: string) => ({
+      active: (document.activeElement as HTMLElement)?.getAttribute("aria-label") ?? document.activeElement?.tagName,
+      scrollY: document.querySelector<HTMLIFrameElement>(f)!.contentWindow!.scrollY,
+    }), FRAME);
+    await open("/team/sdlc/notes/long-html", "긴 HTML");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string) => [...(document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelectorAll("style") ?? [])].some((x) => x.textContent?.includes("data-sel")), { timeout: 20_000 }, FRAME);
+    await page.evaluate((f: string) => {
+      const fr = document.querySelector<HTMLIFrameElement>(f)!;
+      fr.contentWindow!.scrollTo(0, 900);
+      fr.contentDocument!.querySelector("section.s4 > p")!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    }, FRAME);
+    await page.waitForSelector(X, { timeout: 10_000 });
+
+    // 1) X 칸을 마우스로 눌러(전체 선택) 30을 넣고, Y 칸을 마우스로 누른다 → X 저장(흐름 문단이 고정), 포커스는 Y 칸
+    await page.click(X);
+    await page.keyboard.type("30");
+    await page.click(Y);
+    await status("수정본 1");
+    await painted();
+    const s1 = await state();
+    assert.equal(s1.active, "위치 Y (px)", "다음 칸 포커스가 남아야 한다");
+    assert.ok(Math.abs(s1.scrollY - 900) <= 2, `사본 스크롤이 그대로여야 한다(${s1.scrollY})`);
+    const m = (await work()).match(/<p data-pin="" style="position:absolute;left:([\d.]+)%;top:\d+px;width:([\d.]+)%;margin:0">섹션 4 문단 0<\/p>/);
+    assert.ok(m, "X 저장");
+    assert.equal(Number(m![1]), 30, "X는 넣은 값 그대로");
+    assert.ok(Number(m![2]) <= 70, "범위를 넘으면 너비를 줄인다");
+
+    // 2) 포커스가 남은 Y 칸에 바로 120을 넣고 Enter(저장된 값으로 바뀌어도 전체 선택이 남아 덮어 쓴다) → 저장 뒤에도 Y 칸·스크롤·선택 강조 그대로
+    await page.keyboard.type("120");
+    await page.keyboard.press("Enter");
+    await status("수정본 2");
+    await painted();
+    const s2 = await state();
+    assert.equal(s2.active, "위치 Y (px)");
+    assert.ok(Math.abs(s2.scrollY - 900) <= 2, `사본 스크롤(${s2.scrollY})`);
+    assert.match(await work(), /left:30%;top:120px;width:[\d.]+%;margin:0">섹션 4 문단 0</);
+    assert.equal(await page.$eval(Y, (el: HTMLInputElement) => el.value), "120");
   });
 
   test("TC-CFUI-15 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 고정 위치 그림이 되고, 서명 주소로 그린다", async () => {
