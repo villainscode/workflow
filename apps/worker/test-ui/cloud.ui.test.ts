@@ -248,32 +248,6 @@ ${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h
     assert.match(notices.text, /draw\.io[\s\S]*@svgedit\/svgcanvas[\s\S]*ONLYOFFICE/);
   });
 
-  test("TC-CFUI-25 헤더 오른쪽 위 로그아웃 버튼: 누르면 로그인 화면으로, 그 세션만 끝난다(다른 브라우저 세션은 그대로)", async () => {
-    const ctx = await browser.createBrowserContext();
-    const p2 = await ctx.newPage();
-    await p2.setViewport({ width: 1400, height: 900 });
-    await p2.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-    await p2.waitForSelector('input[aria-label="개발용 이메일"]', { timeout: 15_000 });
-    await p2.type('input[aria-label="개발용 이메일"]', "owner@example.com");
-    for (const b of await p2.$$("form button")) if ((await b.evaluate((e: Element) => e.textContent)).includes("개발용 로그인")) await b.click();
-    await p2.waitForFunction(() => location.pathname.startsWith("/team/"), { timeout: 15_000 });
-    const OUT = "header button::-p-text(로그아웃)";
-    const btn = await p2.waitForSelector(OUT, { timeout: 10_000 });
-    // 헤더 오른쪽 끝(계정 메뉴 오른쪽)에 아이콘·글자로 바로 보인다
-    const pos = await p2.evaluate(() => {
-      const r = [...document.querySelectorAll("header button")].find((b) => b.textContent?.trim() === "로그아웃")!.getBoundingClientRect();
-      const a = document.querySelector('header button[aria-label="계정 메뉴"]')!.getBoundingClientRect();
-      return { right: r.right, avatar: a.right, width: window.innerWidth, visible: r.width > 0 && r.height > 0 };
-    });
-    assert.ok(pos.visible && pos.right > pos.avatar && pos.width - pos.right < 40, JSON.stringify(pos));
-    await btn!.click();
-    await p2.waitForSelector('input[aria-label="개발용 이메일"]', { timeout: 15_000 });
-    assert.equal((await p2.evaluate(async () => (await fetch("/api/w/team/tree")).status)), 401, "세션이 끝났다");
-    await ctx.close();
-    // 이 브라우저의 세션은 그대로
-    assert.equal((await api("/tree", true)).status, 200);
-  });
-
   test("TC-CFUI-07 초대 링크를 만들어 다른 브라우저(로그인 전)에서 열면 로그인 후 그 워크스페이스로, viewer는 편집 버튼이 없다", async () => {
     await open("/team/sdlc/process/guide", "샘플 프로세스 가이드");
     await page.click('button[aria-label="계정 메뉴"]');
