@@ -78,6 +78,16 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   ctxRef.current = ctx;
   // 고른 칸의 행·열(표 안을 골랐을 때)
   const [cell, setCell] = useState<{ row: number; col: number } | null>(null);
+  const cellRef = useRef(cell);
+  cellRef.current = cell;
+  // 저장하면 사본을 새로 받는다(key=rev). 스크롤 자리를 기억해 새 사본에서 잇는다
+  const scrollY = useRef(0);
+  // 다 열린 사본의 rev, 위치 칸 저장 중(높이 재기~저장), 저장 중에 넣은 위치 값(끝나면 이어서 저장)
+  const [loadedRev, setLoadedRev] = useState(-1);
+  const [pinning, setPinning] = useState(false);
+  const queued = useRef<Partial<PinBox> | null>(null);
+  // 흐름 요소는 사본에서 위치를 재는데, 새 사본이 열리는 동안에는 잴 수 없어 마지막 값을 쓴다
+  const lastBox = useRef<{ picked: number; box: PinBox } | null>(null);
   // 좁은 화면(640px) 미리보기, 처음 고정 위치로 바꿨을 때 한 줄 안내
   const [narrow, setNarrow] = useState(false);
   const [pinNote, setPinNote] = useState(false);
@@ -92,6 +102,13 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   blocksRef.current = s.blocks;
   // eid는 위치라 저장하면 바뀐다. 다시 읽을 때 "같은 순번·같은 태그" 요소로 고름을 잇는다
   const selKey = useRef<{ index: number; tag: string } | null>(null);
+  // 사람이 새로 고를 때만 오른다. 저장으로 eid가 바뀌어도 속성 패널 칸을 새로 만들지 않게 key로 쓴다
+  const picked = useRef(0);
+  // 구조(s.blocks)가 먼저 바뀌고 사본은 나중에 열린다. 그 사이 고른 요소를 잃지 않게 같은 순번 블록으로 바로 잇는다(블록 순서 = 사본의 data-eid 순서)
+  if (sel && !blocks.has(sel) && selKey.current) {
+    const nb = s.blocks?.[selKey.current.index];
+    if (nb && nb.tag.toUpperCase() === selKey.current.tag) setSel(nb.eid);
+  }
 
   const d = () => frame.current?.contentDocument ?? null;
   const node = (eid: string | null) => (eid ? d()?.querySelector(`[data-eid="${eid}"]`) ?? null : null);
@@ -120,12 +137,11 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   useEffect(() => paint(sel, cell), [sel, cell, paint]);
 
   /** 자유 배치 연산 저장. 실패하면 미리 그린 사본을 버리고 다시 읽는다 */
-  const pin = useCallback((ops: unknown[], summary: string, firstPin?: boolean) => {
-    void runRef.current(ops, summary).then((ok) => {
+  const pin = useCallback((ops: unknown[], summary: string, firstPin?: boolean) =>
+    runRef.current(ops, summary).then((ok) => {
       if (!ok) frame.current?.contentWindow?.location.reload();
       else if (firstPin) setPinNote(true);
-    });
-  }, []);
+    }), []);
 
   /**
    * 기준 섹션의 점(x·y, 사본 화면 좌표)에 고정 요소를 넣는다. 미리 넣어 최소 높이를 잰 뒤 지우고 place 하나로 저장한다.
@@ -214,16 +230,21 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     return pinBoxOf(el.getBoundingClientRect(), cb);
   };
   const setPinBox = (b: Block, part: Partial<PinBox>) => {
+    // 저장 중(높이 재기 포함)에 넣은 값은 모아 두었다가 새 사본이 열리면 이어서 저장한다
+    if (busy || pinning || loadedRev !== s.rev) { queued.current = { ...queued.current, ...part }; return; }
     const doc = d(), el = doc?.querySelector<HTMLElement>(`[data-eid="${b.eid}"]`);
     const base = b.pinBase ? doc?.querySelector<HTMLElement>(`[data-base="${b.pinBase}"]`) : null;
     const cur = pinBoxNow(b);
     if (!doc || !el || !base || !cur || narrow) return;
-    const width = Math.min(100, Math.max(1, part.width ?? cur.width));
-    const box = { left: Math.min(100 - width, Math.max(0, part.left ?? cur.left)), top: Math.max(0, part.top ?? cur.top), width };
+    // X를 넣으면 X는 그대로 두고 넘치는 만큼 너비를 줄인다. 너비를 넣으면 넘치는 만큼 X를 당긴다
+    const left = Math.min(99, Math.max(0, part.left ?? cur.left));
+    const width = part.width !== undefined ? Math.min(100, Math.max(1, part.width)) : Math.max(1, Math.min(cur.width, 100 - left));
+    const box = { left: part.width !== undefined ? Math.min(100 - width, left) : left, top: Math.max(0, part.top ?? cur.top), width };
     if (b.pinned) { el.style.left = `${box.left}%`; el.style.top = `${box.top}px`; el.style.width = `${box.width}%`; } else previewPin(el, base, box);
+    setPinning(true);
     void minHeightFor(doc, base).then((minHeight) => pin([{ t: "toPinned", eid: b.eid,
       box: { left: Math.round(box.left * 100) / 100, top: Math.round(box.top), width: Math.round(box.width * 100) / 100 }, minHeight }],
-    b.pinned ? "위치" : "자유 배치", !b.pinned));
+    b.pinned ? "위치" : "자유 배치", !b.pinned)).finally(() => setPinning(false));
   };
   const duplicate = useCallback(() => {
     const eid = anchorRef.current;
@@ -232,6 +253,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   /** 고르기(사본 안 누르기·레이어 패널·Esc 공통): 순번을 기억해 다시 읽은 사본에서 잇는다 */
   const pick = useCallback((el: Element | null) => {
     const doc = d();
+    picked.current++;
     setSel(el?.getAttribute("data-eid") ?? null);
     selKey.current = el && doc ? { index: [...doc.querySelectorAll("[data-eid]")].indexOf(el), tag: el.tagName } : null;
     const td = el?.closest("td, th");
@@ -248,8 +270,13 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     for (const b of blocksRef.current ?? []) if (b.editable) doc.querySelector(`[data-eid="${b.eid}"]`)?.setAttribute("data-editable", "1");
     const k = selKey.current;
     const again = k ? doc.querySelectorAll("[data-eid]")[k.index] : undefined;
-    setSel(again && again.tagName === k!.tag ? again.getAttribute("data-eid") : null);
-    if (!again || again.tagName !== k!.tag) setCell(null);
+    const kept = again && again.tagName === k!.tag ? again.getAttribute("data-eid") : null;
+    setSel(kept);
+    if (!kept) setCell(null);
+    // 고른 eid가 같으면 sel이 그대로라 강조 effect가 돌지 않는다. 새 사본에 바로 칠한다
+    paint(kept, kept ? cellRef.current : null);
+    doc.defaultView?.scrollTo(0, scrollY.current);
+    setLoadedRev(ctxRef.current.s.rev);
     doc.addEventListener("click", (e) => {
       const t = e.target as Element;
       if (t.closest("a, button, summary, label, form")) e.preventDefault();
@@ -257,7 +284,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       setShape(t.closest("[data-shape]")?.getAttribute("data-shape") ?? null);
       pick(t.closest("[data-eid]"));
     }, true);
-    doc.addEventListener("scroll", bump, { passive: true });
+    doc.addEventListener("scroll", () => { scrollY.current = doc.defaultView?.scrollY ?? 0; bump(); }, { passive: true });
     doc.defaultView?.addEventListener("resize", bump);
     void doc.fonts?.ready.then(bump);
     doc.addEventListener("keydown", (e) => {
@@ -340,9 +367,15 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       void insertImage(f, anchorRef.current, narrowRef.current ? undefined
         : { x: r ? r.left + r.width / 2 : view.innerWidth / 2, y: r ? Math.max(0, r.top) + 40 : view.innerHeight / 2, target: cur });
     });
-  }, [insertImage, pick, bump, duplicate, nudge]);
+  }, [insertImage, pick, bump, duplicate, nudge, paint]);
 
   const b = sel ? blocks.get(sel) : undefined;
+  useEffect(() => {
+    if (!queued.current || busy || pinning || loadedRev !== s.rev) return;
+    const part = queued.current;
+    queued.current = null;
+    if (b?.pinBase) setPinBox(b, part);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = table ? blocks.get(table.getAttribute("data-eid")!) : undefined;
   const ab = anchorEid ? blocks.get(anchorEid) : undefined;
 
@@ -441,7 +474,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
               {b.editable && <p className="mt-1 text-xs text-muted">두 번 누르면 글자를 고칩니다.</p>}
             </section>
 
-            <HtmlStylePanel key={b.eid} b={b} el={selEl as HTMLElement | null} theme={theme} busy={busy}
+            <HtmlStylePanel key={picked.current} b={b} el={selEl as HTMLElement | null} theme={theme} busy={busy}
               apply={(set, unset, summary) => void run([{ t: "setStyle", eid: b.eid, ...(Object.keys(set).length ? { set } : {}), ...(unset.length ? { unset } : {}) }], summary)} />
 
             {tb?.table && <TableSection ctx={ctx} eid={tb.eid} t={tb.table} cell={cell} onRemove={() => remove(tb.eid, "표")} />}
@@ -468,14 +501,16 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
             )}
 
             {b.pinBase && !narrow && (() => {
-              const now = b.pinned ? { left: parseFloat(b.style.left ?? "0"), top: parseFloat(b.style.top ?? "0"), width: parseFloat(b.style.width ?? "0") } : pinBoxNow(b);
+              const measured = b.pinned ? { left: parseFloat(b.style.left ?? "0"), top: parseFloat(b.style.top ?? "0"), width: parseFloat(b.style.width ?? "0") } : pinBoxNow(b);
+              if (measured) lastBox.current = { picked: picked.current, box: measured };
+              const now = measured ?? (lastBox.current?.picked === picked.current ? lastBox.current.box : null);
               return now && (
                 <section className="space-y-1" aria-label="위치">
                   <h3 className="text-xs font-semibold text-muted">{b.pinned ? "위치 (자유 배치)" : "위치 (값을 넣으면 그 자리에 고정)"}</h3>
                   <div className="grid grid-cols-3 gap-1">
-                    <PinNum key={`x${b.eid}${now.left}`} label="X" unit="%" value={now.left} disabled={busy} onCommit={(v) => setPinBox(b, { left: v })} />
-                    <PinNum key={`y${b.eid}${now.top}`} label="Y" unit="px" value={now.top} disabled={busy} onCommit={(v) => setPinBox(b, { top: v })} />
-                    <PinNum key={`w${b.eid}${now.width}`} label="너비" unit="%" value={now.width} disabled={busy} onCommit={(v) => setPinBox(b, { width: v })} />
+                    <PinNum key={`x${picked.current}`} label="X" unit="%" value={now.left} onCommit={(v) => setPinBox(b, { left: v })} />
+                    <PinNum key={`y${picked.current}`} label="Y" unit="px" value={now.top} onCommit={(v) => setPinBox(b, { top: v })} />
+                    <PinNum key={`w${picked.current}`} label="너비" unit="%" value={now.width} onCommit={(v) => setPinBox(b, { width: v })} />
                   </div>
                 </section>
               );
@@ -668,17 +703,30 @@ function InlineSvgSection({ ctx, b, shape, onShape }: { ctx: StructCtx; b: Block
   );
 }
 
-/** 위치 숫자 칸: Enter·칸 떠날 때 저장, Esc는 되돌림 */
-function PinNum({ label, unit, value, disabled, onCommit }: { label: string; unit: string; value: number; disabled: boolean; onCommit: (v: number) => void }) {
+/**
+ * 위치 숫자 칸: Enter·칸 떠날 때 저장, Esc는 되돌림. 저장 중에도 꺼지지 않고(저장 중에 넣은 값은 이어서 저장),
+ * 고치는 중이 아니면 저장된 값을 따라간다(값이 바뀌어도 칸을 새로 만들지 않아 포커스가 남는다)
+ */
+function PinNum({ label, unit, value, onCommit }: { label: string; unit: string; value: number; onCommit: (v: number) => void }) {
   const shown = String(Math.round(value * 10) / 10);
   const [v, setV] = useState(shown);
-  const commit = () => { const n = parseFloat(v); if (Number.isFinite(n) && String(n) !== shown) onCommit(n); else setV(shown); };
+  const dirty = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  // 저장된 값으로 바꿀 때 칸에 포커스가 있으면(누르자마자 저장이 끝난 경우) 다시 전체 선택해 바로 덮어 쓰게 한다
+  const reselect = useRef(false);
+  useEffect(() => { if (!dirty.current) { reselect.current = document.activeElement === input.current; setV(shown); } }, [shown]);
+  useEffect(() => { if (reselect.current) { reselect.current = false; input.current?.select(); } }, [v]);
+  const commit = () => {
+    dirty.current = false;
+    const n = parseFloat(v);
+    if (Number.isFinite(n) && String(n) !== shown) onCommit(n); else setV(shown);
+  };
   return (
     <label className="flex items-center gap-1 text-xs">
       <span className="shrink-0 text-muted">{label}</span>
-      <input type="number" step="any" aria-label={`위치 ${label} (${unit})`} disabled={disabled} value={v} className="w-full min-w-0 rounded border border-line bg-surface px-1 py-0.5 font-mono"
-        onChange={(e) => setV(e.target.value)} onBlur={commit} onFocus={(e) => e.target.select()}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") setV(shown); }} />
+      <input ref={input} type="number" step="any" aria-label={`위치 ${label} (${unit})`} value={v} className="w-full min-w-0 rounded border border-line bg-surface px-1 py-0.5 font-mono"
+        onChange={(e) => { dirty.current = true; setV(e.target.value); }} onBlur={commit} onFocus={(e) => e.target.select()}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") { dirty.current = false; setV(shown); } }} />
       <span className="shrink-0 text-muted">{unit}</span>
     </label>
   );

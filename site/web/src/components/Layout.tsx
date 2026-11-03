@@ -49,7 +49,7 @@ function Shell() {
         </Link>
         <TopMenuBar categories={tree?.categories ?? []} />
         <SearchBox />
-        {can.edit && <IconButton icon={Upload} label="업로드" variant="primary" size={22} className="ml-auto p-2 sm:ml-2" onClick={() => openUpload({ category })} />}
+        {can.edit && <IconButton icon={Upload} label="업로드" variant="primary" size={17} className="ml-auto p-2 sm:ml-2" onClick={() => openUpload({ category })} />}
         {CLOUD && <UserMenu />}
       </header>
 

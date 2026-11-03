@@ -38,7 +38,7 @@ export function SearchBox() {
   const go = (h: SearchHit) => { setOpen(false); navigate(`/${h.category}/${h.menuSlug}/${h.slug}`); };
 
   return (
-    <div ref={box} className="relative order-last mb-2 w-full min-w-0 sm:order-none sm:mb-0 sm:ml-auto sm:max-w-72">
+    <div ref={box} className="relative order-last mb-2 w-full min-w-0 sm:order-none sm:mb-0 sm:ml-auto sm:max-w-57">
       <input
         ref={inputRef}
         type="search"
