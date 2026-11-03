@@ -157,6 +157,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;margin:0;padding:24px}table{width
 <style>body{margin:0;padding:24px;font:16px/1.5 sans-serif}section{padding:16px;border:1px solid #ccc;margin:0 0 16px}</style>
 </head><body><main>
 ${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h2>${Array.from({ length: 6 }, (_, j) => `<p>섹션 ${i} 문단 ${j}</p>`).join("")}</section>`).join("\n")}
+<div class="wide" style="width:2400px;height:20px"></div>
 </main></body></html>
 `);
       writeFileSync(join(ws.docs, "notes/long-html/meta.yaml"), "title: 긴 HTML\ncategory: sdlc\nmenu: notes\nkind: html\nstatus: draft\ncurrent: v0.0\nversions:\n  - version: v0.0\n    entry: page.html\n");
@@ -636,7 +637,8 @@ ${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h
     const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
     const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
       const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
-      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+      // 새 수정본 사본은 뒤에서 읽어 바꿔 끼운다. 바꿔 끼울 때까지 기다린다
+      return !document.querySelector('iframe[title*="읽는 중"]') && !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
     }, { timeout: 20_000 }, FRAME, sel);
     const fire = (sel: string, type: "click" | "dblclick") => page.evaluate((f: string, s: string, t: string) => {
       document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector(s)!.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
@@ -802,7 +804,8 @@ ${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h
     const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
     const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
       const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
-      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+      // 새 수정본 사본은 뒤에서 읽어 바꿔 끼운다. 바꿔 끼울 때까지 기다린다
+      return !document.querySelector('iframe[title*="읽는 중"]') && !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
     }, { timeout: 20_000 }, FRAME, sel);
     const inFrame = <T,>(fn: string) => page.evaluate((f: string, body: string) => {
       const d = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!;
@@ -948,6 +951,52 @@ ${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h
     assert.ok(Math.abs(s2.scrollY - 900) <= 2, `사본 스크롤(${s2.scrollY})`);
     assert.match(await work(), /left:30%;top:120px;width:[\d.]+%;margin:0">섹션 4 문단 0</);
     assert.equal(await page.$eval(Y, (el: HTMLInputElement) => el.value), "120");
+  });
+
+  test("TC-CFUI-25 HTML 속성을 고친 뒤 다른 요소를 누르면 저장하는 동안에도 사본이 비지 않고(새 사본은 뒤에서 읽어 바꿔 끼움) 가로·세로 스크롤이 그대로, 누른 요소가 골라진다", async () => {
+    const FRAME = 'iframe[title="구조 편집"]';
+    const status = (t: string) => page.waitForFunction((x: string) => document.body.innerText.includes(x), { timeout: 15_000 }, t);
+    await open("/team/sdlc/notes/long-html", "긴 HTML");
+    await page.click('button[aria-label="구조 편집 (표·그림)"]');
+    await page.waitForFunction((f: string) => [...(document.querySelector<HTMLIFrameElement>(f)?.contentDocument?.querySelectorAll("style") ?? [])].some((x) => x.textContent?.includes("data-sel")), { timeout: 20_000 }, FRAME);
+    const rev0 = Number((await page.evaluate(() => document.body.innerText.match(/수정본 (\d+)/)?.[1])) ?? 0);
+    await page.evaluate((f: string) => {
+      const fr = document.querySelector<HTMLIFrameElement>(f)!;
+      fr.contentWindow!.scrollTo(300, fr.contentDocument!.querySelector<HTMLElement>("section.s6")!.offsetTop - 20);
+      fr.contentDocument!.querySelector("section.s6 > p")!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    }, FRAME);
+    const y0 = await page.evaluate((f: string) => document.querySelector<HTMLIFrameElement>(f)!.contentWindow!.scrollY, FRAME);
+    assert.ok(y0 > 500);
+    const SIZE = 'input[aria-label="서식 크기"]';
+    await page.waitForSelector(SIZE, { timeout: 10_000 });
+    await page.click(SIZE);
+    await page.keyboard.type("21px");
+    // 저장하는 동안 보이는 사본이 비는지 16ms마다 본다
+    await page.evaluate((f: string) => {
+      const w: any = window; w.__blank = 0;
+      w.__timer = setInterval(() => { const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument; if (!d?.querySelector("[data-eid]")) w.__blank++; }, 16);
+    }, FRAME);
+    // 사본 안 다른 문단을 마우스로 누른다(칸을 떠나며 저장)
+    const at = await page.evaluate((f: string) => {
+      const fr = document.querySelector<HTMLIFrameElement>(f)!, o = fr.getBoundingClientRect();
+      const r = fr.contentDocument!.querySelector("section.s6 > p:nth-of-type(3)")!.getBoundingClientRect();
+      // 가로로 300px 밀려 있어 문단 왼쪽은 사본 밖이다. 사본 안에 보이는 부분을 누른다
+      return { x: o.left + Math.max(r.left, 0) + 20, y: o.top + r.top + r.height / 2 };
+    }, FRAME);
+    await page.mouse.click(at.x, at.y);
+    await status(`수정본 ${rev0 + 1}`);
+    await page.waitForFunction((f: string) => {
+      const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
+      return d?.querySelector("[data-sel]")?.textContent === "섹션 6 문단 2" && /font-size:21px/.test(d.querySelector("section.s6 > p")?.getAttribute("style") ?? "");
+    }, { timeout: 10_000 }, FRAME);
+    const r = await page.evaluate((f: string) => {
+      const w: any = window; clearInterval(w.__timer);
+      const fr = document.querySelector<HTMLIFrameElement>(f)!;
+      return { blank: w.__blank, x: fr.contentWindow!.scrollX, y: fr.contentWindow!.scrollY, frames: document.querySelectorAll("iframe[src*='edit-view']").length };
+    }, FRAME);
+    assert.equal(r.blank, 0, "저장하는 동안 사본이 비면 안 된다");
+    assert.ok(Math.abs(r.x - 300) <= 2 && Math.abs(r.y - y0) <= 2, `스크롤 ${r.x},${r.y} (처음 300,${y0})`);
+    assert.equal(r.frames, 1, "바꿔 끼운 뒤 예전 사본은 없앤다");
   });
 
   test("TC-CFUI-15 슬라이드에 그림 파일을 끌어 놓으면 자산으로 올라가 고정 위치 그림이 되고, 서명 주소로 그린다", async () => {
@@ -1151,7 +1200,8 @@ ${Array.from({ length: 8 }, (_, i) => `<section class="s${i}"><h2>섹션 ${i}</h
     const FRAME = 'iframe[title="구조 편집"]';
     const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
       const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
-      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+      // 새 수정본 사본은 뒤에서 읽어 바꿔 끼운다. 바꿔 끼울 때까지 기다린다
+      return !document.querySelector('iframe[title*="읽는 중"]') && !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
     }, { timeout: 20_000 }, FRAME, sel);
     const fire = (sel: string, type: "click" | "dblclick") => page.evaluate((f: string, s: string, t: string) => {
       const el = document.querySelector<HTMLIFrameElement>(f)!.contentDocument!.querySelector(s)!;

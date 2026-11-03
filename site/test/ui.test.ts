@@ -773,7 +773,8 @@ describe("화면", { skip }, () => {
     await page.click('button[aria-label="구조 편집 (표·그림)"]');
     const ready = (sel: string) => page.waitForFunction((f: string, s: string) => {
       const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
-      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+      // 새 수정본 사본은 뒤에서 읽어 바꿔 끼운다. 바꿔 끼울 때까지 기다린다
+      return !document.querySelector('iframe[title*="읽는 중"]') && !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
     }, { timeout: 20_000 }, FRAME, sel);
     await ready("section.s > p[data-eid]");
     const drop = await page.evaluate((f: string) => {
@@ -821,7 +822,8 @@ describe("화면", { skip }, () => {
     await page.click('button[aria-label="구조 편집 (표·그림)"]');
     await page.waitForFunction((f: string, s: string) => {
       const d = document.querySelector<HTMLIFrameElement>(f)?.contentDocument;
-      return !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
+      // 새 수정본 사본은 뒤에서 읽어 바꿔 끼운다. 바꿔 끼울 때까지 기다린다
+      return !document.querySelector('iframe[title*="읽는 중"]') && !!d?.querySelector(s) && [...d.querySelectorAll("style")].some((x) => x.textContent?.includes("data-sel"));
     }, { timeout: 20_000 }, FRAME, sel);
   }
   const clickIn = (sel: string) => page.evaluate((f: string, s: string) => {

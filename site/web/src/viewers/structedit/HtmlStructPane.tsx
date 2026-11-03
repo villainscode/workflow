@@ -67,7 +67,15 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   const { menu, doc, s, busy, run, setMessage } = ctx;
   const theme = s.theme ?? NO_THEME;
   const confirm = useConfirm();
-  const frame = useRef<HTMLIFrameElement>(null);
+  // 보이는 사본. 저장하면 새 수정본 사본을 뒤에서(보이지 않게) 읽고, 다 열리면 스크롤·강조를 옮긴 뒤 바꿔 끼운다(그동안 화면이 비지 않는다)
+  const frame = useRef<HTMLIFrameElement | null>(null);
+  const [shownRev, setShownRev] = useState(s.rev);
+  const shownRevRef = useRef(shownRev);
+  shownRevRef.current = shownRev;
+  // 새 사본을 읽는 중: 예전 사본의 eid는 이미 옛것이라 누르기·키 입력을 막는다
+  const stale = shownRev !== s.rev;
+  const staleRef = useRef(stale);
+  staleRef.current = stale;
   const [sel, setSel] = useState<string | null>(null);
   // 사본을 스크롤하거나 크기가 바뀌면 손잡이 자리를 다시 잰다
   const [, setTick] = useState(0);
@@ -80,8 +88,8 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   const [cell, setCell] = useState<{ row: number; col: number } | null>(null);
   const cellRef = useRef(cell);
   cellRef.current = cell;
-  // 저장하면 사본을 새로 받는다(key=rev). 스크롤 자리를 기억해 새 사본에서 잇는다
-  const scrollY = useRef(0);
+  // 보이는 사본의 스크롤 자리(가로·세로). 새 사본에서 잇는다
+  const scrollAt = useRef({ x: 0, y: 0 });
   // 다 열린 사본의 rev, 위치 칸 저장 중(높이 재기~저장), 저장 중에 넣은 위치 값(끝나면 이어서 저장)
   const [loadedRev, setLoadedRev] = useState(-1);
   const [pinning, setPinning] = useState(false);
@@ -125,8 +133,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   const anchorEid = anchor?.getAttribute("data-eid") ?? null;
 
   // 사본을 다시 읽으면 강조를 다시 칠한다
-  const paint = useCallback((eid: string | null, c: { row: number; col: number } | null) => {
-    const doc = d();
+  const paint = useCallback((eid: string | null, c: { row: number; col: number } | null, doc = d()) => {
     if (!doc) return;
     doc.querySelectorAll("[data-sel],[data-cell]").forEach((n) => { n.removeAttribute("data-sel"); n.removeAttribute("data-cell"); });
     const el = eid ? doc.querySelector(`[data-eid="${eid}"]`) : null;
@@ -262,9 +269,10 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
   }, []);
 
   // 사본이 열리면: 스타일, 고르기(클릭), 글자 편집(더블클릭), 링크 막기, 그림 끌어 놓기·붙여 넣기
-  const onLoad = useCallback(() => {
-    const doc = d();
-    if (!doc) return;
+  const onLoad = useCallback((rev: number, el: HTMLIFrameElement) => {
+    const doc = el.contentDocument;
+    // 그 사이 더 새 수정본이 왔으면 이 사본은 버려진다
+    if (!doc || doc.URL === "about:blank" || (rev !== ctxRef.current.s.rev && rev !== shownRevRef.current)) return;
     injectStyle(doc, EDIT_CSS);
     // 글자를 고칠 수 있는 요소 표시(사본에는 data-eid만 있다). 사본이 다 읽힌 뒤에 칠해야 한다
     for (const b of blocksRef.current ?? []) if (b.editable) doc.querySelector(`[data-eid="${b.eid}"]`)?.setAttribute("data-editable", "1");
@@ -274,9 +282,11 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
     setSel(kept);
     if (!kept) setCell(null);
     // 고른 eid가 같으면 sel이 그대로라 강조 effect가 돌지 않는다. 새 사본에 바로 칠한다
-    paint(kept, kept ? cellRef.current : null);
-    doc.defaultView?.scrollTo(0, scrollY.current);
-    setLoadedRev(ctxRef.current.s.rev);
+    paint(kept, kept ? cellRef.current : null, doc);
+    doc.defaultView?.scrollTo(scrollAt.current.x, scrollAt.current.y);
+    frame.current = el;
+    setShownRev(rev);
+    setLoadedRev(rev);
     doc.addEventListener("click", (e) => {
       const t = e.target as Element;
       if (t.closest("a, button, summary, label, form")) e.preventDefault();
@@ -284,11 +294,15 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       setShape(t.closest("[data-shape]")?.getAttribute("data-shape") ?? null);
       pick(t.closest("[data-eid]"));
     }, true);
-    doc.addEventListener("scroll", () => { scrollY.current = doc.defaultView?.scrollY ?? 0; bump(); }, { passive: true });
+    doc.addEventListener("scroll", () => {
+      if (frame.current?.contentDocument === doc) scrollAt.current = { x: doc.defaultView?.scrollX ?? 0, y: doc.defaultView?.scrollY ?? 0 };
+      bump();
+    }, { passive: true });
     doc.defaultView?.addEventListener("resize", bump);
     void doc.fonts?.ready.then(bump);
     doc.addEventListener("keydown", (e) => {
       if ((e.target as Element).closest?.('[contenteditable="true"]')) return;
+      if (staleRef.current) { e.preventDefault(); return; }
       const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
       if (mod && k === "z") { e.preventDefault(); if (e.shiftKey) ctxRef.current.redo(); else ctxRef.current.undo(); }
       else if (mod && k === "d") { e.preventDefault(); duplicate(); }
@@ -305,6 +319,7 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
       }
     });
     doc.addEventListener("dblclick", (e) => {
+      if (staleRef.current) return;
       const el = (e.target as Element).closest<HTMLElement>("[data-eid]");
       if (!el || el.getAttribute("data-editable") !== "1") return;
       const before = el.innerHTML;
@@ -445,15 +460,20 @@ export function HtmlStructPane({ ctx }: { ctx: StructCtx }) {
         )}
         <div className="relative min-h-0 flex-1">
           <div className={narrow ? "relative mx-auto h-full w-[640px] max-w-full border-x border-line" : "relative h-full"}>
-            <iframe
-              key={s.rev}
-              ref={frame}
-              src={editViewUrl(menu, doc, s.rev)}
-              title="구조 편집"
-              className="block h-full w-full border-0 bg-surface"
-              sandbox="allow-same-origin"
-              onLoad={onLoad}
-            />
+            {(stale ? [shownRev, s.rev] : [s.rev]).map((r) => (
+              <iframe
+                key={r}
+                ref={(el) => { if (el && r === shownRevRef.current) frame.current = el; }}
+                src={editViewUrl(menu, doc, r)}
+                title={r === shownRev ? "구조 편집" : "구조 편집 (새 수정본 읽는 중)"}
+                aria-hidden={r === shownRev ? undefined : true}
+                tabIndex={r === shownRev ? undefined : -1}
+                className={r === shownRev ? "block h-full w-full border-0 bg-surface" : "invisible absolute inset-0 h-full w-full border-0"}
+                sandbox="allow-same-origin"
+                onLoad={(e) => onLoad(r, e.currentTarget)}
+              />
+            ))}
+            {stale && <div className="absolute inset-0 cursor-progress" aria-hidden />}
             {!editing && (
               <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-label="손잡이">
                 <HtmlHandles selEl={selEl} blocks={blocks} busy={busy} narrow={narrow} pin={pin} apply={(ops, summary) => void run(ops, summary)} />
